@@ -37,7 +37,7 @@ interface Menu {
 interface Table {
   _id: string;
   tableNumber: string;
-  seatingCapacity: number;
+  capacity: number;
   status: string;
 }
 
@@ -352,7 +352,7 @@ export function WaiterDashboard({ user }: DashboardProps) {
                     </div>
                   </div>
                   <div className={`mt-1 text-xs font-medium ${selectedTable === t._id ? 'text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                    {t.status === "AVAILABLE" ? "Available" : t.status} • {t.seatingCapacity} seats
+                    {t.status === "AVAILABLE" ? "Available" : t.status} • {t.capacity} seats
                   </div>
                 </div>
               );
