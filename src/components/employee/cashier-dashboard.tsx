@@ -1,0 +1,328 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { useToast } from "@/components/ui/use-toast";
+import { Calculator, CheckCircle2, Receipt, Search, CreditCard, Banknote } from "lucide-react";
+import { User } from "@/services/auth.service";
+import { employeeService } from "@/services/employee.service";
+import { connectSocket, disconnectSocket } from "@/lib/socket";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+
+interface DashboardProps {
+  user: User;
+}
+
+interface KotItem {
+  _id: string;
+  menuItemId: { name: string; station: string };
+  variantPrice: number;
+  quantity: number;
+}
+
+import { ReceiptModal } from "./ReceiptModal";
+
+interface Order {
+  _id: string;
+  orderNumber: number;
+  tableId?: { tableNumber: string };
+  orderType: string;
+  kots: { items: KotItem[] }[];
+  status: string;
+  paymentStatus: string;
+  financials?: {
+    subtotal: number;
+    totalTax: number;
+    grandTotal: number;
+  };
+  customerDetails?: { name?: string; phone?: string };
+}
+
+export function CashierDashboard({ user }: DashboardProps) {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<string>("CASH");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const { toast } = useToast();
+
+  const fetchOrders = async () => {
+    try {
+      // Fetch both OPEN (unbilled) and BILLED (unpaid) orders
+      const resActive = await employeeService.getOrders({ status: "OPEN" });
+      const resBilled = await employeeService.getOrders({ status: "BILLED" });
+      
+      const allOrders = [...(resActive.data || []), ...(resBilled.data || [])];
+      // Filter out PAID orders just in case
+      setOrders(allOrders.filter(o => o.paymentStatus !== "PAID"));
+      
+      // Update selected order reference if it exists
+      if (selectedOrder) {
+        const updated = allOrders.find(o => o._id === selectedOrder._id);
+        if (updated) setSelectedOrder(updated);
+        else setSelectedOrder(null);
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Failed to fetch orders", description: error.message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    const socket = connectSocket();
+    if (socket) {
+      socket.on("table_status_change", fetchOrders);
+      socket.on("order_billed", fetchOrders);
+      socket.on("item_status_update", fetchOrders);
+    }
+    return () => {
+      if (socket) {
+        socket.off("table_status_change", fetchOrders);
+        socket.off("order_billed", fetchOrders);
+        socket.off("item_status_update", fetchOrders);
+      }
+      disconnectSocket();
+    };
+  }, [toast]); // removed selectedOrder from deps to avoid re-triggering interval
+
+  const handleGenerateBill = async (orderId: string) => {
+    try {
+      setIsProcessing(true);
+      const response = await employeeService.generateBill(orderId);
+      if (response.success) {
+        toast({ title: "Bill Generated successfully" });
+        setShowReceipt(true);
+        await fetchOrders();
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Billing Error", description: error.message });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCheckout = async (orderId: string) => {
+    try {
+      if (!selectedOrder) return;
+      setIsProcessing(true);
+      await employeeService.checkoutOrder(orderId, { 
+        payments: [{ method: paymentMethod, amount: selectedOrder.financials?.grandTotal || 0 }] 
+      });
+      toast({ title: "Payment Successful", description: "Order has been closed and table is free." });
+      setSelectedOrder(null);
+      await fetchOrders();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Checkout Error", description: error.message });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const filteredOrders = orders.filter(o => 
+    o._id.slice(-4).includes(searchQuery) || 
+    (o.tableId && o.tableId.tableNumber.includes(searchQuery))
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[calc(100vh-100px)] items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <p className="text-slate-500 dark:text-slate-400">Loading Cashier Terminal...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col md:flex-row h-[calc(100vh-120px)] bg-slate-50 dark:bg-slate-950 -mx-8 -my-8 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 transition-colors">
+      
+      {/* Left: Orders List */}
+      <div className="w-full md:w-[400px] border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col z-10 shrink-0 transition-colors">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800 space-y-4">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Calculator className="h-5 w-5 text-blue-600 dark:text-blue-500" /> Pending Settlements
+          </h2>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 dark:text-slate-500" />
+            <Input 
+              placeholder="Search by order # or table..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-12 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-sm rounded-lg text-slate-900 dark:text-white placeholder:text-slate-500"
+            />
+          </div>
+        </div>
+
+        <ScrollArea className="flex-1 p-4">
+          <div className="space-y-3">
+            {filteredOrders.length === 0 ? (
+              <div className="text-center text-slate-500 dark:text-slate-500 py-10">No pending orders.</div>
+            ) : (
+              filteredOrders.map(order => (
+                <div 
+                  key={order._id}
+                  onClick={() => setSelectedOrder(order)}
+                  className={`p-4 rounded-xl cursor-pointer transition-all border ${selectedOrder?._id === order._id ? 'bg-blue-50/50 dark:bg-blue-900/20 border-blue-500/50' : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-slate-900 dark:text-white">Order #{order._id?.slice(-4)}</span>
+                    <Badge variant="outline" className={order.status === "BILLED" ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "border-orange-500/30 text-orange-600 dark:text-orange-400 bg-orange-500/10"}>
+                      {order.status}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500 dark:text-slate-400">
+                      {order.orderType === "DINE_IN" ? `Table ${order.tableId?.tableNumber}` : order.orderType}
+                    </span>
+                    <span className="font-semibold text-blue-600 dark:text-blue-400">
+                      ₹{(() => {
+                        if (order.financials?.grandTotal) return order.financials.grandTotal.toFixed(2);
+                        if (order.status === "OPEN") {
+                          const sub = order.kots.flatMap(k => k.items).reduce((sum, item) => sum + ((item.variantPrice || 0) * item.quantity), 0);
+                          return (sub + (sub * 0.05)).toFixed(2);
+                        }
+                        return "0.00";
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Right: Order Details & Checkout */}
+      <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden relative transition-colors">
+        {selectedOrder ? (
+          <div className="flex flex-col h-full">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">Order #{selectedOrder._id?.slice(-4)}</h2>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">
+                    {selectedOrder.orderType === "DINE_IN" ? `Dine-In • Table ${selectedOrder.tableId?.tableNumber}` : selectedOrder.orderType}
+                    {selectedOrder.customerDetails?.name && ` • ${selectedOrder.customerDetails.name}`}
+                  </p>
+                </div>
+                <Badge variant="outline" className={`px-4 py-1 text-sm ${selectedOrder.status === "BILLED" ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"}`}>
+                  {selectedOrder.status === "BILLED" ? "Bill Generated" : "Active / Unbilled"}
+                </Badge>
+              </div>
+            </div>
+
+            <ScrollArea className="flex-1 p-6">
+              <div className="max-w-2xl mx-auto border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-xl">
+                {(() => {
+                  let subtotal = selectedOrder.financials?.subtotal || 0;
+                  let totalTax = selectedOrder.financials?.totalTax || 0;
+                  let grandTotal = selectedOrder.financials?.grandTotal || 0;
+
+                  if (selectedOrder.status === "OPEN") {
+                    subtotal = selectedOrder.kots.flatMap(k => k.items).reduce((sum, item) => sum + ((item.variantPrice || 0) * item.quantity), 0);
+                    totalTax = subtotal * 0.05; // default 5% assumption before billing
+                    grandTotal = subtotal + totalTax;
+                  }
+
+                  return (
+                    <>
+                      <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+                        <h3 className="font-bold text-slate-900 dark:text-white mb-4">Order Items</h3>
+                        <div className="space-y-4">
+                          {selectedOrder.kots.flatMap(k => k.items).map((item, idx) => (
+                            <div key={idx} className="flex justify-between items-center text-sm">
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-950 px-2 py-1 rounded border border-slate-200 dark:border-slate-800">{item.quantity}x</span>
+                                <span className="text-slate-900 dark:text-white">{item.menuItemId?.name || 'Unknown Item'}</span>
+                              </div>
+                              <span className="text-slate-600 dark:text-slate-300">₹{((item.variantPrice || 0) * item.quantity).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div className="p-6 bg-slate-50/50 dark:bg-slate-950/50 space-y-3">
+                        <div className="flex justify-between text-slate-500 dark:text-slate-400 text-sm">
+                          <span>Subtotal</span>
+                          <span>₹{subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-slate-500 dark:text-slate-400 text-sm">
+                          <span>Tax (5%)</span>
+                          <span>₹{totalTax.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-xl font-bold text-slate-900 dark:text-white pt-3 border-t border-slate-200 dark:border-slate-800 mt-2">
+                          <span>Total Amount</span>
+                          <span className="text-blue-600 dark:text-blue-400">₹{grandTotal.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </ScrollArea>
+
+            <div className="p-6 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-between items-center shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.5)]">
+              {selectedOrder.status === "OPEN" ? (
+                <div className="w-full flex justify-end">
+                  <Button 
+                    size="lg"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-14 px-8 text-lg rounded-xl shadow-lg shadow-emerald-900/20"
+                    disabled={isProcessing}
+                    onClick={() => handleGenerateBill(selectedOrder._id)}
+                  >
+                    <Receipt className="mr-2 h-5 w-5" />
+                    Generate Bill
+                  </Button>
+                </div>
+              ) : (
+                <div className="w-full flex flex-col lg:flex-row justify-between items-center gap-4">
+                  <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 w-full lg:w-auto">
+                    <Button 
+                      variant={paymentMethod === "CASH" ? "default" : "ghost"} 
+                      onClick={() => setPaymentMethod("CASH")}
+                      className={`flex-1 lg:flex-none ${paymentMethod === "CASH" ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow hover:bg-slate-50 dark:hover:bg-slate-700" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"} rounded-lg h-12`}
+                    >
+                      <Banknote className="mr-2 h-4 w-4" /> Cash
+                    </Button>
+                    <Button 
+                      variant={paymentMethod === "CARD" ? "default" : "ghost"} 
+                      onClick={() => setPaymentMethod("CARD")}
+                      className={`flex-1 lg:flex-none ${paymentMethod === "CARD" ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow hover:bg-slate-50 dark:hover:bg-slate-700" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"} rounded-lg h-12`}
+                    >
+                      <CreditCard className="mr-2 h-4 w-4" /> Card/UPI
+                    </Button>
+                  </div>
+                  <Button 
+                    size="lg"
+                    className="w-full lg:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold h-14 px-10 text-lg rounded-xl shadow-lg shadow-blue-900/20"
+                    disabled={isProcessing}
+                    onClick={() => handleCheckout(selectedOrder._id)}
+                  >
+                    <CheckCircle2 className="mr-2 h-5 w-5" />
+                    Process Payment
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-600 space-y-4">
+            <Receipt className="h-20 w-20 opacity-20" />
+            <p className="text-xl font-medium">Select an order to view billing details</p>
+          </div>
+        )}
+      </div>
+
+      <ReceiptModal 
+        isOpen={showReceipt} 
+        onClose={() => setShowReceipt(false)} 
+        order={selectedOrder} 
+      />
+    </div>
+  );
+}
