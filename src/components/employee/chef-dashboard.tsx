@@ -52,6 +52,8 @@ interface Order {
 export function ChefDashboard({ user }: DashboardProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [updating, setUpdating] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
   const fetchActiveOrders = async () => {
@@ -82,12 +84,19 @@ export function ChefDashboard({ user }: DashboardProps) {
   }, [toast]);
 
   const updateItemStatus = async (orderId: string, itemId: string, newStatus: string) => {
+    const key = `${orderId}_${itemId}`;
+    setUpdating(prev => ({ ...prev, [key]: true }));
+    setErrors(prev => ({ ...prev, [key]: "" }));
     try {
       await employeeService.updateKotItemStatus(orderId, itemId, newStatus);
       toast({ title: "Ticket updated" });
       fetchActiveOrders();
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error updating status", description: error.message });
+      const message = error.response?.data?.message || error.message || "Failed to update status";
+      setErrors(prev => ({ ...prev, [key]: message }));
+      toast({ variant: "destructive", title: "Error updating status", description: message });
+    } finally {
+      setUpdating(prev => { const next = { ...prev }; delete next[key]; return next; });
     }
   };
 
@@ -191,22 +200,41 @@ export function ChefDashboard({ user }: DashboardProps) {
                                 </div>
                               </div>
                               
-                              <div className="flex gap-2">
-                                {item.itemStatus === "PENDING" && (
-                                  <Button 
-                                    onClick={() => updateItemStatus(kot.order._id, item._id, "PREPARING")}
-                                    className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6"
-                                  >
-                                    Cook
-                                  </Button>
-                                )}
-                                {item.itemStatus === "PREPARING" && (
-                                  <Button 
-                                    onClick={() => updateItemStatus(kot.order._id, item._id, "READY")}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 px-6"
-                                  >
-                                    <CheckCircle2 className="h-4 w-4" /> Ready
-                                  </Button>
+                              <div className="flex flex-col items-end gap-1.5">
+                                <div className="flex gap-2">
+                                  {item.itemStatus === "PENDING" && (
+                                    <Button 
+                                      onClick={() => updateItemStatus(kot.order._id, item._id, "PREPARING")}
+                                      disabled={!!updating[`${kot.order._id}_${item._id}`]}
+                                      className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6"
+                                    >
+                                      {updating[`${kot.order._id}_${item._id}`] ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : "Cook"}
+                                    </Button>
+                                  )}
+                                  {item.itemStatus === "PREPARING" && (
+                                    <Button 
+                                      onClick={() => updateItemStatus(kot.order._id, item._id, "READY")}
+                                      disabled={!!updating[`${kot.order._id}_${item._id}`]}
+                                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 px-6"
+                                    >
+                                      {updating[`${kot.order._id}_${item._id}`] ? (
+                                        <>
+                                          <Loader2 className="h-4 w-4 animate-spin" /> Updating
+                                        </>
+                                      ) : (
+                                        <>
+                                          <CheckCircle2 className="h-4 w-4" /> Ready
+                                        </>
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
+                                {errors[`${kot.order._id}_${item._id}`] && (
+                                  <p className="text-red-600 dark:text-red-400 text-xs font-semibold bg-red-100 dark:bg-red-950/30 px-2 py-1 rounded border border-red-200 dark:border-red-900/50">
+                                    {errors[`${kot.order._id}_${item._id}`]}
+                                  </p>
                                 )}
                               </div>
                             </div>

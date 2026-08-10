@@ -69,6 +69,23 @@ export const orderService = {
     return response.data;
   },
 
+  getSettlementOrders: async (restaurantId: string) => {
+    const headers = { headers: { "x-restaurant-id": restaurantId } };
+    const [openResponse, billedResponse] = await Promise.all([
+      api.get("/orders", { params: { status: "OPEN" }, ...headers }),
+      api.get("/orders", { params: { status: "BILLED" }, ...headers }),
+    ]);
+    const getList = (response: any) => Array.isArray(response.data) ? response.data : response.data?.data || [];
+    return [...getList(openResponse), ...getList(billedResponse)];
+  },
+
+  generateBill: async (restaurantId: string, orderId: string) => {
+    const response = await api.post(`/orders/${orderId}/bill`, {}, {
+      headers: { "x-restaurant-id": restaurantId },
+    });
+    return response.data;
+  },
+
   createInvoice: async (restaurantId: string, orderId: string) => {
     const response = await api.post(`/orders/${orderId}/invoice`, {}, {
       headers: { "x-restaurant-id": restaurantId },

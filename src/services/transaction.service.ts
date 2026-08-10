@@ -38,17 +38,29 @@ export interface Transaction {
   updatedAt: string;
 }
 
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  totalRecords: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
 const getHeaders = (restaurantId?: string) => {
   return restaurantId ? { headers: { "x-restaurant-id": restaurantId } } : {};
 };
 
 export const transactionService = {
-  getTransactions: async (query?: { type?: string; status?: string }, restaurantId?: string) => {
+  getTransactions: async (
+    query?: { type?: string; status?: string; page?: number; limit?: number; search?: string; from?: string; to?: string },
+    restaurantId?: string,
+  ) => {
     const config: any = getHeaders(restaurantId);
     if (query) {
       config.params = query;
     }
-    const res = await apiClient.get<{ success: boolean; data: Transaction[] }>("/transactions", config);
+    const res = await apiClient.get<{ success: boolean; data: { data: Transaction[]; meta: PaginationMeta; summary?: { revenue: number } } }>("/transactions", config);
     return res.data;
   },
 

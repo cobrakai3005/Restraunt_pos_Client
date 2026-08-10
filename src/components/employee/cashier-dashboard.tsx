@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Calculator, CheckCircle2, Receipt, Search, CreditCard, Banknote } from "lucide-react";
+import { Calculator, CheckCircle2, Receipt, Search, CreditCard, Banknote, Loader2 } from "lucide-react";
 import { User } from "@/services/auth.service";
 import { employeeService } from "@/services/employee.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
@@ -275,8 +275,8 @@ export function CashierDashboard({ user }: DashboardProps) {
                     disabled={isProcessing}
                     onClick={() => handleGenerateBill(selectedOrder._id)}
                   >
-                    <Receipt className="mr-2 h-5 w-5" />
-                    Generate Bill
+                    {isProcessing ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Receipt className="mr-2 h-5 w-5" />}
+                    {isProcessing ? "Generating..." : "Generate Bill"}
                   </Button>
                 </div>
               ) : (
@@ -303,8 +303,8 @@ export function CashierDashboard({ user }: DashboardProps) {
                     disabled={isProcessing}
                     onClick={() => handleCheckout(selectedOrder._id)}
                   >
-                    <CheckCircle2 className="mr-2 h-5 w-5" />
-                    Process Payment
+                    {isProcessing ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
+                    {isProcessing ? "Processing..." : "Process Payment"}
                   </Button>
                 </div>
               )}

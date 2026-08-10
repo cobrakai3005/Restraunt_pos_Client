@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Plus, Minus, ShoppingBag, Search, Store } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2 } from "lucide-react";
 import { User } from "@/services/auth.service";
 import { employeeService } from "@/services/employee.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
@@ -90,6 +90,8 @@ export function WaiterDashboard({ user }: DashboardProps) {
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [updating, setUpdating] = useState<Record<string, boolean>>({});
+  const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
 
   const activeOrdersRef = useRef<Order[]>([]);
@@ -269,11 +271,18 @@ export function WaiterDashboard({ user }: DashboardProps) {
   };
 
   const markItemServed = async (orderId: string, itemId: string) => {
+    const key = `${orderId}_${itemId}`;
+    setUpdating(prev => ({ ...prev, [key]: true }));
+    setItemErrors(prev => ({ ...prev, [key]: "" }));
     try {
       await employeeService.updateKotItemStatus(orderId, itemId, "SERVED");
       fetchActiveOrders();
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Failed to update status", description: error.message });
+      const message = error.response?.data?.message || error.message || "Failed to update status";
+      setItemErrors(prev => ({ ...prev, [key]: message }));
+      toast({ variant: "destructive", title: "Failed to update status", description: message });
+    } finally {
+      setUpdating(prev => { const next = { ...prev }; delete next[key]; return next; });
     }
   };
 
@@ -510,13 +519,23 @@ export function WaiterDashboard({ user }: DashboardProps) {
                             </div>
                             <div className="flex items-center gap-2">
                               {item.itemStatus === 'READY' ? (
-                                <button
-                                  onClick={() => markItemServed(existingOrder._id, item._id)}
-                                  className="text-[10px] font-extrabold px-3 py-1.5 rounded-full uppercase bg-green-500 text-white hover:bg-green-400 shadow-[0_0_12px_rgba(34,197,94,0.4)] hover:shadow-[0_0_20px_rgba(34,197,94,0.6)] transition-all cursor-pointer active:scale-95 animate-pulse"
-                                  title="Click to mark as Picked Up/Served"
-                                >
-                                  PICK UP
-                                </button>
+                                <div className="flex flex-col items-end gap-1">
+                                  <button
+                                    onClick={() => markItemServed(existingOrder._id, item._id)}
+                                    disabled={!!updating[`${existingOrder._id}_${item._id}`]}
+                                    className={`text-[10px] font-extrabold px-3 py-1.5 rounded-full uppercase bg-green-500 text-white hover:bg-green-400 shadow-[0_0_12px_rgba(34,197,94,0.4)] hover:shadow-[0_0_20px_rgba(34,197,94,0.6)] transition-all cursor-pointer active:scale-95 animate-pulse ${updating[`${existingOrder._id}_${item._id}`] ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    title="Click to mark as Picked Up/Served"
+                                  >
+                                    {updating[`${existingOrder._id}_${item._id}`] ? (
+                                      <Loader2 className="h-3 w-3 inline animate-spin" />
+                                    ) : "PICK UP"}
+                                  </button>
+                                  {itemErrors[`${existingOrder._id}_${item._id}`] && (
+                                    <span className="text-[10px] font-semibold text-red-600 dark:text-red-400">
+                                      {itemErrors[`${existingOrder._id}_${item._id}`]}
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
                                 <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
                                   item.itemStatus === 'SERVED' ? 'bg-slate-200/50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400' :
