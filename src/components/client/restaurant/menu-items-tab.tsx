@@ -17,14 +17,22 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EditMenuItemDialog } from "./edit-menu-item-dialog";
+import { Pagination } from "@/components/ui/pagination";
 
 const STATIONS = ["BAR", "TANDOOR", "GRILL", "MAIN_KITCHEN", "BAKERY", "COLD_KITCHEN"];
+const PAGE_SIZE = 10;
 
 export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
   const { toast } = useToast();
   const [items, setItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Filter + Pagination State
+  const [statusFilter, setStatusFilter] = useState("all"); // all | true | false
+  const [page, setPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Dialog State
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -48,14 +56,19 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<any>(null);
 
-  const fetchData = async () => {
+  const fetchData = async (currentPage = page, filter = statusFilter) => {
     try {
       setIsLoading(true);
       const [itemsRes, catsRes] = await Promise.all([
-        restaurantService.getMenuItems(restaurantId),
-        restaurantService.getCategories(restaurantId)
+        restaurantService.getMenuItems(restaurantId, { page: currentPage, limit: PAGE_SIZE, isActive: filter }),
+        restaurantService.getCategories(restaurantId, { isActive: "all" })
       ]);
-      if (itemsRes.success) setItems(itemsRes.data.menuItems || []);
+      if (itemsRes.success) {
+        setItems(itemsRes.data.menuItems || []);
+        const meta = itemsRes.meta;
+        setTotalRecords(meta?.totalRecords ?? itemsRes.data.menuItems?.length ?? 0);
+        setTotalPages(meta?.totalPages ?? 1);
+      }
       if (catsRes.success) setCategories(catsRes.data.categories || []);
     } catch (err) {
       toast({ title: "Error", description: "Failed to load data", variant: "destructive" });
@@ -65,8 +78,19 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
   };
 
   useEffect(() => {
-    if (restaurantId) fetchData();
+    if (restaurantId) fetchData(1, "all");
   }, [restaurantId]);
+
+  const handleFilterChange = (v: string) => {
+    setStatusFilter(v);
+    setPage(1);
+    fetchData(1, v);
+  };
+
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    fetchData(p, statusFilter);
+  };
 
   const handleAddVariant = () => {
     setFormData({
@@ -121,7 +145,7 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
         isVeg: "true", isAvailable: true, isActive: true, 
         variants: [{ ...initialVariant }]
       });
-      fetchData();
+      fetchData(page, statusFilter);
     } catch (err: any) {
       toast({ title: "Error", description: err.response?.data?.message || "Failed to create", variant: "destructive" });
     } finally {
@@ -133,7 +157,7 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
     try {
       await restaurantService.deleteMenuItem(restaurantId, id);
       toast({ title: "Success", description: "Menu item deleted" });
-      fetchData();
+      fetchData(page, statusFilter);
     } catch (err: any) {
       toast({ title: "Error", description: err.response?.data?.message || "Failed to delete", variant: "destructive" });
     }
@@ -143,11 +167,23 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-lg font-semibold text-foreground">Menu Items</h3>
-        <Button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="mr-2 h-4 w-4" /> Add Item
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={statusFilter} onValueChange={handleFilterChange}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Items</SelectItem>
+              <SelectItem value="true">Active Only</SelectItem>
+              <SelectItem value="false">Inactive Only</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="mr-2 h-4 w-4" /> Add Item
+          </Button>
+        </div>
       </div>
 
       <div className="w-full overflow-x-auto rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
@@ -169,6 +205,7 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
                   <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
                     <Coffee className="w-4 h-4 text-slate-400" />
                     {item.name}
+                    {!item.isActive && <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-medium">Inactive</span>}
                     {!item.isAvailable && <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium">Out of Stock</span>}
                   </div>
                   {item.description && <div className="text-xs text-slate-500 truncate max-w-[200px] mt-1">{item.description}</div>}
@@ -210,6 +247,14 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        totalRecords={totalRecords}
+        pageSize={PAGE_SIZE}
+        onPageChange={handlePageChange}
+      />
 
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

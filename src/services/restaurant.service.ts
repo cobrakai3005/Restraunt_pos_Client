@@ -2,8 +2,8 @@ import { apiClient } from "@/lib/api";
 
 export const restaurantService = {
   // --- CATEGORIES ---
-  getCategories: async (restaurantId: string) => {
-    const res = await apiClient.get("/restaurant/categories", { headers: { "x-restaurant-id": restaurantId } });
+  getCategories: async (restaurantId: string, params?: Record<string, any>) => {
+    const res = await apiClient.get("/restaurant/categories", { headers: { "x-restaurant-id": restaurantId }, params });
     return res.data;
   },
   createCategory: async (restaurantId: string, data: any) => {
@@ -20,8 +20,8 @@ export const restaurantService = {
   },
 
   // --- MENU ITEMS ---
-  getMenuItems: async (restaurantId: string) => {
-    const res = await apiClient.get("/restaurant/menu-items", { headers: { "x-restaurant-id": restaurantId } });
+  getMenuItems: async (restaurantId: string, params?: Record<string, any>) => {
+    const res = await apiClient.get("/restaurant/menu-items", { headers: { "x-restaurant-id": restaurantId }, params });
     return res.data;
   },
   createMenuItem: async (restaurantId: string, data: any) => {
@@ -38,8 +38,8 @@ export const restaurantService = {
   },
 
   // --- TABLES ---
-  getTables: async (restaurantId: string) => {
-    const res = await apiClient.get("/restaurant/tables", { headers: { "x-restaurant-id": restaurantId } });
+  getTables: async (restaurantId: string, params?: Record<string, any>) => {
+    const res = await apiClient.get("/restaurant/tables", { headers: { "x-restaurant-id": restaurantId }, params });
     return res.data;
   },
   createTable: async (restaurantId: string, data: any) => {
@@ -52,6 +52,12 @@ export const restaurantService = {
   },
   deleteTable: async (restaurantId: string, id: string) => {
     const res = await apiClient.delete(`/restaurant/tables/${id}`, { headers: { "x-restaurant-id": restaurantId } });
+    return res.data;
+  },
+
+  // --- ORDERS (live ops for the restaurant overview) ---
+  getOrders: async (restaurantId: string, params?: Record<string, any>) => {
+    const res = await apiClient.get("/restaurant/orders", { headers: { "x-restaurant-id": restaurantId }, params });
     return res.data;
   },
 };

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 
 interface DashboardProps {
   user: User;
+  embedded?: boolean;
 }
 
 interface KotItem {
@@ -49,7 +50,7 @@ interface Order {
   createdAt: string;
 }
 
-export function ChefDashboard({ user }: DashboardProps) {
+export function ChefDashboard({ user, embedded }: DashboardProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
@@ -107,7 +108,7 @@ export function ChefDashboard({ user }: DashboardProps) {
 
   if (isLoading) {
     return (
-      <div className="flex h-[calc(100vh-100px)] items-center justify-center bg-slate-950">
+      <div className="flex h-full min-h-[300px] items-center justify-center bg-slate-50 dark:bg-slate-950">
         <p className="text-slate-400">Loading KDS...</p>
       </div>
     );
@@ -122,7 +123,7 @@ export function ChefDashboard({ user }: DashboardProps) {
   const readyKots = allKots.filter(k => k.items.every(i => i.itemStatus === "READY" || i.itemStatus === "SERVED") && k.items.some(i => i.itemStatus === "READY"));
 
   return (
-    <div className="h-[calc(100vh-120px)] bg-slate-50 dark:bg-slate-950 -mx-8 -my-8 p-6 flex flex-col transition-colors">
+    <div className={`${embedded ? "h-full rounded-xl" : "h-[calc(100vh-120px)] -mx-8 -my-8"} bg-slate-50 dark:bg-slate-950 p-6 flex flex-col transition-colors ${embedded ? "border border-slate-200 dark:border-slate-800 overflow-hidden" : ""}`}>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">

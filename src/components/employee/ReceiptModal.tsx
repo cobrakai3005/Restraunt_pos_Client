@@ -8,9 +8,15 @@ export interface ReceiptModalProps {
   isOpen: boolean;
   onClose: () => void;
   order: any;
+  restaurant?: {
+    name?: string;
+    address?: { street?: string; city?: string; state?: string; zipCode?: string; country?: string };
+    contact?: { phone?: string; email?: string; managerName?: string };
+    compliance?: { gstNumber?: string; fssaiNumber?: string };
+  } | null;
 }
 
-export function ReceiptModal({ isOpen, onClose, order }: ReceiptModalProps) {
+export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModalProps) {
   if (!order) return null;
 
   let subtotal = order.financials?.subtotal || 0;
@@ -32,7 +38,7 @@ export function ReceiptModal({ isOpen, onClose, order }: ReceiptModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md p-0 border-0 bg-transparent shadow-none [&>button]:hidden">
-        <div className="bg-[#Fdfdfd] p-6 text-black mx-auto w-full max-w-[340px] shadow-2xl relative overflow-hidden" style={{ fontFamily: "monospace" }}>
+        <div className="bg-[#Fdfdfd] p-6 text-black mx-auto w-full max-w-[340px]  shadow-2xl relative break-words" style={{ fontFamily: "monospace" }}>
           
           {/* A style block to hide everything else when printing */}
           <style dangerouslySetInnerHTML={{__html: `
@@ -62,26 +68,34 @@ export function ReceiptModal({ isOpen, onClose, order }: ReceiptModalProps) {
             {/* Logo area */}
             <div className="text-center mb-4">
               <div className="text-4xl font-light tracking-widest mb-2">Ψ¶</div>
-              <h1 className="text-2xl font-bold tracking-widest uppercase">VINIMAY CAFE</h1>
-              <p className="text-sm mt-1">123 CULINARY AVENUE</p>
-              <p className="text-sm">DOWNTOWN DISTRICT</p>
-              <p className="text-sm">PHONE: (555) 123-4567</p>
-              <p className="text-sm">WWW.VINIMAYCAFE.COM</p>
+              <h1 className="text-xl font-bold tracking-widest uppercase break-words">{restaurant?.name || "VINIMAY CAFE"}</h1>
+              {(() => {
+                const addr = restaurant?.address;
+                const lines: string[] = [];
+                if (addr?.street) lines.push(addr.street);
+                const cityLine = [addr?.city, addr?.state, addr?.zipCode].filter(Boolean).join(", ");
+                if (cityLine) lines.push(cityLine);
+                if (addr?.country && addr?.country !== "India") lines.push(addr.country);
+                return lines.map((line, i) => <p key={i} className="text-sm break-words">{line}</p>);
+              })()}
+              {restaurant?.contact?.phone && <p className="text-sm break-words">PHONE: {restaurant.contact.phone}</p>}
+              {restaurant?.contact?.email && <p className="text-sm break-words">{restaurant.contact.email}</p>}
+              {restaurant?.compliance?.gstNumber && <p className="text-sm break-words">GSTIN: {restaurant.compliance.gstNumber}</p>}
             </div>
 
             <div className="border-t-2 border-black border-dashed my-3"></div>
 
             <div className="text-sm">
               <div className="flex justify-between mb-1">
-                <span>{format(new Date(), "dd/MM/yyyy HH:mm")}</span>
+                <span className="min-w-0 break-words">{format(new Date(), "dd/MM/yyyy HH:mm")}</span>
               </div>
               <div className="flex justify-between">
-                <span>RECEIPT: #{order._id.slice(-4).toUpperCase()}</span>
-                <span>TABLE: {order.tableId?.tableNumber || "N/A"}</span>
+                <span className="min-w-0 break-words pr-2">RECEIPT: #{order._id.slice(-4).toUpperCase()}</span>
+                <span className="shrink-0 whitespace-nowrap">TABLE: {order.tableId?.tableNumber || "N/A"}</span>
               </div>
               <div className="flex justify-between">
-                <span>SERVER: {order.waiterId?.contactName?.split(" ")[0].toUpperCase() || "STAFF"}</span>
-                <span>GUESTS: 1</span>
+                <span className="min-w-0 break-words pr-2">SERVER: {order.waiterId?.contactName?.split(" ")[0].toUpperCase() || "STAFF"}</span>
+                <span className="shrink-0 whitespace-nowrap">GUESTS: 1</span>
               </div>
             </div>
 
@@ -89,12 +103,12 @@ export function ReceiptModal({ isOpen, onClose, order }: ReceiptModalProps) {
 
             <div className="text-sm space-y-1">
               {allItems.map((item: any, idx: number) => (
-                <div key={idx} className="flex justify-between items-start">
-                  <div className="flex gap-2 w-3/4">
-                    <span className="w-6">{item.quantity}X</span>
-                    <span className="uppercase break-words">{item.menuItemId?.name}</span>
+                <div key={idx} className="flex justify-between items-start gap-2">
+                  <div className="flex gap-2 flex-1 min-w-0">
+                    <span className="w-6 shrink-0">{item.quantity}X</span>
+                    <span className="uppercase break-words min-w-0">{item.menuItemId?.name}</span>
                   </div>
-                  <span>₹{((item.variantPrice || 0) * item.quantity).toFixed(2)}</span>
+                  <span className="shrink-0 whitespace-nowrap">₹{((item.variantPrice || 0) * item.quantity).toFixed(2)}</span>
                 </div>
               ))}
             </div>
@@ -103,16 +117,16 @@ export function ReceiptModal({ isOpen, onClose, order }: ReceiptModalProps) {
 
             <div className="text-sm">
               <div className="flex justify-between mb-1">
-                <span>SUBTOTAL:</span>
-                <span>₹{subtotal.toFixed(2)}</span>
+                <span className="min-w-0 break-words pr-2">SUBTOTAL:</span>
+                <span className="shrink-0 whitespace-nowrap">₹{subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between mb-1">
-                <span>TAX (5%):</span>
-                <span>₹{totalTax.toFixed(2)}</span>
+                <span className="min-w-0 break-words pr-2">TAX (5%):</span>
+                <span className="shrink-0 whitespace-nowrap">₹{totalTax.toFixed(2)}</span>
               </div>
               <div className="flex justify-between font-bold text-base mt-2">
-                <span>TOTAL:</span>
-                <span>₹{grandTotal.toFixed(2)}</span>
+                <span className="min-w-0 break-words pr-2">TOTAL:</span>
+                <span className="shrink-0 whitespace-nowrap">₹{grandTotal.toFixed(2)}</span>
               </div>
             </div>
 
@@ -121,12 +135,12 @@ export function ReceiptModal({ isOpen, onClose, order }: ReceiptModalProps) {
             {order.status === "PAID" && (
               <div className="text-sm">
                 <div className="flex justify-between">
-                  <span>PAYMENT:</span>
-                  <span>COMPLETED</span>
+                  <span className="min-w-0 break-words pr-2">PAYMENT:</span>
+                  <span className="shrink-0 whitespace-nowrap">COMPLETED</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>STATUS:</span>
-                  <span>APPROVED</span>
+                  <span className="min-w-0 break-words pr-2">STATUS:</span>
+                  <span className="shrink-0 whitespace-nowrap">APPROVED</span>
                 </div>
               </div>
             )}

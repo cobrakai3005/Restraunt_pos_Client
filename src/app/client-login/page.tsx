@@ -27,6 +27,7 @@ import { Store } from "lucide-react";
 import { authService } from "@/services/auth.service";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/context/auth-context";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -36,6 +37,7 @@ const loginSchema = z.object({
 export default function ClientLogin() {
   const router = useRouter();
   const { toast } = useToast();
+  const { login } = useAuth();
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -49,7 +51,7 @@ export default function ClientLogin() {
     try {
       const response = await authService.clientLogin(values.username, values.password);
       if (response?.data?.token) {
-        localStorage.setItem("vinimay_token", response.data.token);
+        login(response.data.token, response.data.user);
         toast({
           title: "Login Successful",
           description: "Welcome to your workspace.",

@@ -11,11 +11,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { EditTableDialog } from "./edit-table-dialog";
+import { Pagination } from "@/components/ui/pagination";
+
+const PAGE_SIZE = 12;
 
 export function TablesTab({ restaurantId }: { restaurantId: string }) {
   const { toast } = useToast();
   const [tables, setTables] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Filter + Pagination State
+  const [statusFilter, setStatusFilter] = useState("all"); // all | true | false
+  const [page, setPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Dialog Add State
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -26,11 +35,16 @@ export function TablesTab({ restaurantId }: { restaurantId: string }) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState<any>(null);
 
-  const fetchTables = async () => {
+  const fetchTables = async (currentPage = page, filter = statusFilter) => {
     try {
       setIsLoading(true);
-      const res = await restaurantService.getTables(restaurantId);
-      if (res.success) setTables(res.data.tables || []);
+      const res = await restaurantService.getTables(restaurantId, { page: currentPage, limit: PAGE_SIZE, isActive: filter });
+      if (res.success) {
+        setTables(res.data.tables || []);
+        const meta = res.meta;
+        setTotalRecords(meta?.totalRecords ?? res.data.tables?.length ?? 0);
+        setTotalPages(meta?.totalPages ?? 1);
+      }
     } catch (err) {
       toast({ title: "Error", description: "Failed to load tables", variant: "destructive" });
     } finally {
@@ -39,8 +53,19 @@ export function TablesTab({ restaurantId }: { restaurantId: string }) {
   };
 
   useEffect(() => {
-    if (restaurantId) fetchTables();
+    if (restaurantId) fetchTables(1, "all");
   }, [restaurantId]);
+
+  const handleFilterChange = (v: string) => {
+    setStatusFilter(v);
+    setPage(1);
+    fetchTables(1, v);
+  };
+
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    fetchTables(p, statusFilter);
+  };
 
   const handleAdd = async () => {
     if (!formData.tableNumber.trim()) return;
@@ -55,7 +80,7 @@ export function TablesTab({ restaurantId }: { restaurantId: string }) {
       toast({ title: "Success", description: "Table added" });
       setFormData({ tableNumber: "", capacity: "4", status: "AVAILABLE", isActive: true });
       setIsAddOpen(false);
-      fetchTables();
+      fetchTables(page, statusFilter);
     } catch (err: any) {
       toast({ title: "Error", description: err.response?.data?.message || "Failed to create", variant: "destructive" });
     } finally {
@@ -67,7 +92,7 @@ export function TablesTab({ restaurantId }: { restaurantId: string }) {
     try {
       await restaurantService.deleteTable(restaurantId, id);
       toast({ title: "Success", description: "Table deleted" });
-      fetchTables();
+      fetchTables(page, statusFilter);
     } catch (err: any) {
       toast({ title: "Error", description: err.response?.data?.message || "Failed to delete", variant: "destructive" });
     }
@@ -77,11 +102,23 @@ export function TablesTab({ restaurantId }: { restaurantId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-lg font-semibold text-foreground">Restaurant Tables</h3>
-        <Button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="mr-2 h-4 w-4" /> Add Table
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={statusFilter} onValueChange={handleFilterChange}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Tables</SelectItem>
+              <SelectItem value="true">Active Only</SelectItem>
+              <SelectItem value="false">Inactive Only</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="mr-2 h-4 w-4" /> Add Table
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -108,6 +145,7 @@ export function TablesTab({ restaurantId }: { restaurantId: string }) {
               {table.status === 'RESERVED' && <Ban className="h-2.5 w-2.5" />}
               {table.status}
             </div>
+            {!table.isActive && <div className="mt-1 text-[10px] uppercase tracking-wider font-semibold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">Inactive</div>}
           </div>
         ))}
         {tables.length === 0 && (
@@ -116,6 +154,14 @@ export function TablesTab({ restaurantId }: { restaurantId: string }) {
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        totalRecords={totalRecords}
+        pageSize={PAGE_SIZE}
+        onPageChange={handlePageChange}
+      />
 
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent>

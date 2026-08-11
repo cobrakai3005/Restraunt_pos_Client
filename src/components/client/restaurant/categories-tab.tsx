@@ -8,14 +8,24 @@ import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { EditCategoryDialog } from "./edit-category-dialog";
+import { Pagination } from "@/components/ui/pagination";
+
+const PAGE_SIZE = 12;
 
 export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
   const { toast } = useToast();
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Filter + Pagination State
+  const [statusFilter, setStatusFilter] = useState("all"); // all | true | false
+  const [page, setPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Dialog Add State
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -26,11 +36,16 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<any>(null);
 
-  const fetchCategories = async () => {
+  const fetchCategories = async (currentPage = page, filter = statusFilter) => {
     try {
       setIsLoading(true);
-      const res = await restaurantService.getCategories(restaurantId);
-      if (res.success) setCategories(res.data.categories || []);
+      const res = await restaurantService.getCategories(restaurantId, { page: currentPage, limit: PAGE_SIZE, isActive: filter });
+      if (res.success) {
+        setCategories(res.data.categories || []);
+        const meta = res.meta;
+        setTotalRecords(meta?.totalRecords ?? res.data.categories?.length ?? 0);
+        setTotalPages(meta?.totalPages ?? 1);
+      }
     } catch (err) {
       toast({ title: "Error", description: "Failed to load categories", variant: "destructive" });
     } finally {
@@ -39,8 +54,19 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
   };
 
   useEffect(() => {
-    if (restaurantId) fetchCategories();
+    if (restaurantId) fetchCategories(1, "all");
   }, [restaurantId]);
+
+  const handleFilterChange = (v: string) => {
+    setStatusFilter(v);
+    setPage(1);
+    fetchCategories(1, v);
+  };
+
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    fetchCategories(p, statusFilter);
+  };
 
   const handleAdd = async () => {
     if (!formData.name.trim()) return;
@@ -50,7 +76,7 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
       toast({ title: "Success", description: "Category created" });
       setFormData({ name: "", description: "", isActive: true });
       setIsAddOpen(false);
-      fetchCategories();
+      fetchCategories(page, statusFilter);
     } catch (err: any) {
       toast({ title: "Error", description: err.response?.data?.message || "Failed to create", variant: "destructive" });
     } finally {
@@ -62,7 +88,7 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
     try {
       await restaurantService.deleteCategory(restaurantId, id);
       toast({ title: "Success", description: "Category deleted" });
-      fetchCategories();
+      fetchCategories(page, statusFilter);
     } catch (err: any) {
       toast({ title: "Error", description: err.response?.data?.message || "Failed to delete", variant: "destructive" });
     }
@@ -72,11 +98,23 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-lg font-semibold text-foreground">Menu Categories</h3>
-        <Button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-          <Plus className="mr-2 h-4 w-4" /> Add Category
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={statusFilter} onValueChange={handleFilterChange}>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="true">Active Only</SelectItem>
+              <SelectItem value="false">Inactive Only</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+            <Plus className="mr-2 h-4 w-4" /> Add Category
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -110,6 +148,14 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        totalRecords={totalRecords}
+        pageSize={PAGE_SIZE}
+        onPageChange={handlePageChange}
+      />
 
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent>

@@ -83,4 +83,11 @@ export const transactionService = {
     const res = await apiClient.delete<{ success: boolean; message: string }>(`/transactions/${id}`, getHeaders(restaurantId));
     return res.data;
   },
+
+  getLedger: async (companyId: string, query?: any, restaurantId?: string) => {
+    const config: any = getHeaders(restaurantId);
+    if (query) config.params = query;
+    const res = await apiClient.get<{ success: boolean; data: { closingBalance: number; entries: any[] } }>(`/transactions/ledger/${companyId}`, config);
+    return res.data;
+  },
 };

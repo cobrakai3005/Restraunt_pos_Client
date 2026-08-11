@@ -17,7 +17,10 @@ import { inventoryService, InventoryItem } from "@/services/inventory.service";
 import { recipeService, Recipe } from "@/services/recipe.service";
 import { AddRecipeDialog } from "@/components/client/add-recipe-dialog";
 import { EditRecipeDialog } from "@/components/client/edit-recipe-dialog";
+import { Pagination } from "@/components/ui/pagination";
 import { toast } from "@/components/ui/use-toast";
+
+const PAGE_SIZE = 10;
 
 export function RecipesTab({ restaurantId }: { restaurantId: string }) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -28,29 +31,47 @@ export function RecipesTab({ restaurantId }: { restaurantId: string }) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
 
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   useEffect(() => {
     if (restaurantId) {
-      fetchRecipes(restaurantId);
+      fetchRecipes(restaurantId, 1);
       fetchMenuItems(restaurantId);
       fetchInventoryItems(restaurantId);
     }
   }, [restaurantId]);
 
-  const fetchRecipes = async (id: string) => {
+  const fetchRecipes = async (id: string, currentPage = page) => {
     try {
-      const res = await recipeService.getRecipes(id);
+      const res = await recipeService.getRecipes(id, { page: currentPage, limit: PAGE_SIZE });
       if (res?.data?.recipes && Array.isArray(res.data.recipes)) {
         setRecipes(res.data.recipes);
+        setTotalRecords(res.meta?.totalRecords ?? res.data.recipes.length);
+        setTotalPages(res.meta?.totalPages ?? 1);
       } else if (res?.data && Array.isArray(res.data)) {
         setRecipes(res.data);
+        setTotalRecords(res.data.length);
+        setTotalPages(1);
       } else if (Array.isArray(res)) {
         setRecipes(res);
+        setTotalRecords(res.length);
+        setTotalPages(1);
       } else {
         setRecipes([]);
+        setTotalRecords(0);
+        setTotalPages(1);
       }
     } catch (error) {
       console.error("Failed to fetch recipes", error);
     }
+  };
+
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    fetchRecipes(restaurantId, p);
   };
 
   const fetchMenuItems = async (id: string) => {
@@ -88,7 +109,7 @@ export function RecipesTab({ restaurantId }: { restaurantId: string }) {
     try {
       await recipeService.deleteRecipe(id, restaurantId);
       toast({ title: "Success", description: "Recipe deleted successfully." });
-      fetchRecipes(restaurantId);
+      fetchRecipes(restaurantId, page);
     } catch (error) {
       toast({ variant: "destructive", title: "Failed to delete recipe" });
     }
@@ -182,10 +203,18 @@ export function RecipesTab({ restaurantId }: { restaurantId: string }) {
         </div>
       )}
 
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        totalRecords={totalRecords}
+        pageSize={PAGE_SIZE}
+        onPageChange={handlePageChange}
+      />
+
       <AddRecipeDialog 
         open={isAddDialogOpen} 
         onOpenChange={setIsAddDialogOpen} 
-        onSuccess={() => fetchRecipes(restaurantId)}
+        onSuccess={() => fetchRecipes(restaurantId, page)}
         restaurantId={restaurantId}
         menuItems={menuItems}
         inventoryItems={inventoryItems}
@@ -194,7 +223,7 @@ export function RecipesTab({ restaurantId }: { restaurantId: string }) {
       <EditRecipeDialog
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
-        onSuccess={() => fetchRecipes(restaurantId)}
+        onSuccess={() => fetchRecipes(restaurantId, page)}
         restaurantId={restaurantId}
         menuItems={menuItems}
         inventoryItems={inventoryItems}

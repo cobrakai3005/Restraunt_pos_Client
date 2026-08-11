@@ -162,13 +162,13 @@ export default function SettingsPage() {
               <Users2 className="w-4 h-4 mr-2" />
               Customers
             </TabsTrigger>
-            <TabsTrigger 
+            {/* <TabsTrigger 
               value="invoices"
               className="data-[state=active]:bg-blue-50 dark:data-[state=active]:bg-blue-900/20 data-[state=active]:text-blue-700 dark:data-[state=active]:text-blue-400 whitespace-nowrap"
             >
               <FileText className="w-4 h-4 mr-2" />
               Invoices
-            </TabsTrigger>
+            </TabsTrigger> */}
             <TabsTrigger 
               value="products"
               className="data-[state=active]:bg-blue-50 dark:data-[state=active]:bg-blue-900/20 data-[state=active]:text-blue-700 dark:data-[state=active]:text-blue-400 whitespace-nowrap"

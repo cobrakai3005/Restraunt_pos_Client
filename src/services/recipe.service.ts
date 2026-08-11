@@ -20,8 +20,8 @@ const getHeaders = (restaurantId?: string) => {
 };
 
 export const recipeService = {
-  getRecipes: async (restaurantId?: string) => {
-    const res = await apiClient.get("/recipes", getHeaders(restaurantId));
+  getRecipes: async (restaurantId?: string, params?: Record<string, any>) => {
+    const res = await apiClient.get("/recipes", { ...getHeaders(restaurantId), params });
     return res.data;
   },
 

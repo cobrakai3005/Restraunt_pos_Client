@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/sidebar";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, LayoutGrid, Package, Settings, Users, Building2, Store, LogOut, BarChart3, ChefHat, Utensils, ArrowLeftRight } from "lucide-react";
+import { FileText, LayoutGrid, Package, Settings, Users, Building2, Store, LogOut, BarChart3, ChefHat, Utensils, ArrowLeftRight, BookOpen } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const adminNavItems = [
@@ -19,7 +19,7 @@ const adminNavItems = [
   { icon: Building2, label: "Client Management", href: "/admin/clients" },
   { icon: Store, label: "Restaurants", href: "/admin/restaurants" },
   { icon: FileText, label: "Documents", href: "#" },
-  { icon: Users, label: "Users", href: "/admin/users" },
+  // { icon: Users, label: "Users", href: "/admin/users" },
   { icon: Settings, label: "Settings", href: "#" },
 ];
 
@@ -27,7 +27,9 @@ const clientNavItems = [
   { icon: BarChart3, label: "Analytics", href: "/client/analytics" },
   { icon: Store, label: "Restaurants", href: "/client/restaurants" },
   { icon: ArrowLeftRight, label: "Transactions", href: "/transactions" },
+  { icon: BookOpen, label: "Ledgers", href: "/client/ledgers" },
   { icon: Utensils, label: "Menu", href: "/client/menu" },
+  { icon: ChefHat, label: "Recipes (BOM)", href: "/client/menu/recipes" },
   { icon: Users, label: "Employees", href: "/client/employees" },
   { icon: Package, label: "Inventory", href: "/client/inventory" },
   { icon: Settings, label: "Settings", href: "/client/settings" },

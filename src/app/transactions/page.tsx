@@ -334,12 +334,12 @@ export default function TransactionsPage() {
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <ReceiptText className="h-5 w-5 text-emerald-600" />
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Billed orders</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Open and Billed orders</h2>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400">Review open and billed orders, generate bills, or collect payment.</p>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          {/* <div className="flex gap-2 overflow-x-auto pb-1">
             {billedOrders.map((order) => (
               <a
                 key={order._id}
@@ -350,7 +350,7 @@ export default function TransactionsPage() {
                 #{order._id.slice(-6).toUpperCase()}
               </a>
             ))}
-          </div>
+          </div> */}
 
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {billedOrders.map((order) => {
@@ -645,7 +645,7 @@ export default function TransactionsPage() {
                           onClick={(event) => event.stopPropagation()}
                           onPointerDown={(event) => event.stopPropagation()}
                         >
-                          {tx.type === "PURCHASE" || tx.type === "JOURNAL" && (
+                          {(tx.type === "PURCHASE" || tx.type === "JOURNAL") && (
                             <DropdownMenuItem onClick={() => {
                               setTransactionToEdit(tx);
                               setNewTransactionType("PURCHASE");
@@ -654,6 +654,10 @@ export default function TransactionsPage() {
                               Edit Purchase
                             </DropdownMenuItem>
                           )}
+
+                        
+
+                         
                           <DropdownMenuItem onClick={() => {
                             setSelectedInvoiceToPrint(tx);
                             setInvoiceAutoAction(null);
@@ -675,6 +679,8 @@ export default function TransactionsPage() {
                           }}>
                             Download PDF
                           </DropdownMenuItem>
+
+                          
                           <DropdownMenuItem
                             className="text-red-600 focus:text-red-600 focus:bg-red-50"
                             onClick={() => handleDeleteTransaction(tx._id)}

@@ -2,8 +2,8 @@ import { apiClient } from "@/lib/api";
 
 export const clientService = {
   // --- RESTAURANTS ---
-  getRestaurants: async () => {
-    const res = await apiClient.get("/client/restaurants");
+  getRestaurants: async (params?: Record<string, any>) => {
+    const res = await apiClient.get("/client/restaurants", { params: params ?? { limit: 100 } });
     return res.data;
   },
   getRestaurantById: async (id: string) => {
@@ -24,8 +24,8 @@ export const clientService = {
   },
 
   // --- EMPLOYEES ---
-  getEmployees: async () => {
-    const res = await apiClient.get("/client/employees");
+  getEmployees: async (params?: Record<string, any>) => {
+    const res = await apiClient.get("/client/employees", { params: params ?? { limit: 100 } });
     return res.data;
   },
   getEmployeeById: async (id: string) => {

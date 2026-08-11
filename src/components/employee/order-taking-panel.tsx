@@ -9,14 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, Layers } from "lucide-react";
-import { User } from "@/services/auth.service";
 import { employeeService } from "@/services/employee.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { VariantPickerDialog } from "./variant-picker-dialog";
-
-interface DashboardProps {
-  user: User;
-}
 
 interface Menu {
   _id: string;
@@ -70,41 +65,44 @@ interface Order {
     items?: {
       _id: string;
       itemStatus: string;
+      quantity?: number;
+      menuItemId?: { name: string };
     }[];
   }[];
 }
 
-export function WaiterDashboard({ user }: DashboardProps) {
+interface OrderTakingPanelProps {
+  onOrderFired?: () => void;
+}
+
+export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   const [menus, setMenus] = useState<Menu[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
-  const [categories, setCategories] = useState<{_id: string, name: string}[]>([]);
+  const [categories, setCategories] = useState<{ _id: string; name: string }[]>([]);
   const [activeOrders, setActiveOrders] = useState<Order[]>([]);
-  
+
   const [activeCategoryId, setActiveCategoryId] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedTable, setSelectedTable] = useState("");
-  const [orderType, setOrderType] = useState<"DINE_IN" | "TAKEAWAY" >("DINE_IN");
+  const [orderType, setOrderType] = useState<"DINE_IN" | "TAKEAWAY">("DINE_IN");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [updating, setUpdating] = useState<Record<string, boolean>>({});
-  const [itemErrors, setItemErrors] = useState<Record<string, string>>({});
   const [pickerMenu, setPickerMenu] = useState<Menu | null>(null);
   const { toast } = useToast();
 
-  const activeOrdersRef = useRef<Order[]>([]);
-  const toastedItemsRef = useRef<Set<string>>(new Set());
   const isFirstLoadRef = useRef(true);
-  
+  const toastedItemsRef = useRef<Set<string>>(new Set());
+
   const fetchActiveOrders = useCallback(async () => {
     try {
       const res = await employeeService.getOrders({ status: "OPEN" });
       const newOrders = res.data || [];
-      
+
       newOrders.forEach((newOrder: any) => {
         newOrder.kots?.forEach((newKot: any) => {
           newKot.items?.forEach((newItem: any) => {
@@ -125,7 +123,6 @@ export function WaiterDashboard({ user }: DashboardProps) {
 
       isFirstLoadRef.current = false;
       setActiveOrders(newOrders);
-      activeOrdersRef.current = newOrders;
     } catch (error) {
       console.error("Failed to fetch active orders", error);
     }
@@ -137,10 +134,9 @@ export function WaiterDashboard({ user }: DashboardProps) {
         const [menRes, tabRes, catRes] = await Promise.all([
           employeeService.getMenuItems(),
           employeeService.getTables(),
-          employeeService.getCategories()
+          employeeService.getCategories(),
         ]);
-        
-        // Filter out inactive/soft-deleted items
+
         setMenus(menRes.data?.menuItems?.filter((m: any) => m.isActive) || []);
         setTables(tabRes.data?.tables || []);
         setCategories(catRes.data?.categories?.filter((c: any) => c.isActive) || []);
@@ -237,34 +233,31 @@ export function WaiterDashboard({ user }: DashboardProps) {
     try {
       const kotPayload = {
         station: "MAIN_KITCHEN",
-        items: cart.map(c => ({ 
-          menuItemId: c._id, 
+        items: cart.map(c => ({
+          menuItemId: c._id,
           variantName: c.selectedVariant.name,
-          quantity: c.quantity, 
-          notes: c.notes || undefined
-        }))
+          quantity: c.quantity,
+          notes: c.notes || undefined,
+        })),
       };
 
-      const existingOrder = orderType === "DINE_IN" 
+      const existingOrder = orderType === "DINE_IN"
         ? activeOrders.find(o => o.tableId?._id === selectedTable && o.status === "OPEN")
         : null;
 
       if (existingOrder) {
-        // Append KOT to existing order
         await employeeService.addKot(existingOrder._id, kotPayload);
         toast({ title: "Additional KOT sent to kitchen successfully!" });
       } else {
-        // 1. Create the Order envelope
         const orderPayload = {
           tableId: selectedTable || undefined,
           orderType,
-          customerDetails: customerName || customerPhone ? { name: customerName, phone: customerPhone } : undefined
+          customerDetails: customerName || customerPhone ? { name: customerName, phone: customerPhone } : undefined,
         };
-        
+
         const orderRes = await employeeService.createOrder(orderPayload);
         const orderId = orderRes.data._id;
 
-        // 2. Add the KOT (Kitchen Order Ticket)
         await employeeService.addKot(orderId, kotPayload);
         toast({ title: "New order sent to kitchen successfully!" });
       }
@@ -275,8 +268,8 @@ export function WaiterDashboard({ user }: DashboardProps) {
         setCustomerPhone("");
         setSelectedTable("");
       }
-      fetchActiveOrders(); // refresh active orders immediately
-      
+      fetchActiveOrders();
+      onOrderFired?.();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error placing order", description: error.message || "Failed to place order." });
     } finally {
@@ -284,34 +277,18 @@ export function WaiterDashboard({ user }: DashboardProps) {
     }
   };
 
-  const markItemServed = async (orderId: string, itemId: string) => {
-    const key = `${orderId}_${itemId}`;
-    setUpdating(prev => ({ ...prev, [key]: true }));
-    setItemErrors(prev => ({ ...prev, [key]: "" }));
-    try {
-      await employeeService.updateKotItemStatus(orderId, itemId, "SERVED");
-      fetchActiveOrders();
-    } catch (error: any) {
-      const message = error.response?.data?.message || error.message || "Failed to update status";
-      setItemErrors(prev => ({ ...prev, [key]: message }));
-      toast({ variant: "destructive", title: "Failed to update status", description: message });
-    } finally {
-      setUpdating(prev => { const next = { ...prev }; delete next[key]; return next; });
-    }
-  };
-
   if (isLoading) {
     return (
-      <div className="flex h-[calc(100vh-100px)] items-center justify-center bg-slate-50 dark:bg-slate-950 transition-colors">
+      <div className="flex h-full min-h-[300px] items-center justify-center bg-slate-50 dark:bg-slate-950 transition-colors">
         <p className="text-slate-600 dark:text-slate-400">Syncing terminal data...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-120px)] bg-slate-100/50 dark:bg-slate-900/50 -mx-8 -my-8 rounded-xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 transition-colors backdrop-blur-xl shadow-2xl">
-      
-      {/* Active Tables Sidebar */}
+    <div className="flex flex-col md:flex-row h-full bg-slate-100/50 dark:bg-slate-900/50 rounded-xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 transition-colors backdrop-blur-xl shadow-2xl">
+
+      {/* Tables Sidebar */}
       <div className="hidden md:flex flex-col w-[200px] lg:w-[220px] border-r border-white/30 dark:border-white/10 bg-white/60 dark:bg-slate-950/60 z-10 shrink-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] transition-colors backdrop-blur-xl">
         <div className="p-4 border-b border-white/30 dark:border-slate-800/50 shrink-0 h-[80px] flex items-center justify-between">
           <h2 className="font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
@@ -333,8 +310,8 @@ export function WaiterDashboard({ user }: DashboardProps) {
               }
 
               return (
-                <div 
-                  key={t._id} 
+                <div
+                  key={t._id}
                   onClick={() => {
                     setSelectedTable(t._id);
                     setOrderType("DINE_IN");
@@ -375,15 +352,15 @@ export function WaiterDashboard({ user }: DashboardProps) {
         </ScrollArea>
       </div>
 
-      {/* Left Menu Section */}
+      {/* Menu Section */}
       <div className="flex-1 flex flex-col p-6 gap-6 overflow-hidden bg-transparent">
-        
+
         {/* Search & Categories */}
         <div className="space-y-4 shrink-0">
           <div className="relative group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors" />
-            <Input 
-              placeholder="Search menu items..." 
+            <Input
+              placeholder="Search menu items..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-12 h-14 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-white/50 dark:border-slate-700/50 shadow-sm text-lg rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:ring-offset-0 transition-all hover:bg-white/90 dark:hover:bg-slate-900/90"
@@ -391,7 +368,7 @@ export function WaiterDashboard({ user }: DashboardProps) {
           </div>
 
           <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar">
-            <Button 
+            <Button
               variant={activeCategoryId === "All" ? "default" : "outline"}
               className={`rounded-xl whitespace-nowrap px-6 transition-all duration-200 ${activeCategoryId === "All" ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20" : "bg-white/60 dark:bg-slate-900/60 border-white/50 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-white/90 dark:hover:bg-slate-800 shadow-sm"}`}
               onClick={() => setActiveCategoryId("All")}
@@ -399,8 +376,8 @@ export function WaiterDashboard({ user }: DashboardProps) {
               All Items
             </Button>
             {categories.map(cat => (
-              <Button 
-                key={cat._id} 
+              <Button
+                key={cat._id}
                 variant={activeCategoryId === cat._id ? "default" : "outline"}
                 className={`rounded-xl whitespace-nowrap px-6 transition-all duration-200 ${activeCategoryId === cat._id ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20" : "bg-white/60 dark:bg-slate-900/60 border-white/50 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-white/90 dark:hover:bg-slate-800 shadow-sm"}`}
                 onClick={() => setActiveCategoryId(cat._id)}
@@ -415,8 +392,8 @@ export function WaiterDashboard({ user }: DashboardProps) {
         <ScrollArea className="flex-1 -mx-6 px-6">
           <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5 pb-10">
             {filteredMenus.map(menu => (
-              <Card 
-                key={menu._id} 
+              <Card
+                key={menu._id}
                 className={`cursor-pointer transition-all duration-300 flex flex-col h-36 active:scale-[0.97] bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-white/60 dark:border-slate-700/50 hover:shadow-xl hover:-translate-y-1 hover:border-blue-400/50 dark:hover:border-blue-500/50 hover:bg-white/90 dark:hover:bg-slate-800/90 shadow-sm ${!menu.isAvailable ? 'opacity-50 grayscale hover:-translate-y-0 hover:shadow-sm cursor-not-allowed' : ''}`}
                 onClick={() => handleMenuClick(menu)}
               >
@@ -452,7 +429,7 @@ export function WaiterDashboard({ user }: DashboardProps) {
         </ScrollArea>
       </div>
 
-      {/* Right Cart Section */}
+      {/* Cart Section */}
       <div className="w-full md:w-[350px] lg:w-[400px] border-l border-white/30 dark:border-white/10 bg-white/80 dark:bg-slate-950/80 backdrop-blur-2xl flex flex-col z-20 shrink-0 shadow-[-8px_0_30px_-15px_rgba(0,0,0,0.1)] transition-colors overflow-y-auto hide-scrollbar">
         <div className="p-4 border-b border-slate-200/50 dark:border-slate-800/50 space-y-4 shrink-0">
           <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/50 dark:bg-slate-900/50 rounded-xl border border-white/50 dark:border-slate-800/50 shadow-inner">
@@ -466,7 +443,7 @@ export function WaiterDashboard({ user }: DashboardProps) {
               Delivery
             </Button> */}
           </div>
-          
+
           {orderType === "DINE_IN" && (
             <div className="space-y-1.5">
               <Label className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-widest pl-1">Select Table</Label>
@@ -504,16 +481,16 @@ export function WaiterDashboard({ user }: DashboardProps) {
           <div className="space-y-1.5 pt-1">
             <Label className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-widest pl-1">Customer Details <span className="opacity-50 font-medium lowercase">(optional)</span></Label>
             <div className="flex gap-2">
-              <Input 
-                placeholder="Name" 
-                value={customerName} 
-                onChange={e => setCustomerName(e.target.value)} 
+              <Input
+                placeholder="Name"
+                value={customerName}
+                onChange={e => setCustomerName(e.target.value)}
                 className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm text-slate-900 dark:text-white h-11 rounded-xl placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50"
               />
-              <Input 
-                placeholder="Phone" 
-                value={customerPhone} 
-                onChange={e => setCustomerPhone(e.target.value)} 
+              <Input
+                placeholder="Phone"
+                value={customerPhone}
+                onChange={e => setCustomerPhone(e.target.value)}
                 className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm text-slate-900 dark:text-white h-11 w-32 rounded-xl placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50"
               />
             </div>
@@ -531,42 +508,21 @@ export function WaiterDashboard({ user }: DashboardProps) {
                   <div className="space-y-3 bg-white/50 dark:bg-slate-900/30 border border-slate-200/50 dark:border-slate-800/50 p-4 rounded-2xl shadow-sm backdrop-blur-md">
                     <h3 className="font-extrabold text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-widest pl-1">Already Ordered</h3>
                     <div className="space-y-1">
-                      {existingOrder.kots?.flatMap(kot => 
+                      {existingOrder.kots?.flatMap(kot =>
                         kot.items?.map((item: any) => (
                           <div key={item._id} className="flex justify-between items-center py-2.5 border-b border-slate-200/50 dark:border-slate-800/50 last:border-0">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-slate-800 dark:text-slate-200 text-sm bg-slate-100 dark:bg-slate-800 w-6 h-6 flex items-center justify-center rounded-md">{item.quantity}</span>
                               <span className="font-semibold text-slate-900 dark:text-white text-sm">{item.menuItemId?.name || "Item"}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              {item.itemStatus === 'READY' ? (
-                                <div className="flex flex-col items-end gap-1">
-                                  <button
-                                    onClick={() => markItemServed(existingOrder._id, item._id)}
-                                    disabled={!!updating[`${existingOrder._id}_${item._id}`]}
-                                    className={`text-[10px] font-extrabold px-3 py-1.5 rounded-full uppercase bg-green-500 text-white hover:bg-green-400 shadow-[0_0_12px_rgba(34,197,94,0.4)] hover:shadow-[0_0_20px_rgba(34,197,94,0.6)] transition-all cursor-pointer active:scale-95 animate-pulse ${updating[`${existingOrder._id}_${item._id}`] ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                    title="Click to mark as Picked Up/Served"
-                                  >
-                                    {updating[`${existingOrder._id}_${item._id}`] ? (
-                                      <Loader2 className="h-3 w-3 inline animate-spin" />
-                                    ) : "PICK UP"}
-                                  </button>
-                                  {itemErrors[`${existingOrder._id}_${item._id}`] && (
-                                    <span className="text-[10px] font-semibold text-red-600 dark:text-red-400">
-                                      {itemErrors[`${existingOrder._id}_${item._id}`]}
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                                  item.itemStatus === 'SERVED' ? 'bg-slate-200/50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400' :
-                                  item.itemStatus === 'PREPARING' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400' :
-                                  'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
-                                }`}>
-                                  {item.itemStatus}
-                                </span>
-                              )}
-                            </div>
+                            <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                              item.itemStatus === 'SERVED' ? 'bg-slate-200/50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400' :
+                              item.itemStatus === 'READY' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' :
+                              item.itemStatus === 'PREPARING' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400' :
+                              'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+                            }`}>
+                              {item.itemStatus}
+                            </span>
                           </div>
                         ))
                       )}
@@ -599,9 +555,9 @@ export function WaiterDashboard({ user }: DashboardProps) {
                           </div>
                           <div className="font-extrabold text-sm text-blue-600 dark:text-blue-400">₹{(item.selectedVariant.price * item.quantity).toFixed(2)}</div>
                         </div>
-                        
-                        <Input 
-                          placeholder="Add cooking notes (e.g. no onions)" 
+
+                        <Input
+                          placeholder="Add cooking notes (e.g. no onions)"
                           value={item.notes}
                           onChange={(e) => updateNotes(item.cartId, e.target.value)}
                           className="h-8 text-xs bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-600 rounded-lg focus-visible:ring-blue-500/30"
@@ -645,11 +601,12 @@ export function WaiterDashboard({ user }: DashboardProps) {
               <span className="text-blue-600 dark:text-blue-400">₹{total.toFixed(2)}</span>
             </div>
           </div>
-          <Button 
-            className="w-full h-14 text-lg font-extrabold tracking-wide shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.23)] hover:bg-[rgba(37,99,235,0.9)] bg-blue-600 text-white rounded-xl active:scale-[0.98] transition-all duration-200" 
+          <Button
+            className="w-full h-14 text-lg font-extrabold tracking-wide shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.23)] hover:bg-[rgba(37,99,235,0.9)] bg-blue-600 text-white rounded-xl active:scale-[0.98] transition-all duration-200"
             disabled={cart.length === 0 || isSubmitting}
             onClick={placeOrder}
           >
+            {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin inline" /> : null}
             {isSubmitting ? "Firing Order..." : "FIRE TO KITCHEN"}
           </Button>
         </div>

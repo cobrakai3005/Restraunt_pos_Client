@@ -18,10 +18,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Store, UserCircle, KeyRound } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 
-import { authService } from "@/services/auth.service";
+import { authService, User } from "@/services/auth.service";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
 import { Suspense } from "react";
+import { useAuth } from "@/context/auth-context";
 
 const credentialSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -37,6 +38,7 @@ function EmployeeLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { login } = useAuth();
   
   // Try to load from URL first, then fallback to saved local storage
   const urlRestaurantId = searchParams.get("restaurantId") || "";
@@ -59,8 +61,8 @@ function EmployeeLoginForm() {
     },
   });
 
-  const handleLoginSuccess = (token: string, restaurantId?: string) => {
-    localStorage.setItem("vinimay_token", token);
+  const handleLoginSuccess = (token: string, user: User, restaurantId?: string) => {
+    login(token, user);
     if (restaurantId) {
        localStorage.setItem("vinimay_restaurant_id", restaurantId);
     }
@@ -84,7 +86,7 @@ function EmployeeLoginForm() {
       const response = await authService.employeeLogin(values.username, values.password);
       if (response?.data?.token) {
         // We get user object back which has the restaurantId
-        handleLoginSuccess(response.data.token, response.data.user?.restaurantId);
+        handleLoginSuccess(response.data.token, response.data.user, response.data.user?.restaurantId);
       }
     } catch (error: any) {
       handleLoginError(error);
@@ -95,7 +97,7 @@ function EmployeeLoginForm() {
     try {
       const response = await authService.posLogin(values.restaurantId, values.posPin);
       if (response?.data?.token) {
-        handleLoginSuccess(response.data.token, values.restaurantId);
+        handleLoginSuccess(response.data.token, response.data.user, values.restaurantId);
       }
     } catch (error: any) {
       handleLoginError(error);
@@ -225,7 +227,7 @@ function EmployeeLoginForm() {
                             <Input 
                               className="bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white text-center text-xl tracking-[1em]" 
                               type="password" 
-                              maxLength={6}
+                              maxLength={4}
                               inputMode="numeric"
                               placeholder="••••" 
                               {...field} 

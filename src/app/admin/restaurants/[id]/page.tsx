@@ -9,24 +9,26 @@ import { CategoriesTab } from "@/components/client/restaurant/categories-tab";
 import { MenuItemsTab } from "@/components/client/restaurant/menu-items-tab";
 import { TablesTab } from "@/components/client/restaurant/tables-tab";
 import { RecipesTab } from "@/components/client/restaurant/recipes-tab";
-import { TasksTab } from "@/components/client/restaurant/tasks-tab";
 import { OrdersTab } from "@/components/client/restaurant/orders-tab";
-import { clientService } from "@/services/client.service";
+import { adminService } from "@/services/admin.service";
 
-export default function RestaurantDashboard() {
+export default function AdminRestaurantDashboard() {
   const params = useParams();
   const router = useRouter();
   const restaurantId = params.id as string;
-  
+
   const [restaurantName, setRestaurantName] = useState("Loading...");
+  const [clientName, setClientName] = useState("");
 
   useEffect(() => {
     if (restaurantId) {
-      // Assuming getRestaurantById exists. If not, we could fetch all and filter, or just use a generic name.
-      clientService.getRestaurants().then(res => {
+      adminService.getAllRestaurants().then(res => {
         if (res.success) {
-          const rest = res.data.restaurants.find((r: any) => r._id === restaurantId);
-          if (rest) setRestaurantName(rest.name);
+          const rest = (res.data.restaurants || []).find((r: any) => r._id === restaurantId);
+          if (rest) {
+            setRestaurantName(rest.name);
+            setClientName(rest.clientId?.contactName || "");
+          }
         }
       });
     }
@@ -44,7 +46,9 @@ export default function RestaurantDashboard() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">{restaurantName}</h1>
-            <p className="text-sm text-slate-500">Manage menus, tables, and settings for this branch.</p>
+            <p className="text-sm text-slate-500">
+              {clientName ? `Manage this branch for ${clientName}.` : "Manage this branch."}
+            </p>
           </div>
         </div>
       </div>
@@ -68,19 +72,19 @@ export default function RestaurantDashboard() {
               Recipes
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="overview" className="focus-visible:outline-none">
             <OrdersTab restaurantId={restaurantId} />
           </TabsContent>
-          
+
           <TabsContent value="categories" className="focus-visible:outline-none">
             <CategoriesTab restaurantId={restaurantId} />
           </TabsContent>
-          
+
           <TabsContent value="menu" className="focus-visible:outline-none">
             <MenuItemsTab restaurantId={restaurantId} />
           </TabsContent>
-          
+
           <TabsContent value="tables" className="focus-visible:outline-none">
             <TablesTab restaurantId={restaurantId} />
           </TabsContent>

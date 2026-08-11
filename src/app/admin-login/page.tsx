@@ -27,6 +27,7 @@ import { Building2 } from "lucide-react";
 import { authService } from "@/services/auth.service";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/context/auth-context";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -36,6 +37,7 @@ const loginSchema = z.object({
 export default function AdminLogin() {
   const router = useRouter();
   const { toast } = useToast();
+  const { login } = useAuth();
   
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -50,9 +52,7 @@ export default function AdminLogin() {
       const response = await authService.login(values.username, values.password);
       console.log(response);
       if (response?.data?.token) {
-        localStorage.setItem("vinimay_token", response.data.token);
-        
-        localStorage.setItem("vinimay_role", response.data?.user?.role);
+        login(response.data.token, response.data.user);
         toast({
           title: "Login Successful",
           description: "Welcome back, Administrator.",

@@ -30,9 +30,9 @@ const getHeaders = (restaurantId?: string) => {
 };
 
 export const inventoryService = {
-  async getInventoryItems(restaurantId?: string) {
+  async getInventoryItems(restaurantId?: string, params?: Record<string, any>) {
     const url = restaurantId ? `/inventory?restaurantId=${restaurantId}` : "/inventory";
-    const response = await apiClient.get(url, getHeaders(restaurantId));
+    const response = await apiClient.get(url, { ...getHeaders(restaurantId), params });
     return response.data;
   },
 

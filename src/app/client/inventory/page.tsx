@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Package, Edit, Trash2, ArrowUpDown } from "lucide-react";
+import { Plus, Package, Edit, Trash2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Select,
@@ -20,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
 import { clientService } from "@/services/client.service";
 import { inventoryService, InventoryItem } from "@/services/inventory.service";
 import { AddInventoryDialog } from "@/components/client/add-inventory-dialog";
@@ -31,6 +33,8 @@ interface Restaurant {
   name: string;
 }
 
+const PAGE_SIZE = 10;
+
 export default function ClientInventoryPage() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string>("");
@@ -40,13 +44,20 @@ export default function ClientInventoryPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
 
+  // Search + Pagination State
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   useEffect(() => {
     fetchRestaurants();
   }, []);
 
   useEffect(() => {
     if (selectedRestaurantId) {
-      fetchInventory(selectedRestaurantId);
+      setPage(1);
+      fetchInventory(selectedRestaurantId, 1, "");
     } else {
       setInventoryItems([]);
     }
@@ -81,13 +92,31 @@ export default function ClientInventoryPage() {
     }
   };
 
-  const fetchInventory = async (restaurantId: string) => {
+  const fetchInventory = async (restaurantId: string, currentPage = page, searchTerm = search) => {
     try {
-      const res = await inventoryService.getInventoryItems(restaurantId);
+      const res = await inventoryService.getInventoryItems(restaurantId, {
+        page: currentPage,
+        limit: PAGE_SIZE,
+        search: searchTerm || undefined,
+      });
       setInventoryItems(res.data || []);
+      const meta = res.meta;
+      setTotalRecords(meta?.totalRecords ?? res.data?.length ?? 0);
+      setTotalPages(meta?.totalPages ?? 1);
     } catch (error) {
       console.error("Failed to fetch inventory", error);
     }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(1);
+    fetchInventory(selectedRestaurantId, 1, value);
+  };
+
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    fetchInventory(selectedRestaurantId, p, search);
   };
 
   const handleEdit = (item: InventoryItem) => {
@@ -103,7 +132,7 @@ export default function ClientInventoryPage() {
     try {
       await inventoryService.deleteInventoryItem(item._id, selectedRestaurantId);
       toast({ title: "Success", description: "Item deleted successfully" });
-      fetchInventory(selectedRestaurantId);
+      fetchInventory(selectedRestaurantId, page, search);
     } catch (error) {
       console.error("Failed to delete item", error);
     }
@@ -120,6 +149,15 @@ export default function ClientInventoryPage() {
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="relative w-full sm:w-56">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search items..."
+              value={search}
+              onChange={e => handleSearchChange(e.target.value)}
+              className="pl-9"
+            />
+          </div>
           <Select 
             value={selectedRestaurantId} 
             onValueChange={setSelectedRestaurantId}
@@ -224,6 +262,18 @@ export default function ClientInventoryPage() {
               </Table>
             </div>
           )}
+
+          {inventoryItems.length > 0 && (
+            <div className="mt-4">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                totalRecords={totalRecords}
+                pageSize={PAGE_SIZE}
+                onPageChange={handlePageChange}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -231,7 +281,7 @@ export default function ClientInventoryPage() {
         open={isAddDialogOpen} 
         onOpenChange={setIsAddDialogOpen} 
         onSuccess={() => {
-          if (selectedRestaurantId) fetchInventory(selectedRestaurantId);
+          if (selectedRestaurantId) fetchInventory(selectedRestaurantId, page, search);
         }}
         restaurants={restaurants}
         preselectedRestaurantId={selectedRestaurantId}
@@ -241,7 +291,7 @@ export default function ClientInventoryPage() {
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
         onSuccess={() => {
-          if (selectedRestaurantId) fetchInventory(selectedRestaurantId);
+          if (selectedRestaurantId) fetchInventory(selectedRestaurantId, page, search);
         }}
         restaurantId={selectedRestaurantId}
         item={editingItem}

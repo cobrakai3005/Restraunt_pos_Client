@@ -1,12 +1,32 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, UserSquare2, Mail, Phone, Pencil, Trash2, Copy, Check } from "lucide-react";
+import { Plus, UserSquare2, Mail, Phone, Pencil, Trash2, Copy, Check, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Pagination } from "@/components/ui/pagination";
 import { clientService } from "@/services/client.service";
 import { useToast } from "@/components/ui/use-toast";
 import { AddEmployeeDialog } from "@/components/client/add-employee-dialog";
 import { EditEmployeeDialog } from "@/components/client/edit-employee-dialog";
+
+const PAGE_SIZE = 10;
+
+const ROLE_FILTERS = [
+  { value: "ALL", label: "All Roles" },
+  { value: "MANAGER", label: "Manager" },
+  { value: "CASHIER", label: "Cashier" },
+  { value: "WAITER", label: "Waiter" },
+  { value: "CHEF", label: "Chef" },
+  { value: "INVENTORY_MANAGER", label: "Inventory Manager" },
+];
 
 export default function EmployeesPage() {
   const { toast } = useToast();
@@ -19,6 +39,13 @@ export default function EmployeesPage() {
   const [copied, setCopied] = useState(false);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8678";
 
+  // Search + Filter + Pagination State
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(`${appUrl}/employee-login`);
     setCopied(true);
@@ -29,12 +56,20 @@ export default function EmployeesPage() {
     });
   };
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = async (currentPage = page, searchTerm = search, role = roleFilter) => {
     try {
       setIsLoading(true);
-      const res = await clientService.getEmployees();
+      const res = await clientService.getEmployees({
+        page: currentPage,
+        limit: PAGE_SIZE,
+        search: searchTerm || undefined,
+        role: role !== "ALL" ? role : undefined,
+      });
       if (res.success) {
         setEmployees(res.data.employees || []);
+        const meta = res.meta;
+        setTotalRecords(meta?.totalRecords ?? res.data.employees?.length ?? 0);
+        setTotalPages(meta?.totalPages ?? 1);
       }
     } catch (error) {
       toast({
@@ -48,8 +83,25 @@ export default function EmployeesPage() {
   };
 
   useEffect(() => {
-    fetchEmployees();
+    fetchEmployees(1, "", "ALL");
   }, []);
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    setPage(1);
+    fetchEmployees(1, value, roleFilter);
+  };
+
+  const handleRoleChange = (value: string) => {
+    setRoleFilter(value);
+    setPage(1);
+    fetchEmployees(1, search, value);
+  };
+
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    fetchEmployees(p, search, roleFilter);
+  };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this employee?")) return;
@@ -78,13 +130,34 @@ export default function EmployeesPage() {
         <div className="flex items-center gap-4">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Employees</h1>
           <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-700">
-            {employees.length} staff
+            {totalRecords} staff
           </span>
         </div>
-        <Button onClick={() => setIsAddOpen(true)} className="rounded-full bg-emerald-600 hover:bg-emerald-700">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Employee
-        </Button>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search employees..."
+              value={search}
+              onChange={e => handleSearchChange(e.target.value)}
+              className="pl-9 w-56"
+            />
+          </div>
+          <Select value={roleFilter} onValueChange={handleRoleChange}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Filter by role" />
+            </SelectTrigger>
+            <SelectContent>
+              {ROLE_FILTERS.map(r => (
+                <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button onClick={() => setIsAddOpen(true)} className="rounded-full bg-emerald-600 hover:bg-emerald-700">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Employee
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between rounded-xl border border-border bg-card text-card-foreground p-4 shadow-sm">
@@ -107,18 +180,19 @@ export default function EmployeesPage() {
           <span className="text-sm text-slate-500">Loading employees...</span>
         </div>
       ) : employees.length > 0 ? (
-        <div className="w-full overflow-x-auto rounded-2xl border border-border bg-card text-card-foreground p-2 shadow-sm">
-          <table className="w-full min-w-[800px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs font-semibold tracking-wider text-slate-500">
-                <th className="py-4 pl-6 pr-4">EMPLOYEE</th>
-                <th className="py-4 px-4">ROLE</th>
-                <th className="py-4 px-4">EMAIL</th>
-                <th className="py-4 px-4">PHONE</th>
-                <th className="py-4 px-4">BRANCH</th>
-                <th className="py-4 pr-6 pl-4 text-right">ACTIONS</th>
-              </tr>
-            </thead>
+        <>
+          <div className="w-full overflow-x-auto rounded-2xl border border-border bg-card text-card-foreground p-2 shadow-sm">
+            <table className="w-full min-w-[800px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs font-semibold tracking-wider text-slate-500">
+                  <th className="py-4 pl-6 pr-4">EMPLOYEE</th>
+                  <th className="py-4 px-4">ROLE</th>
+                  <th className="py-4 px-4">EMAIL</th>
+                  <th className="py-4 px-4">PHONE</th>
+                  <th className="py-4 px-4">BRANCH</th>
+                  <th className="py-4 pr-6 pl-4 text-right">ACTIONS</th>
+                </tr>
+              </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {employees.map((emp) => {
                 const initials = emp.contactName?.substring(0, 2).toUpperCase() || "EM";
@@ -174,7 +248,18 @@ export default function EmployeesPage() {
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+
+          {employees.length > 0 && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalRecords={totalRecords}
+              pageSize={PAGE_SIZE}
+              onPageChange={handlePageChange}
+            />
+          )}
+        </>
       ) : (
         <div className="flex h-40 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card text-card-foreground gap-2">
           <span className="text-sm text-slate-500">You haven't added any employees yet.</span>

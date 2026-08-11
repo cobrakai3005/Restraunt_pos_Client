@@ -8,6 +8,12 @@ export interface User {
   role: string;
   clientId?: string;
   restaurantId?: string;
+  restaurant?: {
+    name?: string;
+    address?: { street?: string; city?: string; state?: string; zipCode?: string; country?: string };
+    contact?: { phone?: string; email?: string; managerName?: string };
+    compliance?: { gstNumber?: string; fssaiNumber?: string };
+  } | null;
 }
 
 export const authService = {
@@ -55,7 +61,7 @@ export const authService = {
     }
     if (typeof window !== "undefined") {
       localStorage.removeItem("vinimay_token");
-      localStorage.removeItem("vinimay_restaurant_id");
+      // Keep vinimay_restaurant_id so the PIN login can pre-fill the restaurant without re-typing it.
     }
   },
 };

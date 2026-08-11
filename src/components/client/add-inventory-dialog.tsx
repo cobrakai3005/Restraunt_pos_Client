@@ -7,10 +7,25 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { inventoryService } from "@/services/inventory.service";
 import { toast } from "@/components/ui/use-toast";
 import { Loader2, ChevronsUpDown, Check, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const UNITS = [
+  { value: "PCS", label: "Piece" },
+  { value: "KG", label: "Kg" },
+  { value: "LITRE", label: "Litre" },
+  { value: "BOX", label: "Box" },
+  { value: "METER", label: "Meter" },
+  { value: "DOZEN", label: "Dozen" },
+  { value: "PACK", label: "Pack" },
+  { value: "SQFT", label: "Sq. ft." },
+  { value: "GRAM", label: "Gm" },
+  { value: "ML", label: "Ml" },
+];
 
 interface Restaurant {
   _id: string;
@@ -28,6 +43,7 @@ interface AddInventoryDialogProps {
 export function AddInventoryDialog({ open, onOpenChange, onSuccess, restaurants, preselectedRestaurantId }: AddInventoryDialogProps) {
   const [loading, setLoading] = useState(false);
   const [openCombobox, setOpenCombobox] = useState(false);
+  const [openUnitCombobox, setOpenUnitCombobox] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     unit: "KG" as "KG" | "LITRE" | "GRAM" | "ML" | "PCS",
@@ -120,21 +136,49 @@ export function AddInventoryDialog({ open, onOpenChange, onSuccess, restaurants,
 
             <div className="space-y-2">
               <Label>Unit</Label>
-              <Select 
-                value={formData.unit} 
-                onValueChange={(value) => setFormData({ ...formData, unit: value as any })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select unit" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="KG">Kilogram (KG)</SelectItem>
-                  <SelectItem value="LITRE">Litre (L)</SelectItem>
-                  <SelectItem value="GRAM">Gram (G)</SelectItem>
-                  <SelectItem value="ML">Milliliter (ML)</SelectItem>
-                  <SelectItem value="PCS">Pieces (PCS)</SelectItem>
-                </SelectContent>
-              </Select>
+              <Popover open={openUnitCombobox} onOpenChange={setOpenUnitCombobox}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openUnitCombobox}
+                    className="w-full justify-between font-normal"
+                  >
+                    {formData.unit
+                      ? UNITS.find((unit) => unit.value === formData.unit)?.label || formData.unit
+                      : "Select unit..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search units..." />
+                    <CommandList>
+                      <CommandEmpty>No unit found.</CommandEmpty>
+                      <CommandGroup>
+                        {UNITS.map((unit) => (
+                          <CommandItem
+                            key={unit.value}
+                            value={unit.label}
+                            onSelect={() => {
+                              setFormData({ ...formData, unit: unit.value as any });
+                              setOpenUnitCombobox(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.unit === unit.value ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {unit.label}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="space-y-2">

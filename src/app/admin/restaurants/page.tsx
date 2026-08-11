@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Plus, Store, MapPin, Building2, Pencil, Trash2 } from "lucide-react";
+import { Plus, Store, MapPin, Building2, Pencil, Trash2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminService } from "@/services/admin.service";
 import { useToast } from "@/components/ui/use-toast";
@@ -140,6 +140,11 @@ export default function AdminRestaurantsPage() {
                   </div>
                 </div>
               </div>
+
+              <Link href={`/admin/restaurants/${rest._id}`} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-50 dark:bg-blue-900/20 py-2.5 text-sm font-semibold text-blue-600 dark:text-blue-400 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/40">
+                <Settings2 className="h-4 w-4" />
+                Manage Restaurant
+              </Link>
             </div>
           ))}
         </div>
