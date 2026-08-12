@@ -73,10 +73,9 @@ export function ManagerStaffTab() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
           <h2 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-            <Users className="h-6 w-6 text-indigo-500" /> On-Duty Staff & Station Allocation
-          </h2>
+            <Users className="h-6 w-6 text-indigo-500" /> Staff       </h2>
           <p className="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">
-            Active team roster, role assignments & station routing oversight
+            Active team roster
           </p>
         </div>
 
