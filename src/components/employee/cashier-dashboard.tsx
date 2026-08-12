@@ -293,7 +293,7 @@ export function CashierDashboard({ user }: DashboardProps) {
               {filteredOrders.length === 0 ? (
                 <div className="text-center text-slate-500 dark:text-slate-500 py-10">No pending orders.</div>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {filteredOrders.map(order => (
                     <div
                       key={order._id}
