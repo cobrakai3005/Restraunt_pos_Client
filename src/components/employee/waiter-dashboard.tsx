@@ -555,7 +555,10 @@ export function WaiterDashboard({ user }: DashboardProps) {
             <Button size="sm" variant={orderType === "DINE_IN" ? "default" : "ghost"} onClick={() => setOrderType("DINE_IN")} className={`rounded-lg transition-all ${orderType === "DINE_IN" ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-md font-bold" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"}`}>
               Dine In
             </Button>
-            <Button size="sm" variant={orderType === "TAKEAWAY" ? "default" : "ghost"} onClick={() => setOrderType("TAKEAWAY")} className={`rounded-lg transition-all ${orderType === "TAKEAWAY" ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-md font-bold" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"}`}>
+            <Button size="sm" variant={orderType === "TAKEAWAY" ? "default" : "ghost"} onClick={() => {
+              setOrderType("TAKEAWAY")
+              setSelectedTable("")
+            }} className={`rounded-lg transition-all ${orderType === "TAKEAWAY" ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-md font-bold" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"}`}>
               Takeaway
             </Button>
             {/* <Button size="sm" variant={orderType === "DELIVERY" ? "default" : "ghost"} onClick={() => setOrderType("DELIVERY")} className={`rounded-lg transition-all ${orderType === "DELIVERY" ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-md font-bold" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"}`}>
