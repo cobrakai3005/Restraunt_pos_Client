@@ -72,6 +72,14 @@ interface Order {
     _id: string;
     items?: {
       _id: string;
+      menuItemId?: {
+        _id?: string;
+        name: string;
+        station?: string;
+      };
+      variantName?: string;
+      quantity: number;
+      notes?: string;
       itemStatus: string;
     }[];
   }[];
@@ -608,9 +616,57 @@ export function WaiterDashboard({ user }: DashboardProps) {
           </div>
         </div>
 
+        {/* Ready for Pickup — always visible so waiters can serve immediately */}
+        {(() => {
+          const readyItems = activeOrders.flatMap(order =>
+            (order.kots || []).flatMap(kot =>
+              (kot.items || [])
+                .filter(i => i.itemStatus === "READY")
+                .map(i => ({ item: i, order }))
+            )
+          );
+          if (readyItems.length === 0) return null;
+          return (
+            <div className="px-4 pb-2 shrink-0">
+              <h3 className="font-extrabold text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-widest pl-1 flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Ready for Pickup ({readyItems.length})
+              </h3>
+              <div className="mt-2 space-y-2">
+                {readyItems.map(({ item, order }) => {
+                  const key = `${order._id}_${item._id}`;
+                  const tableLabel = order.orderType === "DINE_IN"
+                    ? `Table ${typeof order.tableId === "object" ? order.tableId?.tableNumber : (order as any).tableNumber || ""}`
+                    : order.orderType;
+                  return (
+                    <div key={key} className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/70 dark:bg-emerald-900/10">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-bold text-slate-900 dark:text-white">{item.menuItemId?.name || "Item"}</div>
+                        <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">{tableLabel} • {item.quantity}x</div>
+                      </div>
+                      <button
+                        onClick={() => markItemServed(order._id, item._id)}
+                        disabled={!!updating[key]}
+                        title="Click to mark as Picked Up/Served"
+                        className="shrink-0 cursor-pointer rounded-full bg-emerald-500 px-3 py-1.5 text-[10px] font-extrabold uppercase text-white shadow-[0_0_12px_rgba(34,197,94,0.4)] transition-all hover:bg-emerald-400 hover:shadow-[0_0_20px_rgba(34,197,94,0.6)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {updating[key] ? <Loader2 className="h-3 w-3 inline animate-spin" /> : "PICK UP"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="flex-1 p-4 shrink-0">
           {(() => {
-            const existingOrder = activeOrders.find(o => o.tableId?._id === selectedTable && o.status === "OPEN");
+            const existingOrder = activeOrders.find(o => {
+              if (!o || o.status !== "OPEN") return false;
+              const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
+              const tNum = typeof o.tableId === "object" ? o.tableId?.tableNumber : (o as any).tableNumber;
+              return (tId && String(tId) === String(selectedTable)) || (tNum && String(tNum) === String(selectedTable));
+            });
             const hasExistingItems = existingOrder && existingOrder.kots && existingOrder.kots.length > 0;
 
             return (
