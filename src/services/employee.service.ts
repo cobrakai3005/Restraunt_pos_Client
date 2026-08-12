@@ -82,5 +82,20 @@ export const employeeService = {
   async reopenOrder(orderId: string) {
     const response = await apiClient.post(`/orders/${orderId}/reopen`);
     return response.data;
+  },
+
+  async getEmployees() {
+    try {
+      const response = await apiClient.get("/client/employees");
+      return response.data;
+    } catch {
+      const response = await apiClient.get("/employees");
+      return response.data;
+    }
+  },
+
+  async getAnalytics(params?: Record<string, any>) {
+    const response = await apiClient.get("/analytics/dashboard", { params });
+    return response.data;
   }
 };

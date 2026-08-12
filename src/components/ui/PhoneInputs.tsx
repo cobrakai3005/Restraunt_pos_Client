@@ -37,7 +37,10 @@ export function PhoneInput({
   const digitCount = value.length;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = digitsOnly(e.target.value);
+    let raw = digitsOnly(e.target.value);
+    if (raw.startsWith("0")) {
+      raw = raw.replace(/^0+/, "");
+    }
     onChange(raw.slice(0, 10));
   };
 

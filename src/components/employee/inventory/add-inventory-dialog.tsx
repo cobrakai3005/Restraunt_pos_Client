@@ -97,9 +97,10 @@ export function AddInventoryDialog({ open, onOpenChange, onSuccess }: AddInvento
                 type="number"
                 min="0"
                 step="0.01"
+                placeholder="0"
                 className="bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
-                value={formData.costPerUnit}
-                onChange={(e) => setFormData({ ...formData, costPerUnit: Number(e.target.value) })}
+                value={formData.costPerUnit === 0 || !formData.costPerUnit ? "" : formData.costPerUnit}
+                onChange={(e) => setFormData({ ...formData, costPerUnit: e.target.value === "" ? 0 : Number(e.target.value) })}
               />
             </div>
           </div>
@@ -112,9 +113,10 @@ export function AddInventoryDialog({ open, onOpenChange, onSuccess }: AddInvento
                 type="number"
                 min="0"
                 step="0.01"
+                placeholder="0"
                 className="bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
-                value={formData.currentStock}
-                onChange={(e) => setFormData({ ...formData, currentStock: Number(e.target.value) })}
+                value={formData.currentStock === 0 || !formData.currentStock ? "" : formData.currentStock}
+                onChange={(e) => setFormData({ ...formData, currentStock: e.target.value === "" ? 0 : Number(e.target.value) })}
               />
             </div>
             
@@ -125,9 +127,10 @@ export function AddInventoryDialog({ open, onOpenChange, onSuccess }: AddInvento
                 type="number"
                 min="0"
                 step="0.01"
+                placeholder="0"
                 className="bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white"
-                value={formData.reorderLevel}
-                onChange={(e) => setFormData({ ...formData, reorderLevel: Number(e.target.value) })}
+                value={formData.reorderLevel === 0 || !formData.reorderLevel ? "" : formData.reorderLevel}
+                onChange={(e) => setFormData({ ...formData, reorderLevel: e.target.value === "" ? 0 : Number(e.target.value) })}
               />
             </div>
           </div>

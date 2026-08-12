@@ -154,8 +154,11 @@ export const ContactInput: React.FC<ContactInputProps> = ({
     let rawValue = e.target.value;
 
     if (strictTenDigits) {
-      // Remove any non-digit characters
+      // Remove any non-digit characters and leading zeros
       let digitsOnly = rawValue.replace(/\D/g, '');
+      if (digitsOnly.startsWith('0')) {
+        digitsOnly = digitsOnly.replace(/^0+/, '');
+      }
 
       // Restrict to exactly 10 digits
       if (digitsOnly.length > 10) {

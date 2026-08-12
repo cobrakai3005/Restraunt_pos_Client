@@ -1,7 +1,6 @@
 import { io, Socket } from "socket.io-client";
 
-// Define the URL of the backend server.
-// For now, it points to localhost:8745 where the backend runs.
+// Socket.io runs on the same server as the REST API, so default to the API origin.
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL ||
   process.env.NEXT_PUBLIC_API_URL ||

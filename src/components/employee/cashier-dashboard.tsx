@@ -19,7 +19,7 @@ interface DashboardProps {
 
 interface KotItem {
   _id: string;
-  menuItemId: { name: string; station: string };
+  menuItemId: { name: string; station?: string; imageUrl?: string };
   variantPrice: number;
   quantity: number;
   itemStatus: string;
@@ -373,6 +373,13 @@ export function CashierDashboard({ user }: DashboardProps) {
                               {selectedOrder.kots.flatMap(k => k.items).map((item, idx) => (
                                 <div key={idx} className="flex justify-between items-center text-sm">
                                   <div className="flex items-center gap-3">
+                                    {item.menuItemId?.imageUrl && (
+                                      <img
+                                        src={item.menuItemId.imageUrl}
+                                        alt={item.menuItemId?.name}
+                                        className="w-8 h-8 rounded-lg object-cover border border-slate-200 dark:border-slate-800 shrink-0"
+                                      />
+                                    )}
                                     <span className="font-bold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-950 px-2 py-1 rounded border border-slate-200 dark:border-slate-800">{item.quantity}x</span>
                                     <span className="text-slate-900 dark:text-white">{item.menuItemId?.name || 'Unknown Item'}</span>
                                   </div>

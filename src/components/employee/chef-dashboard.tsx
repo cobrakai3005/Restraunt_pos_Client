@@ -24,6 +24,7 @@ interface KotItem {
     _id?: string;
     name: string;
     station?: string;
+    imageUrl?: string;
   };
   variantName?: string;
   quantity: number;
@@ -60,7 +61,7 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedKot, setSelectedKot] = useState<any | null>(null);
-  const [gridDensity, setGridDensity] = useState<"normal" | "compact">("compact");
+  const [gridDensity, setGridDensity] = useState<"normal" | "compact">("normal");
   const [filterUrgency, setFilterUrgency] = useState<"ALL" | "URGENT" | "COOKING" | "PENDING">("ALL");
   const [selectedStation, setSelectedStation] = useState<string>((user as any)?.station || "ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -148,14 +149,14 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
   const readyKots = allKots.filter(k => k.items.every(i => i.itemStatus === "READY" || i.itemStatus === "SERVED") && k.items.some(i => i.itemStatus === "READY"));
 
   return (
-      <div className={`${embedded ? "h-full rounded-xl" : "h-[calc(100vh-120px)] -mx-8 -my-8"} bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 p-6 flex flex-col transition-colors ${embedded ? "border border-slate-200 dark:border-slate-800 overflow-hidden" : ""}`}>
-        <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
-              <Flame className="h-7 w-7 text-orange-500 animate-pulse" />
-              Kitchen Display System (KDS)
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5 font-medium">
+    <div className={`${embedded ? "h-full rounded-xl" : "h-[calc(100vh-120px)] -mx-8 -my-8"} bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-6 flex flex-col transition-colors ${embedded ? "border border-slate-200 dark:border-slate-800 overflow-hidden" : ""}`}>
+      <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+            <Flame className="h-7 w-7 text-orange-500 animate-pulse" />
+            Kitchen Display System (KDS)
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 text-sm mt-0.5 font-medium">
             Live Ticket Terminal • Chef {(user as any)?.contactName || user.username} {(user as any)?.station ? `(Assigned: ${(user as any).station})` : "(All Stations)"}
           </p>
         </div>
@@ -166,7 +167,7 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
           <select
             value={selectedStation}
             onChange={(e) => setSelectedStation(e.target.value)}
-            className="h-10 px-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs rounded-xl text-amber-600 dark:text-amber-400 font-bold focus:ring-blue-500 cursor-pointer shadow-md"
+            className="h-10 px-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-xs rounded-xl text-amber-600 dark:text-amber-400 font-bold focus:ring-blue-500 cursor-pointer shadow-sm"
           >
             <option value="ALL">👨‍🍳 All Kitchen Stations</option>
             <option value="MAIN_KITCHEN">🍳 Main Kitchen</option>
@@ -183,37 +184,37 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
               placeholder="Search KOT #, Table, Dish..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-10 w-44 sm:w-56 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-xs rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500"
+              className="h-10 w-44 sm:w-56 bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-xs rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500 shadow-sm"
             />
           </div>
 
           {/* Urgency Filter */}
-          <div className="flex gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold">
+          <div className="flex gap-1 bg-white dark:bg-slate-950 p-1 rounded-xl border border-slate-300 dark:border-slate-800 text-xs font-bold shadow-sm">
             <button
               onClick={() => setFilterUrgency("ALL")}
-              className={`px-3 py-1 rounded-lg transition-all ${filterUrgency === "ALL" ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+              className={`px-3 py-1 rounded-lg transition-all ${filterUrgency === "ALL" ? "bg-blue-600 text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
             >
               All ({pendingKots.length})
             </button>
             <button
               onClick={() => setFilterUrgency("URGENT")}
-              className={`px-3 py-1 rounded-lg transition-all ${filterUrgency === "URGENT" ? "bg-red-600 text-white" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+              className={`px-3 py-1 rounded-lg transition-all ${filterUrgency === "URGENT" ? "bg-red-600 text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
             >
               Urgent ({pendingKots.filter(k => getTimeElapsed(k.createdAt) > 15).length})
             </button>
           </div>
 
           {/* Density Switcher for 40+ KOTs */}
-          <div className="flex gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold">
+          <div className="flex gap-1 bg-white dark:bg-slate-950 p-1 rounded-xl border border-slate-300 dark:border-slate-800 text-xs font-bold shadow-sm">
             <button
               onClick={() => setGridDensity("normal")}
-              className={`px-3 py-1 rounded-lg transition-all ${gridDensity === "normal" ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+              className={`px-3 py-1 rounded-lg transition-all ${gridDensity === "normal" ? "bg-slate-200 text-slate-900 dark:bg-slate-800 dark:text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
             >
               Standard Grid
             </button>
             <button
               onClick={() => setGridDensity("compact")}
-              className={`px-3 py-1 rounded-lg transition-all ${gridDensity === "compact" ? "bg-emerald-600 text-white" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+              className={`px-3 py-1 rounded-lg transition-all ${gridDensity === "compact" ? "bg-emerald-600 text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
               title="Dense Grid View for 40+ KOTs"
             >
               ⚡ Dense Grid (40+ KOTs)
@@ -227,14 +228,14 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
       }`}>
         
         {/* PENDING TICKETS SECTION */}
-        <Card className={`flex flex-col border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/80 shadow-2xl overflow-hidden backdrop-blur-xl ${
+        <Card className={`flex flex-col border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-950/80 shadow-xl overflow-hidden backdrop-blur-xl ${
           gridDensity === "compact" ? "lg:col-span-3" : "lg:col-span-1"
         }`}>
-          <CardHeader className="border-b border-slate-200 dark:border-slate-800/80 pb-4 bg-slate-100/70 dark:bg-slate-900/60 flex flex-row items-center justify-between">
-            <CardTitle className="text-orange-500 dark:text-orange-400 flex items-center gap-2 text-lg font-extrabold">
+          <CardHeader className="border-b border-slate-200 dark:border-slate-800/80 pb-4 bg-slate-50/80 dark:bg-slate-900/60 flex flex-row items-center justify-between">
+            <CardTitle className="text-orange-600 dark:text-orange-400 flex items-center gap-2 text-lg font-extrabold">
               <ChefHat className="h-5 w-5 text-orange-500" /> Incoming KOT Tickets
             </CardTitle>
-            <Badge variant="outline" className="text-orange-600 dark:text-orange-400 border-orange-500/30 bg-orange-500/10 font-mono">
+            <Badge variant="outline" className="text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10 font-mono">
               {pendingKots.length} Tickets
             </Badge>
           </CardHeader>
@@ -279,24 +280,24 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
                   return (
                     <div
                       key={kot._id}
-                      className={`rounded-2xl border transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-xl hover:shadow-2xl ${
+                      className={`rounded-2xl border transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-md hover:shadow-xl ${
                         isUrgent
-                          ? 'border-red-500/60 bg-red-50 ring-1 ring-red-500/20 dark:bg-red-950/40 dark:ring-red-500/30'
+                          ? 'border-red-400/80 bg-red-50/90 dark:border-red-500/60 dark:bg-red-950/40 ring-1 ring-red-500/30'
                           : isModerate
-                          ? 'border-amber-500/40 bg-amber-50 dark:bg-amber-950/20'
-                          : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-slate-700'
+                          ? 'border-amber-300/80 bg-amber-50/90 dark:border-amber-500/40 dark:bg-amber-950/20'
+                          : 'border-slate-200/90 bg-white dark:border-slate-800 dark:bg-slate-900/90 hover:border-slate-400 dark:hover:border-slate-700'
                       }`}
                     >
                       {/* Ticket Header */}
                       <div className={`px-4 py-3 flex items-center justify-between border-b ${
-                        isUrgent ? 'border-red-200/60 bg-red-100 dark:border-red-900/50 dark:bg-red-900/40' : 'border-slate-200 bg-slate-100/70 dark:border-slate-800 dark:bg-slate-800/60'
+                        isUrgent ? 'border-red-200 bg-red-100/80 dark:border-red-900/50 dark:bg-red-900/40' : 'border-slate-200 bg-slate-100/70 dark:border-slate-800 dark:bg-slate-800/60'
                       }`}>
                         <div className="flex items-center gap-3">
                           <span className="font-black text-2xl text-slate-900 dark:text-white tracking-tight">#{kot.kotNumber}</span>
                           <div>
                             <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-semibold">Order #{kot.order._id?.slice(-4)}</div>
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 text-[10px] font-bold px-2 py-0">
+                              <Badge variant="outline" className="border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-200 text-[10px] font-bold px-2 py-0">
                                 {kot.order.orderType === "DINE_IN" ? `Table ${kot.order.tableId?.tableNumber}` : kot.order.orderType}
                               </Badge>
                             </div>
@@ -304,7 +305,7 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
                         </div>
 
                         <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black shrink-0 ${
-                          isUrgent ? 'bg-red-500 text-white animate-pulse shadow-md' : isModerate ? 'bg-amber-100/70 text-amber-600 border border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                          isUrgent ? 'bg-red-500 text-white animate-pulse shadow-md' : isModerate ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-300 dark:border-amber-500/30' : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                         }`}>
                           <Clock className="h-3.5 w-3.5" /> {minutesOld}m
                         </div>
@@ -318,9 +319,16 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
                           const isUpdating = !!updating[`${kot.order._id}_${item._id}`];
 
                           return (
-                            <div key={item._id} className="flex items-start justify-between gap-3 text-sm pb-3 border-b border-slate-200 dark:border-slate-800/60 last:border-0 last:pb-0">
+                            <div key={item._id} className="flex items-start justify-between gap-3 text-sm pb-3 border-b border-slate-200/80 dark:border-slate-800/60 last:border-0 last:pb-0">
                               <div className="flex items-start gap-3 flex-1 min-w-0">
-                                <span className="font-black text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-900/50 px-2.5 py-1 rounded-lg text-sm shrink-0">
+                                {/* {item.menuItemId?.imageUrl && (
+                                  <img
+                                    src={item.menuItemId.imageUrl}
+                                    alt={item.menuItemId?.name}
+                                    className="w-8 h-8 rounded-lg object-cover border border-slate-700/80 shrink-0"
+                                  />
+                                )} */}
+                                <span className="font-black text-amber-800 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-900/50 px-2.5 py-1 rounded-lg text-sm shrink-0">
                                   {item.quantity}x
                                 </span>
                                 <div className="min-w-0 flex-1">
@@ -329,12 +337,12 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
                                     {item.variantName && item.variantName !== "Standard" && (
                                       <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">({item.variantName})</span>
                                     )}
-                                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-slate-100 text-amber-600 dark:bg-slate-800 dark:text-amber-300 border border-slate-200 dark:border-slate-700/60 font-mono uppercase">
+                                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-slate-300 dark:border-slate-700/60 font-mono uppercase">
                                       👨‍🍳 {item.station || item.menuItemId?.station || "MAIN_KITCHEN"}
                                     </span>
                                   </div>
                                   {item.notes && (
-                                    <div className="text-xs text-red-600 dark:text-red-300 font-semibold bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 p-2 rounded-xl mt-1.5 break-words whitespace-normal">
+                                    <div className="text-xs text-red-700 dark:text-red-300 font-semibold bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 p-2 rounded-xl mt-1.5 break-words whitespace-normal">
                                       ⚠️ {item.notes}
                                     </div>
                                   )}
@@ -381,11 +389,11 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
                           size="sm"
                           variant="outline"
                           onClick={() => setSelectedKot(kot)}
-                          className={`font-bold border-slate-300 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white rounded-xl ${
+                          className={`font-bold border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white rounded-xl ${
                             gridDensity === "compact" ? "h-7 px-2 text-[10px]" : "h-9 px-3 text-xs"
                           }`}
                         >
-                          <Eye className={`text-blue-400 ${gridDensity === "compact" ? "h-3 w-3 mr-1" : "h-3.5 w-3.5 mr-1.5"}`} /> Details
+                          <Eye className={`text-blue-600 dark:text-blue-400 ${gridDensity === "compact" ? "h-3 w-3 mr-1" : "h-3.5 w-3.5 mr-1.5"}`} /> Details
                         </Button>
 
                         <Button
@@ -407,20 +415,20 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
         </Card>
 
         {/* READY TICKETS SECTION */}
-        <Card className="flex flex-col border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/80 shadow-2xl overflow-hidden backdrop-blur-xl">
-          <CardHeader className="border-b border-slate-200 dark:border-slate-800/80 pb-4 bg-slate-100/70 dark:bg-slate-900/60 flex flex-row items-center justify-between">
+        <Card className="flex flex-col border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-950/80 shadow-xl overflow-hidden backdrop-blur-xl">
+          <CardHeader className="border-b border-slate-200 dark:border-slate-800/80 pb-4 bg-slate-50/80 dark:bg-slate-900/60 flex flex-row items-center justify-between">
             <CardTitle className="text-emerald-600 dark:text-emerald-400 flex items-center gap-2 text-lg font-extrabold">
               <CheckCircle2 className="h-5 w-5 text-emerald-500" /> Ready for Pickup
             </CardTitle>
-            <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10 font-mono">
+            <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 font-mono">
               {readyKots.length} Ready
             </Badge>
           </CardHeader>
 
           <ScrollArea className="flex-1 p-4">
             {readyKots.length === 0 ? (
-              <div className="text-center text-slate-500 py-20 flex flex-col items-center gap-3">
-                <Clock className="h-12 w-12 text-slate-700 opacity-50" />
+              <div className="text-center text-slate-400 dark:text-slate-500 py-20 flex flex-col items-center gap-3">
+                <Clock className="h-12 w-12 text-slate-300 dark:text-slate-700 opacity-50" />
                 <p className="font-semibold">No items waiting for pickup.</p>
               </div>
             ) : (
@@ -432,26 +440,26 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
                 {readyKots.map(kot => (
                   <div
                     key={kot._id}
-                    className="rounded-2xl border border-emerald-400/60 bg-emerald-50 dark:border-emerald-500/40 dark:bg-emerald-950/20 p-4 flex flex-col justify-between min-h-[120px] cursor-pointer hover:border-emerald-500 transition-all shadow-md"
+                    className="rounded-2xl border border-emerald-300/80 dark:border-emerald-500/40 bg-emerald-50/80 dark:bg-emerald-950/20 p-4 flex flex-col justify-between min-h-[120px] cursor-pointer hover:border-emerald-500 transition-all shadow-md"
                     onClick={() => setSelectedKot(kot)}
                   >
                     <div className="flex justify-between items-start">
                       <div>
-                        <span className="font-black text-xl text-emerald-600 dark:text-emerald-400">#{kot.kotNumber}</span>
+                        <span className="font-black text-xl text-emerald-700 dark:text-emerald-400">#{kot.kotNumber}</span>
                         <span className="text-xs font-mono text-slate-500 dark:text-slate-400 ml-2">Order #{kot.order._id?.slice(-4)}</span>
                       </div>
-                      <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                      <Badge variant="outline" className="border-emerald-300 dark:border-emerald-500/30 bg-emerald-100 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 text-xs font-bold">
                         {kot.order.orderType === "DINE_IN" ? `Table ${kot.order.tableId?.tableNumber}` : kot.order.orderType}
                       </Badge>
                     </div>
 
-                    <div className="text-xs text-emerald-700 dark:text-emerald-200/80 font-medium my-2">
+                    <div className="text-xs text-emerald-800 dark:text-emerald-200/80 font-medium my-2">
                       All {kot.items.length} item(s) cooked & waiting for pickup
                     </div>
 
                     <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-emerald-200 dark:border-emerald-900/30">
                       <span>{kot.order.waiterId ? `Waiter: ${kot.order.waiterId.contactName}` : 'Counter'}</span>
-                      <span className="text-blue-400 font-bold flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> View Details</span>
+                      <span className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> View Details</span>
                     </div>
                   </div>
                 ))}
@@ -472,20 +480,20 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
                   <div>
                     <DialogTitle className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
                       KOT #{selectedKot.kotNumber}
-                      <Badge variant="outline" className="border-blue-500/40 bg-blue-500/10 text-blue-400 text-xs font-bold">
+                      <Badge variant="outline" className="border-blue-300 dark:border-blue-500/40 bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 text-xs font-bold">
                         Order #{selectedKot.order._id?.slice(-4)}
                       </Badge>
                     </DialogTitle>
-                    <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm mt-1 flex items-center gap-2">
+                    <DialogDescription className="text-slate-600 dark:text-slate-400 text-sm mt-1 flex items-center gap-2">
                       <span>{selectedKot.order.orderType === "DINE_IN" ? `Table ${selectedKot.order.tableId?.tableNumber}` : selectedKot.order.orderType}</span>
                       {selectedKot.order.waiterId && (
-                        <span>• Served by <strong className="text-slate-900 dark:text-slate-200">{selectedKot.order.waiterId.contactName}</strong></span>
+                        <span>• Served by <strong className="text-slate-800 dark:text-slate-200">{selectedKot.order.waiterId.contactName}</strong></span>
                       )}
                     </DialogDescription>
                   </div>
 
                   <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                    <Clock className="h-4 w-4 text-orange-400" />
+                    <Clock className="h-4 w-4 text-orange-500 dark:text-orange-400" />
                     <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-200">{getTimeElapsed(selectedKot.createdAt)}m ago</span>
                   </div>
                 </div>
@@ -499,20 +507,27 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
 
                     return (
                       <div key={item._id} className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex items-start gap-4 flex-1">
-                          <div className="font-black text-2xl text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-900/50 min-w-[3.5rem] h-12 rounded-xl flex items-center justify-center">
+                        <div className="flex items-center gap-4 flex-1">
+                          {item.menuItemId?.imageUrl && (
+                            <img
+                              src={item.menuItemId.imageUrl}
+                              alt={item.menuItemId?.name}
+                              className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700/80 shrink-0 shadow-md"
+                            />
+                          )}
+                          <div className="font-black text-2xl text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-900/50 min-w-[3.5rem] h-12 rounded-xl flex items-center justify-center shrink-0">
                             {item.quantity}x
                           </div>
                           <div className="space-y-1">
                             <h4 className="font-bold text-lg text-slate-900 dark:text-white leading-tight">{item.menuItemId?.name}</h4>
                             {item.variantName && item.variantName !== "Standard" && (
-                              <Badge variant="outline" className="text-xs text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-700">
+                              <Badge variant="outline" className="text-xs text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700">
                                 Variant: {item.variantName}
                               </Badge>
                             )}
                             {item.notes && (
-                              <div className="mt-2 p-2.5 rounded-xl bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/60 text-red-600 dark:text-red-300 text-xs font-bold flex items-center gap-2">
-                                <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                              <div className="mt-2 p-2.5 rounded-xl bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/60 text-red-700 dark:text-red-300 text-xs font-bold flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
                                 <span>Instruction: {item.notes}</span>
                               </div>
                             )}
@@ -540,12 +555,12 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
                             </Button>
                           )}
                           {item.itemStatus === "READY" && (
-                            <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 px-4 py-2 rounded-xl text-xs font-extrabold">
+                            <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/40 px-4 py-2 rounded-xl text-xs font-extrabold">
                               ✓ Ready
                             </Badge>
                           )}
                           {item.itemStatus === "SERVED" && (
-                            <Badge className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl text-xs font-extrabold">
+                            <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl text-xs font-extrabold">
                               Served
                             </Badge>
                           )}
@@ -561,7 +576,7 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
                 <Button
                   variant="outline"
                   onClick={() => setSelectedKot(null)}
-                  className="border-slate-300 text-slate-600 hover:bg-slate-200 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 rounded-xl"
+                  className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
                 >
                   Close
                 </Button>

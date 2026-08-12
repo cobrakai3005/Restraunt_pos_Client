@@ -165,8 +165,9 @@ export function EditInventoryDialog({ open, onOpenChange, onSuccess, restaurantI
                 min="0"
                 step="0.01"
                 required
-                value={formData.costPerUnit}
-                onChange={(e) => setFormData({ ...formData, costPerUnit: parseFloat(e.target.value) || 0 })}
+                placeholder="0"
+                value={formData.costPerUnit === 0 || !formData.costPerUnit ? "" : formData.costPerUnit}
+                onChange={(e) => setFormData({ ...formData, costPerUnit: e.target.value === "" ? 0 : parseFloat(e.target.value) })}
               />
             </div>
 
@@ -176,8 +177,9 @@ export function EditInventoryDialog({ open, onOpenChange, onSuccess, restaurantI
                 type="number"
                 min="0"
                 required
-                value={formData.currentStock}
-                onChange={(e) => setFormData({ ...formData, currentStock: parseFloat(e.target.value) || 0 })}
+                placeholder="0"
+                value={formData.currentStock === 0 || !formData.currentStock ? "" : formData.currentStock}
+                onChange={(e) => setFormData({ ...formData, currentStock: e.target.value === "" ? 0 : parseFloat(e.target.value) })}
               />
             </div>
 
@@ -187,8 +189,9 @@ export function EditInventoryDialog({ open, onOpenChange, onSuccess, restaurantI
                 type="number"
                 min="0"
                 required
-                value={formData.reorderLevel}
-                onChange={(e) => setFormData({ ...formData, reorderLevel: parseFloat(e.target.value) || 0 })}
+                placeholder="0"
+                value={formData.reorderLevel === 0 || !formData.reorderLevel ? "" : formData.reorderLevel}
+                onChange={(e) => setFormData({ ...formData, reorderLevel: e.target.value === "" ? 0 : parseFloat(e.target.value) })}
               />
             </div>
 
