@@ -376,7 +376,7 @@ export function WaiterDashboard({ user }: DashboardProps) {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-120px)] bg-slate-100/50 dark:bg-slate-900/50 -mx-8 -my-8 rounded-xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 transition-colors backdrop-blur-xl shadow-2xl">
+    <div className="flex flex-col md:flex-row h-[calc(100vh-80px)] bg-slate-100/50 dark:bg-slate-900/50 -mx-8 -my-8 rounded-xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 transition-colors backdrop-blur-xl shadow-2xl">
       
       {/* Active Tables Sidebar */}
       <div className="hidden md:flex flex-col w-[240px] lg:w-[470px] border-r border-white/30 dark:border-white/10 bg-white/60 dark:bg-slate-950/60 z-10 shrink-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] transition-colors backdrop-blur-xl">

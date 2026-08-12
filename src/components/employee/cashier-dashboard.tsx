@@ -205,7 +205,7 @@ export function CashierDashboard({ user }: DashboardProps) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] bg-slate-50 dark:bg-slate-950 -mx-8 -my-8 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 transition-colors">
+    <div className="flex flex-col h-[calc(100vh-80px)] bg-slate-50 dark:bg-slate-950 -mx-8 -my-8 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 transition-colors">
       {/* Professional Segmented Tab Bar */}
       <div className="shrink-0 z-20 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
