@@ -13,7 +13,56 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { employeeService } from "@/services/employee.service";
+
+function StaffSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Header bar skeleton */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-72" />
+          <Skeleton className="h-3.5 w-64" />
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Role filter pills */}
+          <div className="flex gap-1 p-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-20 rounded-lg" />
+            ))}
+          </div>
+          <Skeleton className="h-10 w-44 rounded-xl" />
+          <Skeleton className="h-9 w-9 rounded-xl" />
+        </div>
+      </div>
+
+      {/* Staff cards grid skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Card key={i} className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
+              <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function ManagerStaffTab() {
   const [loading, setLoading] = useState(true);
@@ -67,13 +116,15 @@ export function ManagerStaffTab() {
     }
   };
 
+  if (loading) return <StaffSkeleton />;
+
   return (
     <div className="space-y-6">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div>
           <h2 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-            <Users className="h-6 w-6 text-indigo-500" /> Staff       </h2>
+            <Users className="h-6 w-6 text-indigo-500" /> Staff    </h2>
           <p className="text-slate-500 dark:text-slate-400 text-xs font-medium mt-0.5">
             Active team roster
           </p>

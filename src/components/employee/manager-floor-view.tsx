@@ -18,7 +18,53 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { employeeService } from "@/services/employee.service";
+
+function FloorSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Top controls bar skeleton */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-64" />
+          <Skeleton className="h-3.5 w-80" />
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Status filter pills */}
+          <div className="flex gap-1 p-1">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-20 rounded-lg" />
+            ))}
+          </div>
+          <Skeleton className="h-10 w-44 rounded-xl" />
+          <Skeleton className="h-9 w-9 rounded-xl" />
+        </div>
+      </div>
+
+      {/* Table cards grid skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <Card key={i} className="border-slate-200 dark:border-slate-800">
+            <CardContent className="p-4 flex flex-col justify-between h-40">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1.5">
+                  <Skeleton className="h-6 w-20" />
+                  <Skeleton className="h-3 w-28" />
+                </div>
+                <Skeleton className="h-5 w-20 rounded-full" />
+              </div>
+              <div className="space-y-2 mt-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function ManagerFloorView() {
   const [loading, setLoading] = useState(true);
@@ -110,6 +156,8 @@ export function ManagerFloorView() {
       setReopening(false);
     }
   };
+
+  if (loading) return <FloorSkeleton />;
 
   return (
     <div className="space-y-6">

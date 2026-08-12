@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Plus, Search, Edit, Trash2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
 import { inventoryService, InventoryItem } from "@/services/inventory.service";
 import { AddInventoryDialog } from "./add-inventory-dialog";
@@ -126,11 +127,33 @@ export function InventoryTab() {
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-slate-500">
-                    Loading inventory...
-                  </td>
-                </tr>
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className="border-b border-slate-200 dark:border-slate-800">
+                    <td className="px-4 py-4">
+                      <Skeleton className="h-4 w-6" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <Skeleton className="h-4 w-36 mb-1.5" />
+                      <Skeleton className="h-3 w-16" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <Skeleton className="h-4 w-24 mb-1.5" />
+                      <Skeleton className="h-3 w-28" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <Skeleton className="h-4 w-16" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <Skeleton className="h-6 w-14 rounded-full" />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <Skeleton className="h-8 w-8 rounded-lg" />
+                        <Skeleton className="h-8 w-8 rounded-lg" />
+                      </div>
+                    </td>
+                  </tr>
+                ))
               ) : pagedItems.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-8 text-center text-slate-500">

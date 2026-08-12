@@ -12,7 +12,80 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { employeeService } from "@/services/employee.service";
+
+function AuditSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Header skeleton */}
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-72" />
+            <Skeleton className="h-3.5 w-80" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-10 w-48 rounded-xl" />
+            <Skeleton className="h-9 w-9 rounded-xl" />
+          </div>
+        </div>
+        {/* Date range row */}
+        <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+          <Skeleton className="h-4 w-4 rounded" />
+          <Skeleton className="h-3.5 w-20" />
+          <Skeleton className="h-8 w-32 rounded-lg" />
+          <Skeleton className="h-8 w-32 rounded-lg" />
+          <Skeleton className="h-3.5 w-28 ml-auto" />
+        </div>
+      </div>
+
+      {/* Summary cards skeleton — 3 cols */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Card key={i} className="p-4 border-slate-200 dark:border-slate-800 shadow-sm">
+            <Skeleton className="h-3 w-40" />
+            <Skeleton className="h-7 w-28 mt-2" />
+          </Card>
+        ))}
+      </div>
+
+      {/* Orders list card skeleton */}
+      <Card className="border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-md">
+        <CardHeader className="border-b border-slate-200 dark:border-slate-800 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1.5">
+              <Skeleton className="h-5 w-64" />
+              <Skeleton className="h-3.5 w-40" />
+            </div>
+            <div className="flex gap-1.5">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-7 w-16 rounded-xl" />
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-4 space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-4 w-16 rounded-full" />
+                  </div>
+                  <Skeleton className="h-3 w-56" />
+                </div>
+              </div>
+              <Skeleton className="h-8 w-28 rounded-xl shrink-0" />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 // Helper: format Date → "YYYY-MM-DD" for <input type="date">
 const toInputDate = (d: Date) => d.toISOString().slice(0, 10);
@@ -92,6 +165,8 @@ export function ManagerAuditTab() {
   const billedCount = orders.filter(o => o.status === "BILLED").length;
   const paidCount = orders.filter(o => o.status === "PAID").length;
   const openCount = orders.filter(o => o.status === "OPEN").length;
+
+  if (loading) return <AuditSkeleton />;
 
   return (
     <div className="space-y-6">
