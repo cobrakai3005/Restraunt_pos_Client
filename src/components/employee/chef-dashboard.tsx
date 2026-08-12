@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Clock, CheckCircle2, Flame, Loader2 } from "lucide-react";
+import { Clock, CheckCircle2, Flame, Loader2, Eye, AlertCircle, ChefHat, UserCheck } from "lucide-react";
 import { User } from "@/services/auth.service";
 import { employeeService } from "@/services/employee.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 interface DashboardProps {
   user: User;
@@ -19,12 +21,14 @@ interface DashboardProps {
 interface KotItem {
   _id: string;
   menuItemId: {
-    _id: string;
+    _id?: string;
     name: string;
+    station?: string;
   };
   variantName?: string;
   quantity: number;
   notes?: string;
+  station?: string;
   itemStatus: "PENDING" | "PREPARING" | "READY" | "SERVED";
 }
 
@@ -55,6 +59,11 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [selectedKot, setSelectedKot] = useState<any | null>(null);
+  const [gridDensity, setGridDensity] = useState<"normal" | "compact">("compact");
+  const [filterUrgency, setFilterUrgency] = useState<"ALL" | "URGENT" | "COOKING" | "PENDING">("ALL");
+  const [selectedStation, setSelectedStation] = useState<string>((user as any)?.station || "ALL");
+  const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
 
   const fetchActiveOrders = async () => {
@@ -92,12 +101,28 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
       await employeeService.updateKotItemStatus(orderId, itemId, newStatus);
       toast({ title: "Ticket updated" });
       fetchActiveOrders();
+
+      // Update selectedKot state in real-time if modal is open
+      setSelectedKot((prev: any) => {
+        if (!prev || prev.order._id !== orderId) return prev;
+        return {
+          ...prev,
+          items: prev.items.map((i: KotItem) => i._id === itemId ? { ...i, itemStatus: newStatus } : i)
+        };
+      });
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || "Failed to update status";
       setErrors(prev => ({ ...prev, [key]: message }));
       toast({ variant: "destructive", title: "Error updating status", description: message });
     } finally {
       setUpdating(prev => { const next = { ...prev }; delete next[key]; return next; });
+    }
+  };
+
+  const markAllReady = async (kot: any) => {
+    const pendingItems = kot.items.filter((i: KotItem) => i.itemStatus !== "READY" && i.itemStatus !== "SERVED");
+    for (const item of pendingItems) {
+      await updateItemStatus(kot.order._id, item._id, "READY");
     }
   };
 
@@ -123,184 +148,436 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
   const readyKots = allKots.filter(k => k.items.every(i => i.itemStatus === "READY" || i.itemStatus === "SERVED") && k.items.some(i => i.itemStatus === "READY"));
 
   return (
-    <div className={`${embedded ? "h-full rounded-xl" : "h-[calc(100vh-120px)] -mx-8 -my-8"} bg-slate-50 dark:bg-slate-950 p-6 flex flex-col transition-colors ${embedded ? "border border-slate-200 dark:border-slate-800 overflow-hidden" : ""}`}>
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Flame className="h-6 w-6 text-orange-500" />
-            Kitchen Display System
-          </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            Managing live tickets for {user.username}
+      <div className={`${embedded ? "h-full rounded-xl" : "h-[calc(100vh-120px)] -mx-8 -my-8"} bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 p-6 flex flex-col transition-colors ${embedded ? "border border-slate-200 dark:border-slate-800 overflow-hidden" : ""}`}>
+        <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+              <Flame className="h-7 w-7 text-orange-500 animate-pulse" />
+              Kitchen Display System (KDS)
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5 font-medium">
+            Live Ticket Terminal • Chef {(user as any)?.contactName || user.username} {(user as any)?.station ? `(Assigned: ${(user as any).station})` : "(All Stations)"}
           </p>
+        </div>
+
+        {/* Top Controls: Search, Station, Filter, Density */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Station Filter */}
+          <select
+            value={selectedStation}
+            onChange={(e) => setSelectedStation(e.target.value)}
+            className="h-10 px-3 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs rounded-xl text-amber-600 dark:text-amber-400 font-bold focus:ring-blue-500 cursor-pointer shadow-md"
+          >
+            <option value="ALL">👨‍🍳 All Kitchen Stations</option>
+            <option value="MAIN_KITCHEN">🍳 Main Kitchen</option>
+            <option value="TANDOOR">🔥 Tandoor</option>
+            <option value="GRILL">🍖 Grill</option>
+            <option value="BAR">🍹 Bar & Beverages</option>
+            <option value="BAKERY">🍰 Bakery</option>
+            <option value="COLD_KITCHEN">🥗 Cold Kitchen</option>
+          </select>
+
+          {/* Search Bar */}
+          <div className="relative">
+            <Input
+              placeholder="Search KOT #, Table, Dish..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-10 w-44 sm:w-56 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-xs rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500"
+            />
+          </div>
+
+          {/* Urgency Filter */}
+          <div className="flex gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold">
+            <button
+              onClick={() => setFilterUrgency("ALL")}
+              className={`px-3 py-1 rounded-lg transition-all ${filterUrgency === "ALL" ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+            >
+              All ({pendingKots.length})
+            </button>
+            <button
+              onClick={() => setFilterUrgency("URGENT")}
+              className={`px-3 py-1 rounded-lg transition-all ${filterUrgency === "URGENT" ? "bg-red-600 text-white" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+            >
+              Urgent ({pendingKots.filter(k => getTimeElapsed(k.createdAt) > 15).length})
+            </button>
+          </div>
+
+          {/* Density Switcher for 40+ KOTs */}
+          <div className="flex gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold">
+            <button
+              onClick={() => setGridDensity("normal")}
+              className={`px-3 py-1 rounded-lg transition-all ${gridDensity === "normal" ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+            >
+              Standard Grid
+            </button>
+            <button
+              onClick={() => setGridDensity("compact")}
+              className={`px-3 py-1 rounded-lg transition-all ${gridDensity === "compact" ? "bg-emerald-600 text-white" : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+              title="Dense Grid View for 40+ KOTs"
+            >
+              ⚡ Dense Grid (40+ KOTs)
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0">
+      <div className={`flex-1 grid gap-6 min-h-0 ${
+        gridDensity === "compact" ? "grid-cols-1 lg:grid-cols-4" : "grid-cols-1 lg:grid-cols-2"
+      }`}>
         
-        {/* PENDING TICKETS */}
-        <Card className="flex flex-col border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-colors overflow-hidden">
-          <CardHeader className="border-b border-slate-200 dark:border-slate-800 pb-4 bg-slate-50/50 dark:bg-slate-900/50">
-            <CardTitle className="text-orange-600 dark:text-orange-500 flex items-center justify-between text-lg">
-              Incoming Tickets
-              <Badge variant="outline" className="text-orange-600 dark:text-orange-500 border-orange-500 bg-orange-50 dark:bg-orange-500/10">
-                {pendingKots.length} Active
-              </Badge>
+        {/* PENDING TICKETS SECTION */}
+        <Card className={`flex flex-col border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/80 shadow-2xl overflow-hidden backdrop-blur-xl ${
+          gridDensity === "compact" ? "lg:col-span-3" : "lg:col-span-1"
+        }`}>
+          <CardHeader className="border-b border-slate-200 dark:border-slate-800/80 pb-4 bg-slate-100/70 dark:bg-slate-900/60 flex flex-row items-center justify-between">
+            <CardTitle className="text-orange-500 dark:text-orange-400 flex items-center gap-2 text-lg font-extrabold">
+              <ChefHat className="h-5 w-5 text-orange-500" /> Incoming KOT Tickets
             </CardTitle>
+            <Badge variant="outline" className="text-orange-600 dark:text-orange-400 border-orange-500/30 bg-orange-500/10 font-mono">
+              {pendingKots.length} Tickets
+            </Badge>
           </CardHeader>
+
           <ScrollArea className="flex-1 p-4">
-            <div className="space-y-4">
-              {pendingKots.length === 0 ? (
-                <div className="text-center text-slate-500 dark:text-slate-500 py-20">
-                  No active tickets in kitchen.
-                </div>
-              ) : (
-                pendingKots.map(kot => {
+            {pendingKots.length === 0 ? (
+              <div className="text-center text-slate-500 py-20 flex flex-col items-center gap-3">
+                <CheckCircle2 className="h-12 w-12 text-slate-700 opacity-50" />
+                <p className="font-semibold">All clear! No pending orders in kitchen.</p>
+              </div>
+            ) : (
+              <div className={`grid ${
+                gridDensity === "compact"
+                  ? "grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2.5"
+                  : "grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4"
+              }`}>
+                {pendingKots.filter(kot => {
+                  const minutesOld = getTimeElapsed(kot.createdAt);
+                  if (filterUrgency === "URGENT" && minutesOld <= 15) return false;
+                  if (filterUrgency === "COOKING" && !kot.items.some(i => i.itemStatus === "PREPARING")) return false;
+                  if (filterUrgency === "PENDING" && !kot.items.some(i => i.itemStatus === "PENDING")) return false;
+
+                  if (selectedStation !== "ALL") {
+                    const hasMatchingStation = kot.items.some((i: KotItem) => (i.station || i.menuItemId?.station || "MAIN_KITCHEN") === selectedStation);
+                    if (!hasMatchingStation) return false;
+                  }
+
+                  if (searchQuery) {
+                    const q = searchQuery.toLowerCase();
+                    const matchKot = String(kot.kotNumber).includes(q);
+                    const matchOrder = String(kot.order._id).toLowerCase().includes(q);
+                    const matchTable = kot.order.tableId?.tableNumber?.toLowerCase().includes(q);
+                    const matchItem = kot.items.some((i: KotItem) => i.menuItemId?.name?.toLowerCase().includes(q));
+                    return matchKot || matchOrder || matchTable || matchItem;
+                  }
+                  return true;
+                }).map(kot => {
                   const minutesOld = getTimeElapsed(kot.createdAt);
                   const isUrgent = minutesOld > 15;
+                  const isModerate = minutesOld > 8 && !isUrgent;
 
                   return (
-                    <div key={kot._id} className={`rounded-xl border ${isUrgent ? 'border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950'} overflow-hidden transition-colors`}>
-                      <div className={`px-4 py-2 flex justify-between items-center border-b ${isUrgent ? 'border-red-200 dark:border-red-900/50 bg-red-100 dark:bg-red-900/20' : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900'}`}>
+                    <div
+                      key={kot._id}
+                      className={`rounded-2xl border transition-all duration-200 flex flex-col justify-between overflow-hidden shadow-xl hover:shadow-2xl ${
+                        isUrgent
+                          ? 'border-red-500/60 bg-red-50 ring-1 ring-red-500/20 dark:bg-red-950/40 dark:ring-red-500/30'
+                          : isModerate
+                          ? 'border-amber-500/40 bg-amber-50 dark:bg-amber-950/20'
+                          : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/90 dark:hover:border-slate-700'
+                      }`}
+                    >
+                      {/* Ticket Header */}
+                      <div className={`px-4 py-3 flex items-center justify-between border-b ${
+                        isUrgent ? 'border-red-200/60 bg-red-100 dark:border-red-900/50 dark:bg-red-900/40' : 'border-slate-200 bg-slate-100/70 dark:border-slate-800 dark:bg-slate-800/60'
+                      }`}>
                         <div className="flex items-center gap-3">
-                          <span className={`font-bold text-lg ${isUrgent ? 'text-red-700 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>#{kot.kotNumber}</span>
-                          <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                            Order #{kot.order._id?.slice(-4)}
-                          </span>
-                          <Badge variant="outline" className="border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                            {kot.order.orderType === "DINE_IN" ? `Table ${kot.order.tableId?.tableNumber}` : kot.order.orderType}
-                          </Badge>
-                          {kot.order.waiterId && (
-                            <Badge variant="outline" className="border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
-                              {kot.order.waiterId.contactName}
-                            </Badge>
-                          )}
+                          <span className="font-black text-2xl text-slate-900 dark:text-white tracking-tight">#{kot.kotNumber}</span>
+                          <div>
+                            <div className="text-[11px] font-mono text-slate-500 dark:text-slate-400 font-semibold">Order #{kot.order._id?.slice(-4)}</div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <Badge variant="outline" className="border-slate-200 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 text-[10px] font-bold px-2 py-0">
+                                {kot.order.orderType === "DINE_IN" ? `Table ${kot.order.tableId?.tableNumber}` : kot.order.orderType}
+                              </Badge>
+                            </div>
+                          </div>
                         </div>
-                        <div className={`flex items-center gap-1.5 font-bold ${isUrgent ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
-                          <Clock className="h-4 w-4" /> {minutesOld}m
+
+                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black shrink-0 ${
+                          isUrgent ? 'bg-red-500 text-white animate-pulse shadow-md' : isModerate ? 'bg-amber-100/70 text-amber-600 border border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
+                        }`}>
+                          <Clock className="h-3.5 w-3.5" /> {minutesOld}m
                         </div>
                       </div>
-                      
-                      <div className="p-2 space-y-1">
-                        {kot.items.map(item => {
+
+                      {/* Items List */}
+                      <div className="p-4 space-y-3 flex-1">
+                        {kot.items.map((item: KotItem) => {
                           if (item.itemStatus === "READY" || item.itemStatus === "SERVED") return null;
-                          
+
+                          const isUpdating = !!updating[`${kot.order._id}_${item._id}`];
+
                           return (
-                            <div key={item._id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700">
-                              <div className="flex items-start gap-4 flex-1">
-                                <div className="font-black text-xl text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/20 px-3 rounded-md min-w-[3rem] text-center border border-blue-200 dark:border-blue-800/30">
+                            <div key={item._id} className="flex items-start justify-between gap-3 text-sm pb-3 border-b border-slate-200 dark:border-slate-800/60 last:border-0 last:pb-0">
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                <span className="font-black text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-900/50 px-2.5 py-1 rounded-lg text-sm shrink-0">
                                   {item.quantity}x
-                                </div>
-                                <div className="flex-1">
-                                  <p className="text-slate-900 dark:text-white font-medium text-lg leading-none">{item.menuItemId.name}</p>
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-slate-900 dark:text-white leading-snug break-words flex flex-wrap items-center gap-1.5">
+                                    <span>{item.menuItemId?.name}</span>
+                                    {item.variantName && item.variantName !== "Standard" && (
+                                      <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">({item.variantName})</span>
+                                    )}
+                                    <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-slate-100 text-amber-600 dark:bg-slate-800 dark:text-amber-300 border border-slate-200 dark:border-slate-700/60 font-mono uppercase">
+                                      👨‍🍳 {item.station || item.menuItemId?.station || "MAIN_KITCHEN"}
+                                    </span>
+                                  </div>
                                   {item.notes && (
-                                    <p className="text-red-600 dark:text-red-400 text-sm mt-1.5 font-semibold bg-red-100 dark:bg-red-950/30 inline-block px-2 py-0.5 rounded border border-red-200 dark:border-red-900/50">
-                                      Note: {item.notes}
-                                    </p>
+                                    <div className="text-xs text-red-600 dark:text-red-300 font-semibold bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 p-2 rounded-xl mt-1.5 break-words whitespace-normal">
+                                      ⚠️ {item.notes}
+                                    </div>
                                   )}
                                 </div>
                               </div>
-                              
-                              <div className="flex flex-col items-end gap-1.5">
-                                <div className="flex gap-2">
-                                  {item.itemStatus === "PENDING" && (
-                                    <Button 
-                                      onClick={() => updateItemStatus(kot.order._id, item._id, "PREPARING")}
-                                      disabled={!!updating[`${kot.order._id}_${item._id}`]}
-                                      className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6"
-                                    >
-                                      {updating[`${kot.order._id}_${item._id}`] ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : "Cook"}
-                                    </Button>
-                                  )}
-                                  {item.itemStatus === "PREPARING" && (
-                                    <Button 
-                                      onClick={() => updateItemStatus(kot.order._id, item._id, "READY")}
-                                      disabled={!!updating[`${kot.order._id}_${item._id}`]}
-                                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 px-6"
-                                    >
-                                      {updating[`${kot.order._id}_${item._id}`] ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 animate-spin" /> Updating
-                                        </>
-                                      ) : (
-                                        <>
-                                          <CheckCircle2 className="h-4 w-4" /> Ready
-                                        </>
-                                      )}
-                                    </Button>
-                                  )}
-                                </div>
-                                {errors[`${kot.order._id}_${item._id}`] && (
-                                  <p className="text-red-600 dark:text-red-400 text-xs font-semibold bg-red-100 dark:bg-red-950/30 px-2 py-1 rounded border border-red-200 dark:border-red-900/50">
-                                    {errors[`${kot.order._id}_${item._id}`]}
-                                  </p>
+
+                              {/* Item Action Button */}
+                              <div className="shrink-0 pt-0.5">
+                                {item.itemStatus === "PENDING" && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => updateItemStatus(kot.order._id, item._id, "PREPARING")}
+                                    disabled={isUpdating}
+                                    className={`font-extrabold bg-orange-600 hover:bg-orange-500 text-white rounded-xl shadow-md ${
+                                      gridDensity === "compact" ? "h-6 px-2 text-[10px]" : "h-8 px-3 text-xs"
+                                    }`}
+                                  >
+                                    {isUpdating ? <Loader2 className="h-3 w-3 animate-spin" /> : "Cook"}
+                                  </Button>
+                                )}
+                                {item.itemStatus === "PREPARING" && (
+                                  <Button
+                                    size="sm"
+                                    onClick={() => updateItemStatus(kot.order._id, item._id, "READY")}
+                                    disabled={isUpdating}
+                                    className={`font-extrabold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md ${
+                                      gridDensity === "compact" ? "h-6 px-2 text-[10px]" : "h-8 px-3 text-xs"
+                                    }`}
+                                  >
+                                    {isUpdating ? <Loader2 className="h-3 w-3 animate-spin" /> : "Ready"}
+                                  </Button>
                                 )}
                               </div>
                             </div>
                           );
                         })}
                       </div>
+
+                      {/* Footer Actions */}
+                      <div className={`bg-slate-50 dark:bg-slate-950/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-1.5 ${
+                        gridDensity === "compact" ? "p-1.5" : "p-3"
+                      }`}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedKot(kot)}
+                          className={`font-bold border-slate-300 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white rounded-xl ${
+                            gridDensity === "compact" ? "h-7 px-2 text-[10px]" : "h-9 px-3 text-xs"
+                          }`}
+                        >
+                          <Eye className={`text-blue-400 ${gridDensity === "compact" ? "h-3 w-3 mr-1" : "h-3.5 w-3.5 mr-1.5"}`} /> Details
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          onClick={() => markAllReady(kot)}
+                          className={`font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl shadow-md gap-1 ${
+                            gridDensity === "compact" ? "h-7 px-2 text-[10px]" : "h-9 px-4 text-xs"
+                          }`}
+                        >
+                          <CheckCircle2 className={gridDensity === "compact" ? "h-3 w-3" : "h-4 w-4"} /> All Ready
+                        </Button>
+                      </div>
                     </div>
                   );
-                })
-              )}
-            </div>
+                })}
+              </div>
+            )}
           </ScrollArea>
         </Card>
 
-        {/* READY FOR PICKUP */}
-        <Card className="flex flex-col border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm transition-colors overflow-hidden">
-          <CardHeader className="border-b border-slate-200 dark:border-slate-800 pb-4 bg-slate-50/50 dark:bg-slate-900/50">
-            <CardTitle className="text-emerald-600 dark:text-emerald-500 flex items-center justify-between text-lg">
-              Ready for Pickup
-              <Badge variant="outline" className="text-emerald-600 dark:text-emerald-500 border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10">
-                {readyKots.length} Ready
-              </Badge>
+        {/* READY TICKETS SECTION */}
+        <Card className="flex flex-col border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/80 shadow-2xl overflow-hidden backdrop-blur-xl">
+          <CardHeader className="border-b border-slate-200 dark:border-slate-800/80 pb-4 bg-slate-100/70 dark:bg-slate-900/60 flex flex-row items-center justify-between">
+            <CardTitle className="text-emerald-600 dark:text-emerald-400 flex items-center gap-2 text-lg font-extrabold">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500" /> Ready for Pickup
             </CardTitle>
+            <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400 border-emerald-500/30 bg-emerald-500/10 font-mono">
+              {readyKots.length} Ready
+            </Badge>
           </CardHeader>
+
           <ScrollArea className="flex-1 p-4">
-            <div className="space-y-4">
-              {readyKots.length === 0 ? (
-                <div className="text-center text-slate-500 dark:text-slate-500 py-20">
-                  No items waiting for pickup.
-                </div>
-              ) : (
-                readyKots.map(kot => (
-                  <div key={kot._id} className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/20 overflow-hidden opacity-80 hover:opacity-100 transition-opacity">
-                    <div className="px-4 py-2 flex justify-between items-center border-b border-emerald-200 dark:border-emerald-900/50 bg-emerald-100 dark:bg-emerald-950/30">
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-emerald-700 dark:text-emerald-400 text-lg">#{kot.kotNumber}</span>
-                        <span className="text-sm font-medium text-emerald-600 dark:text-emerald-200/50">
-                          Order #{kot.order._id?.slice(-4)}
-                        </span>
+            {readyKots.length === 0 ? (
+              <div className="text-center text-slate-500 py-20 flex flex-col items-center gap-3">
+                <Clock className="h-12 w-12 text-slate-700 opacity-50" />
+                <p className="font-semibold">No items waiting for pickup.</p>
+              </div>
+            ) : (
+              <div className={`grid ${
+                gridDensity === "compact"
+                  ? "grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2.5"
+                  : "grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4"
+              }`}>
+                {readyKots.map(kot => (
+                  <div
+                    key={kot._id}
+                    className="rounded-2xl border border-emerald-400/60 bg-emerald-50 dark:border-emerald-500/40 dark:bg-emerald-950/20 p-4 flex flex-col justify-between min-h-[120px] cursor-pointer hover:border-emerald-500 transition-all shadow-md"
+                    onClick={() => setSelectedKot(kot)}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="font-black text-xl text-emerald-600 dark:text-emerald-400">#{kot.kotNumber}</span>
+                        <span className="text-xs font-mono text-slate-500 dark:text-slate-400 ml-2">Order #{kot.order._id?.slice(-4)}</span>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        <Badge variant="outline" className="border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-800/30 text-emerald-600 dark:text-emerald-300">
-                          {kot.order.orderType === "DINE_IN" ? `Table ${kot.order.tableId?.tableNumber}` : kot.order.orderType}
-                        </Badge>
-                        {kot.order.waiterId && (
-                          <Badge variant="outline" className="border-blue-200 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
-                            {kot.order.waiterId.contactName}
-                          </Badge>
-                        )}
-                      </div>
+                      <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                        {kot.order.orderType === "DINE_IN" ? `Table ${kot.order.tableId?.tableNumber}` : kot.order.orderType}
+                      </Badge>
                     </div>
-                    
-                    <div className="p-3">
-                      <p className="text-emerald-100/70 text-sm italic text-center">
-                        All {kot.items.length} items are marked ready and waiting for waiter.
-                      </p>
+
+                    <div className="text-xs text-emerald-700 dark:text-emerald-200/80 font-medium my-2">
+                      All {kot.items.length} item(s) cooked & waiting for pickup
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-emerald-200 dark:border-emerald-900/30">
+                      <span>{kot.order.waiterId ? `Waiter: ${kot.order.waiterId.contactName}` : 'Counter'}</span>
+                      <span className="text-blue-400 font-bold flex items-center gap-1"><Eye className="h-3.5 w-3.5" /> View Details</span>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
           </ScrollArea>
         </Card>
 
       </div>
+
+      {/* 1-CLICK ORDER DETAIL MODAL */}
+      <Dialog open={!!selectedKot} onOpenChange={(open) => !open && setSelectedKot(null)}>
+        <DialogContent className="max-w-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-3xl p-6 shadow-2xl backdrop-blur-2xl">
+          {selectedKot && (
+            <>
+              <DialogHeader className="border-b border-slate-200 dark:border-slate-800 pb-4">
+                <div className="flex items-center justify-between pr-6">
+                  <div>
+                    <DialogTitle className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+                      KOT #{selectedKot.kotNumber}
+                      <Badge variant="outline" className="border-blue-500/40 bg-blue-500/10 text-blue-400 text-xs font-bold">
+                        Order #{selectedKot.order._id?.slice(-4)}
+                      </Badge>
+                    </DialogTitle>
+                    <DialogDescription className="text-slate-500 dark:text-slate-400 text-sm mt-1 flex items-center gap-2">
+                      <span>{selectedKot.order.orderType === "DINE_IN" ? `Table ${selectedKot.order.tableId?.tableNumber}` : selectedKot.order.orderType}</span>
+                      {selectedKot.order.waiterId && (
+                        <span>• Served by <strong className="text-slate-900 dark:text-slate-200">{selectedKot.order.waiterId.contactName}</strong></span>
+                      )}
+                    </DialogDescription>
+                  </div>
+
+                  <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <Clock className="h-4 w-4 text-orange-400" />
+                    <span className="font-mono text-sm font-bold text-slate-700 dark:text-slate-200">{getTimeElapsed(selectedKot.createdAt)}m ago</span>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {/* Items List */}
+              <ScrollArea className="max-h-[60vh] py-4 pr-2">
+                <div className="space-y-3">
+                  {selectedKot.items.map((item: KotItem) => {
+                    const isUpdating = !!updating[`${selectedKot.order._id}_${item._id}`];
+
+                    return (
+                      <div key={item._id} className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-start gap-4 flex-1">
+                          <div className="font-black text-2xl text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-900/50 min-w-[3.5rem] h-12 rounded-xl flex items-center justify-center">
+                            {item.quantity}x
+                          </div>
+                          <div className="space-y-1">
+                            <h4 className="font-bold text-lg text-slate-900 dark:text-white leading-tight">{item.menuItemId?.name}</h4>
+                            {item.variantName && item.variantName !== "Standard" && (
+                              <Badge variant="outline" className="text-xs text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-700">
+                                Variant: {item.variantName}
+                              </Badge>
+                            )}
+                            {item.notes && (
+                              <div className="mt-2 p-2.5 rounded-xl bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800/60 text-red-600 dark:text-red-300 text-xs font-bold flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                                <span>Instruction: {item.notes}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions per item */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          {item.itemStatus === "PENDING" && (
+                            <Button
+                              onClick={() => updateItemStatus(selectedKot.order._id, item._id, "PREPARING")}
+                              disabled={isUpdating}
+                              className="bg-orange-600 hover:bg-orange-500 text-white font-extrabold px-5 h-11 rounded-xl shadow-lg"
+                            >
+                              {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Start Cooking"}
+                            </Button>
+                          )}
+                          {item.itemStatus === "PREPARING" && (
+                            <Button
+                              onClick={() => updateItemStatus(selectedKot.order._id, item._id, "READY")}
+                              disabled={isUpdating}
+                              className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold px-6 h-11 rounded-xl shadow-lg gap-2"
+                            >
+                              {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <><CheckCircle2 className="h-4 w-4" /> Mark Ready</>}
+                            </Button>
+                          )}
+                          {item.itemStatus === "READY" && (
+                            <Badge className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 px-4 py-2 rounded-xl text-xs font-extrabold">
+                              ✓ Ready
+                            </Badge>
+                          )}
+                          {item.itemStatus === "SERVED" && (
+                            <Badge className="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 px-4 py-2 rounded-xl text-xs font-extrabold">
+                              Served
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+
+              {/* Modal Footer */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedKot(null)}
+                  className="border-slate-300 text-slate-600 hover:bg-slate-200 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 rounded-xl"
+                >
+                  Close
+                </Button>
+                {selectedKot.items.some((i: KotItem) => i.itemStatus !== "READY" && i.itemStatus !== "SERVED") && (
+                  <Button
+                    onClick={() => markAllReady(selectedKot)}
+                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black px-6 h-12 rounded-xl shadow-lg shadow-emerald-900/30 gap-2"
+                  >
+                    <CheckCircle2 className="h-5 w-5" /> Mark Entire Ticket Ready
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -32,6 +32,8 @@ export interface MenuItem {
   isVeg: boolean;
   isAvailable: boolean;
   isActive: boolean;
+  imageUrl?: string | null;
+  imagePublicId?: string | null;
   createdAt: string;
 }
 

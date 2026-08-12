@@ -36,6 +36,20 @@ export const restaurantService = {
     const res = await apiClient.delete(`/restaurant/menu-items/${id}`, { headers: { "x-restaurant-id": restaurantId } });
     return res.data;
   },
+  uploadMenuItemImage: async (restaurantId: string, id: string, file: File) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    const res = await apiClient.post(`/restaurant/menu-items/${id}/image`, formData, {
+      headers: { "x-restaurant-id": restaurantId, "Content-Type": undefined },
+    });
+    return res.data;
+  },
+  removeMenuItemImage: async (restaurantId: string, id: string) => {
+    const res = await apiClient.delete(`/restaurant/menu-items/${id}/image`, {
+      headers: { "x-restaurant-id": restaurantId },
+    });
+    return res.data;
+  },
 
   // --- TABLES ---
   getTables: async (restaurantId: string, params?: Record<string, any>) => {

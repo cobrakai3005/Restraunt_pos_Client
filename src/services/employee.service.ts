@@ -77,5 +77,10 @@ export const employeeService = {
   async checkoutOrder(orderId: string, paymentDetails: any) {
     const response = await apiClient.post(`/orders/${orderId}/checkout`, paymentDetails);
     return response.data;
+  },
+
+  async reopenOrder(orderId: string) {
+    const response = await apiClient.post(`/orders/${orderId}/reopen`);
+    return response.data;
   }
 };

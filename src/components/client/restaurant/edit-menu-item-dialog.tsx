@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { restaurantService } from "@/services/restaurant.service";
 import { useToast } from "@/components/ui/use-toast";
+import { MenuImageField } from "./menu-image-field";
 
 const STATIONS = ["BAR", "TANDOOR", "GRILL", "MAIN_KITCHEN", "BAKERY", "COLD_KITCHEN"];
 
@@ -29,6 +30,8 @@ export function EditMenuItemDialog({ open, onOpenChange, restaurantId, item, cat
     variants: [{ name: "Regular", price: "", sku: "" }]
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [removeImage, setRemoveImage] = useState(false);
 
   useEffect(() => {
     if (item && open) {
@@ -45,6 +48,8 @@ export function EditMenuItemDialog({ open, onOpenChange, restaurantId, item, cat
           ? item.variants.map((v: any) => ({ name: v.name, price: v.price?.toString(), sku: v.sku || "" }))
           : [{ name: "Regular", price: item.price?.toString() || "", sku: "" }]
       });
+      setImageFile(null);
+      setRemoveImage(false);
     }
   }, [item, open]);
 
@@ -93,6 +98,13 @@ export function EditMenuItemDialog({ open, onOpenChange, restaurantId, item, cat
         isActive: formData.isActive,
         variants: validVariants.map(v => ({ name: v.name, price: Number(v.price), sku: v.sku }))
       });
+
+      if (removeImage) {
+        await restaurantService.removeMenuItemImage(restaurantId, item._id);
+      } else if (imageFile) {
+        await restaurantService.uploadMenuItemImage(restaurantId, item._id, imageFile);
+      }
+
       toast({ title: "Success", description: "Menu item updated" });
       onSuccess();
       onOpenChange(false);
@@ -108,7 +120,13 @@ export function EditMenuItemDialog({ open, onOpenChange, restaurantId, item, cat
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Edit Menu Item</DialogTitle></DialogHeader>
         <div className="space-y-4 pt-4">
-          
+
+          <MenuImageField
+            currentImage={item?.imageUrl}
+            onFileChange={setImageFile}
+            onRemoveChange={setRemoveImage}
+          />
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="mb-2 block">Item Name <span className="text-rose-500">*</span></Label>

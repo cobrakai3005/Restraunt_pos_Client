@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { Calculator, CheckCircle2, Receipt, Search, CreditCard, Banknote, Loader2, UtensilsCrossed, Flame, Smartphone } from "lucide-react";
+import { Calculator, CheckCircle2, Receipt, Search, CreditCard, Banknote, Loader2, UtensilsCrossed, Flame, Smartphone, RotateCcw } from "lucide-react";
 import { User } from "@/services/auth.service";
 import { employeeService } from "@/services/employee.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
@@ -77,6 +77,7 @@ export function CashierDashboard({ user }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [completedReceiptOrder, setCompletedReceiptOrder] = useState<Order | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<string>("CASH");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -131,6 +132,7 @@ export function CashierDashboard({ user }: DashboardProps) {
       const response = await employeeService.generateBill(orderId);
       if (response.success) {
         toast({ title: "Bill Generated successfully" });
+        setCompletedReceiptOrder(selectedOrder);
         setShowReceipt(true);
         await fetchOrders();
       }
@@ -145,14 +147,33 @@ export function CashierDashboard({ user }: DashboardProps) {
     try {
       if (!selectedOrder) return;
       setIsProcessing(true);
+      const orderToReceipt = { ...selectedOrder };
       await employeeService.checkoutOrder(orderId, {
         payments: [{ method: paymentMethod, amount: selectedOrder.financials?.grandTotal || 0 }],
       });
-      toast({ title: "Payment Successful", description: "Order has been closed and table is free." });
+      toast({ title: "Payment Successful 🎉", description: "Order settled and table released." });
+      setCompletedReceiptOrder(orderToReceipt);
+      setShowReceipt(true);
       setSelectedOrder(null);
       await fetchOrders();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Checkout Error", description: error.message });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReopenOrder = async (orderId: string) => {
+    try {
+      setIsProcessing(true);
+      await employeeService.reopenOrder(orderId);
+      toast({
+        title: "Order Re-opened 🔓",
+        description: `Order #${selectedOrder?._id?.slice(-4)} tab is now OPEN. Waiters can now add extra items in POS!`,
+      });
+      await fetchOrders();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Re-open Error", description: error.message || "Failed to re-open order" });
     } finally {
       setIsProcessing(false);
     }
@@ -200,7 +221,7 @@ export function CashierDashboard({ user }: DashboardProps) {
         </div>
 
         {/* Segmented control */}
-        <div className="flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 shadow-inner">
+        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-inner">
           {TABS.map(tab => {
             const Icon = tab.icon;
             const isActive = mode === tab.id;
@@ -210,15 +231,26 @@ export function CashierDashboard({ user }: DashboardProps) {
                 key={tab.id}
                 size="sm"
                 onClick={() => setMode(tab.id)}
-                className={`relative rounded-xl h-11 px-3.5 md:px-5 text-sm font-bold transition-all duration-300 ${isActive ? tab.activeClass : "text-slate-200 dark:text-slate-100 hover:text-slate-900 dark:hover:text-white hover:bg-white/70 dark:hover:bg-slate-800/70"}`}
+                className={`relative rounded-xl h-11 px-4 md:px-6 text-sm font-extrabold transition-all duration-200 ${
+                  isActive
+                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/40 ring-2 ring-blue-400 ring-offset-2 ring-offset-slate-950 scale-105"
+                    : "bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/80 border border-slate-800/60"
+                }`}
               >
-                <Icon className="mr-2 h-4 w-4" />
+                <Icon className={`mr-2 h-4 w-4 ${isActive ? "text-white" : "text-slate-400"}`} />
                 <span className="hidden md:inline">{tab.label}</span>
                 <span className="md:hidden">{tab.label.split(" ")[0]}</span>
                 {badge > 0 && (
-                  <span className={`ml-2 min-w-[1.5rem] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center ${isActive ? "bg-white/25 text-white" : tab.dotClass + " text-white"}`}>
+                  <span className={`ml-2.5 px-2 py-0.5 rounded-full text-xs font-black flex items-center justify-center ${
+                    isActive ? "bg-white text-blue-700 shadow-sm" : "bg-orange-500 text-white"
+                  }`}>
                     {badge}
                   </span>
+                )}
+
+                {/* Active Underline Pill Indicator */}
+                {isActive && (
+                  <span className="absolute -bottom-1 left-4 right-4 h-1 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse" />
                 )}
               </Button>
             );
@@ -237,8 +269,8 @@ export function CashierDashboard({ user }: DashboardProps) {
         </div>
       ) : (
         <div className="flex flex-col md:flex-row flex-1 min-h-0 transition-colors">
-          {/* Left: Orders List */}
-          <div className="w-full md:w-[400px] border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col z-10 shrink-0 transition-colors">
+          {/* Left: Orders List (Grid Layout) */}
+          <div className="w-full md:w-[440px] lg:w-[780px] border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col z-10 shrink-0 transition-colors">
             <div className="p-5 border-b border-slate-200 dark:border-slate-800 space-y-4">
               <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Receipt className="h-5 w-5 text-emerald-600 dark:text-emerald-500" /> Pending Settlements
@@ -258,27 +290,32 @@ export function CashierDashboard({ user }: DashboardProps) {
             </div>
 
             <ScrollArea className="flex-1 p-4">
-              <div className="space-y-3">
-                {filteredOrders.length === 0 ? (
-                  <div className="text-center text-slate-500 dark:text-slate-500 py-10">No pending orders.</div>
-                ) : (
-                  filteredOrders.map(order => (
+              {filteredOrders.length === 0 ? (
+                <div className="text-center text-slate-500 dark:text-slate-500 py-10">No pending orders.</div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {filteredOrders.map(order => (
                     <div
                       key={order._id}
                       onClick={() => setSelectedOrder(order)}
-                      className={`p-4 rounded-xl cursor-pointer transition-all border ${selectedOrder?._id === order._id ? 'bg-blue-50/50 dark:bg-blue-900/20 border-blue-500/50 shadow-md shadow-blue-500/10' : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
+                      className={`p-3.5 rounded-2xl cursor-pointer transition-all border flex flex-col justify-between h-28 ${
+                        selectedOrder?._id === order._id
+                          ? 'bg-blue-50/80 dark:bg-blue-900/30 border-blue-500 shadow-md ring-2 ring-blue-500/30'
+                          : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-900'
+                      }`}
                     >
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="font-bold text-slate-900 dark:text-white">Order #{order._id?.slice(-4)}</span>
-                        <Badge variant="outline" className={order.status === "BILLED" ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "border-orange-500/30 text-orange-600 dark:text-orange-400 bg-orange-500/10"}>
+                      <div className="flex justify-between items-start">
+                        <span className="font-extrabold text-sm text-slate-900 dark:text-white">#{order._id?.slice(-4)}</span>
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 font-bold ${order.status === "BILLED" ? "border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10" : "border-orange-500/30 text-orange-600 dark:text-orange-400 bg-orange-500/10"}`}>
                           {order.status}
                         </Badge>
                       </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-500 dark:text-slate-400">
+
+                      <div className="mt-auto space-y-1">
+                        <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 truncate">
                           {order.orderType === "DINE_IN" ? `Table ${order.tableId?.tableNumber}` : order.orderType}
-                        </span>
-                        <span className="font-semibold text-blue-600 dark:text-blue-400">
+                        </div>
+                        <div className="font-extrabold text-blue-600 dark:text-blue-400 text-sm">
                           ₹{(() => {
                             if (order.financials?.grandTotal) return order.financials.grandTotal.toFixed(2);
                             if (order.status === "OPEN") {
@@ -287,12 +324,12 @@ export function CashierDashboard({ user }: DashboardProps) {
                             }
                             return "0.00";
                           })()}
-                        </span>
+                        </div>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </ScrollArea>
           </div>
 
@@ -403,15 +440,26 @@ export function CashierDashboard({ user }: DashboardProps) {
                           <CreditCard className="mr-2 h-4 w-4" /> Card
                         </Button>
                       </div>
-                      <Button
-                        size="lg"
-                        className="w-full lg:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold h-14 px-10 text-lg rounded-xl shadow-lg shadow-blue-900/20"
-                        disabled={isProcessing}
-                        onClick={() => handleCheckout(selectedOrder._id)}
-                      >
-                        {isProcessing ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
-                        {isProcessing ? "Processing..." : "Process Payment"}
-                      </Button>
+                      <div className="flex gap-2 w-full lg:w-auto">
+                        <Button
+                          variant="outline"
+                          className="border-amber-500/40 hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold h-14 px-5 text-sm rounded-xl"
+                          disabled={isProcessing}
+                          onClick={() => handleReopenOrder(selectedOrder._id)}
+                          title="Re-open order tab to add additional items before final payment"
+                        >
+                          <RotateCcw className="mr-2 h-4 w-4" /> Re-Open Order
+                        </Button>
+                        <Button
+                          size="lg"
+                          className="flex-1 lg:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold h-14 px-8 text-lg rounded-xl shadow-lg shadow-blue-900/20"
+                          disabled={isProcessing}
+                          onClick={() => handleCheckout(selectedOrder._id)}
+                        >
+                          {isProcessing ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
+                          {isProcessing ? "Processing..." : "Process Payment"}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -427,8 +475,8 @@ export function CashierDashboard({ user }: DashboardProps) {
           <ReceiptModal
             isOpen={showReceipt}
             onClose={() => setShowReceipt(false)}
-            order={selectedOrder}
-            restaurant={user.restaurant}
+            order={completedReceiptOrder || selectedOrder}
+            restaurant={(user as any)?.restaurant}
           />
         </div>
       )}

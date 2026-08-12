@@ -6,12 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, Layers } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, Sparkles, UserX, UtensilsCrossed } from "lucide-react";
 import { employeeService } from "@/services/employee.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { VariantPickerDialog } from "./variant-picker-dialog";
+import { MenuItemCard } from "./menu-item-card";
+
+const PRESET_COOKING_NOTES = ["Less Spicy", "No Onion/Garlic", "Extra Spicy", "Jain", "Less Oil", "Takeaway Pack"];
 
 interface Menu {
   _id: string;
@@ -27,7 +29,8 @@ interface Menu {
   }[];
   station: string;
   isAvailable: boolean;
-  image?: string;
+  imageUrl?: string | null;
+  isVeg?: boolean | null;
 }
 
 interface Table {
@@ -97,11 +100,27 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
   const isFirstLoadRef = useRef(true);
   const toastedItemsRef = useRef<Set<string>>(new Set());
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus search input on '/' shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const fetchActiveOrders = useCallback(async () => {
     try {
-      const res = await employeeService.getOrders({ status: "OPEN" });
-      const newOrders = res.data || [];
+      const [resOpen, resBilled] = await Promise.all([
+        employeeService.getOrders({ status: "OPEN" }),
+        employeeService.getOrders({ status: "BILLED" }),
+      ]);
+      const newOrders = [...(resOpen.data || []), ...(resBilled.data || [])];
 
       newOrders.forEach((newOrder: any) => {
         newOrder.kots?.forEach((newKot: any) => {
@@ -215,6 +234,22 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     setCart(prev => prev.map(item => item.cartId === cartId ? { ...item, notes } : item));
   };
 
+  const togglePresetNote = (cartId: string, noteText: string) => {
+    setCart(prev => prev.map(item => {
+      if (item.cartId === cartId) {
+        const currentNotes = item.notes ? item.notes.split(", ").map(s => s.trim()).filter(Boolean) : [];
+        let updated: string[];
+        if (currentNotes.includes(noteText)) {
+          updated = currentNotes.filter(n => n !== noteText);
+        } else {
+          updated = [...currentNotes, noteText];
+        }
+        return { ...item, notes: updated.join(", ") };
+      }
+      return item;
+    }));
+  };
+
   const filteredMenus = menus.filter(m => {
     const matchesCategory = activeCategoryId === "All" || m.categoryId?._id === activeCategoryId;
     const matchesSearch = m.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -241,12 +276,37 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         })),
       };
 
-      const existingOrder = orderType === "DINE_IN"
-        ? activeOrders.find(o => o.tableId?._id === selectedTable && o.status === "OPEN")
+      const existingOpenOrder = orderType === "DINE_IN"
+        ? activeOrders.find(o => {
+            if (!o || o.status !== "OPEN") return false;
+            const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
+            const tNum = typeof o.tableId === "object" ? o.tableId?.tableNumber : (o as any).tableNumber;
+            return (tId && String(tId) === String(selectedTable)) || (tNum && String(tNum) === String(selectedTable));
+          })
         : null;
 
-      if (existingOrder) {
-        await employeeService.addKot(existingOrder._id, kotPayload);
+      const existingBilledOrder = orderType === "DINE_IN" && !existingOpenOrder
+        ? activeOrders.find(o => {
+            if (!o || o.status !== "BILLED") return false;
+            const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
+            const tNum = typeof o.tableId === "object" ? o.tableId?.tableNumber : (o as any).tableNumber;
+            return (tId && String(tId) === String(selectedTable)) || (tNum && String(tNum) === String(selectedTable));
+          })
+        : null;
+
+      if (existingBilledOrder) {
+        setIsSubmitting(false);
+        const tabObj = tables.find(t => t._id === selectedTable);
+        return toast({
+          variant: "destructive",
+          title: "Table Bill Generated 🧾",
+          description: `Table ${tabObj?.tableNumber || ""} (Order #${existingBilledOrder._id.slice(-4)}) has an unpaid bill. Please settle payment in Billing & Settlements to release the table, or switch to Takeaway.`,
+          duration: 7000,
+        });
+      }
+
+      if (existingOpenOrder) {
+        await employeeService.addKot(existingOpenOrder._id, kotPayload);
         toast({ title: "Additional KOT sent to kitchen successfully!" });
       } else {
         const orderPayload = {
@@ -263,7 +323,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
       }
 
       setCart([]);
-      if (!existingOrder) {
+      if (!existingOpenOrder) {
         setCustomerName("");
         setCustomerPhone("");
         setSelectedTable("");
@@ -289,17 +349,42 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     <div className="flex flex-col md:flex-row h-full bg-slate-100/50 dark:bg-slate-900/50 rounded-xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 transition-colors backdrop-blur-xl shadow-2xl">
 
       {/* Tables Sidebar */}
-      <div className="hidden md:flex flex-col w-[200px] lg:w-[220px] border-r border-white/30 dark:border-white/10 bg-white/60 dark:bg-slate-950/60 z-10 shrink-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] transition-colors backdrop-blur-xl">
-        <div className="p-4 border-b border-white/30 dark:border-slate-800/50 shrink-0 h-[80px] flex items-center justify-between">
-          <h2 className="font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-            <Store className="h-5 w-5 text-blue-500" /> Tables
-          </h2>
+      <div className="hidden md:flex flex-col w-[240px] lg:w-[470px] border-r border-white/30 dark:border-white/10 bg-white/60 dark:bg-slate-950/60 z-10 shrink-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] transition-colors backdrop-blur-xl">
+        <div className="p-4 border-b border-white/30 dark:border-slate-800/50 shrink-0 space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+              <Store className="h-5 w-5 text-blue-500" /> Table Floor
+            </h2>
+          </div>
+          <div className="flex items-center gap-1.5 text-[10px] font-bold">
+            <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/20">
+              {tables.filter(t => !activeOrders.some(o => {
+                if (!o || o.status === "COMPLETED" || o.status === "CANCELLED" || o.status === "CLOSED") return false;
+                const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
+                const tNum = typeof o.tableId === "object" ? o.tableId?.tableNumber : (o as any).tableNumber;
+                return (tId && String(tId) === String(t._id)) || (tNum && String(tNum) === String(t.tableNumber));
+              })).length} Free
+            </span>
+            <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/20">
+              {tables.filter(t => activeOrders.some(o => {
+                if (!o || o.status === "COMPLETED" || o.status === "CANCELLED" || o.status === "CLOSED") return false;
+                const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
+                const tNum = typeof o.tableId === "object" ? o.tableId?.tableNumber : (o as any).tableNumber;
+                return (tId && String(tId) === String(t._id)) || (tNum && String(tNum) === String(t.tableNumber));
+              })).length} Active
+            </span>
+          </div>
         </div>
         <ScrollArea className="flex-1 p-3">
-          <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2.5">
             {tables.map(t => {
-              const order = activeOrders.find(o => o.tableId?._id === t._id && o.status === "OPEN");
-              const isOccupied = !!order;
+              const order = activeOrders.find(o => {
+                if (!o || o.status === "COMPLETED" || o.status === "CANCELLED" || o.status === "CLOSED") return false;
+                const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
+                const tNum = typeof o.tableId === "object" ? o.tableId?.tableNumber : (o as any).tableNumber;
+                return (tId && String(tId) === String(t._id)) || (tNum && String(tNum) === String(t.tableNumber));
+              });
+              const isOccupied = !!order || t.status === "OCCUPIED" || (t as any).isOccupied === true;
               let hasReady = false;
               if (order) {
                 order.kots?.forEach(kot => {
@@ -308,6 +393,8 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                   });
                 });
               }
+
+              const isSelected = selectedTable === t._id;
 
               return (
                 <div
@@ -323,27 +410,36 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                       setCustomerPhone("");
                     }
                   }}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all duration-200 active:scale-95 ${selectedTable === t._id ? 'border-blue-400 bg-blue-50/80 dark:bg-blue-500/20 shadow-md ring-1 ring-blue-400/50' : 'border-white/40 dark:border-slate-800/50 bg-white/40 dark:bg-slate-900/40 hover:bg-white/80 dark:hover:bg-slate-800/80 hover:shadow-sm'}`}
+                  className={`p-3 rounded-2xl border cursor-pointer transition-all duration-200 flex flex-col justify-between h-24 relative overflow-hidden active:scale-95 ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/50 shadow-md'
+                      : isOccupied
+                      ? 'border-amber-400 dark:border-amber-700 bg-amber-500/15 hover:bg-amber-500/20'
+                      : 'border-white/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-900/50 hover:bg-white/90 dark:hover:bg-slate-800/90'
+                  }`}
                 >
-                  <div className="flex justify-between items-center">
-                    <span className={`font-bold text-sm ${selectedTable === t._id ? 'text-blue-900 dark:text-blue-100' : 'text-slate-700 dark:text-slate-300'}`}>{t.tableNumber}</span>
-                    <div className="flex items-center gap-2">
-                      {isOccupied && (
-                        <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 uppercase font-bold tracking-wider">
-                          #{String(order.orderNumber || "").slice(-4)}
-                        </span>
-                      )}
-                      {hasReady ? (
-                        <span className="h-2.5 w-2.5 rounded-full bg-green-500 shadow-[0_0_12px_rgba(34,197,94,0.8)] animate-pulse ring-2 ring-green-500/30" title="Food Ready"></span>
-                      ) : isOccupied ? (
-                        <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]" title="Occupied"></span>
-                      ) : (
-                        <span className="h-2.5 w-2.5 rounded-full bg-slate-300 dark:bg-slate-700" title="Empty"></span>
-                      )}
-                    </div>
+                  <div className="flex justify-between items-start">
+                    <span className={`font-extrabold text-sm ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-900 dark:text-white'}`}>
+                      {t.tableNumber}
+                    </span>
+                    {hasReady ? (
+                      <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] animate-ping" title="Food Ready"></span>
+                    ) : isOccupied ? (
+                      <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.8)]" title="Occupied / Order Active"></span>
+                    ) : (
+                      <span className="h-2 w-2 rounded-full bg-emerald-500/40" title="Free"></span>
+                    )}
                   </div>
-                  <div className={`mt-1 text-xs font-medium ${selectedTable === t._id ? 'text-blue-700 dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}`}>
-                    {t.status === "AVAILABLE" ? "Available" : t.status} • {t.capacity} seats
+
+                  <div className="mt-auto space-y-0.5">
+                    {isOccupied && (
+                      <div className="text-[10px] font-mono font-bold text-amber-600 dark:text-amber-400">
+                        #{String(order?.orderNumber || order?._id || "").slice(-4)}
+                      </div>
+                    )}
+                    <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                      {t.capacity} Seats
+                    </div>
                   </div>
                 </div>
               );
@@ -360,11 +456,15 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           <div className="relative group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors" />
             <Input
-              placeholder="Search menu items..."
+              ref={searchInputRef}
+              placeholder="Search menu items... (Press '/' to focus)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 h-14 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-white/50 dark:border-slate-700/50 shadow-sm text-lg rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:ring-offset-0 transition-all hover:bg-white/90 dark:hover:bg-slate-900/90"
+              className="pl-12 pr-14 h-14 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-white/50 dark:border-slate-700/50 shadow-sm text-lg rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:ring-offset-0 transition-all hover:bg-white/90 dark:hover:bg-slate-900/90"
             />
+            <kbd className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:inline-flex h-6 select-none items-center gap-1 rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2 font-mono text-[10px] font-medium text-slate-500 dark:text-slate-400">
+              /
+            </kbd>
           </div>
 
           <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar">
@@ -391,35 +491,24 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         {/* Menu Grid */}
         <ScrollArea className="flex-1 -mx-6 px-6">
           <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5 pb-10">
-            {filteredMenus.map(menu => (
-              <Card
-                key={menu._id}
-                className={`cursor-pointer transition-all duration-300 flex flex-col h-36 active:scale-[0.97] bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-white/60 dark:border-slate-700/50 hover:shadow-xl hover:-translate-y-1 hover:border-blue-400/50 dark:hover:border-blue-500/50 hover:bg-white/90 dark:hover:bg-slate-800/90 shadow-sm ${!menu.isAvailable ? 'opacity-50 grayscale hover:-translate-y-0 hover:shadow-sm cursor-not-allowed' : ''}`}
-                onClick={() => handleMenuClick(menu)}
-              >
-                <CardContent className="p-4 flex flex-col h-full justify-between relative overflow-hidden">
-                  {!menu.isAvailable && (
-                    <div className="absolute inset-0 bg-slate-100/60 dark:bg-slate-950/60 flex items-center justify-center z-10 backdrop-blur-[1px]">
-                      <span className="bg-red-500 text-white text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-full shadow-lg">Sold Out</span>
-                    </div>
-                  )}
-                  <div>
-                    <h3 className="font-bold text-sm line-clamp-2 leading-tight text-slate-900 dark:text-white drop-shadow-sm">{menu.name}</h3>
-                    <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mt-1 inline-block">{menu.categoryId?.name || "Uncategorized"}</span>
-                  </div>
-                  <div className="flex items-end justify-between mt-2">
-                    <div className="font-extrabold text-blue-600 dark:text-blue-400 text-lg drop-shadow-sm">
-                      ₹{(menu.variants?.[0]?.price || 0).toFixed(2)}
-                    </div>
-                    {(menu.variants?.length || 0) > 1 && (
-                      <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 border border-violet-200 dark:border-violet-800/50 px-2 py-0.5 rounded-full">
-                        <Layers className="h-3 w-3" /> {menu.variants.length} Variants
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {filteredMenus.map(menu => {
+              const inCartCount = cart.filter(item => item._id === menu._id).reduce((sum, item) => sum + item.quantity, 0);
+
+              return (
+                <MenuItemCard
+                  key={menu._id}
+                  name={menu.name}
+                  categoryName={menu.categoryId?.name}
+                  price={menu.variants?.[0]?.price || 0}
+                  variantsCount={menu.variants?.length || 0}
+                  isAvailable={menu.isAvailable}
+                  imageUrl={menu.imageUrl}
+                  isVeg={menu.isVeg}
+                  inCartCount={inCartCount}
+                  onClick={() => handleMenuClick(menu)}
+                />
+              );
+            })}
             {filteredMenus.length === 0 && (
               <div className="col-span-full py-12 text-center text-slate-500 dark:text-slate-500">
                 No menu items found.
@@ -479,7 +568,19 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           )}
 
           <div className="space-y-1.5 pt-1">
-            <Label className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-widest pl-1">Customer Details <span className="opacity-50 font-medium lowercase">(optional)</span></Label>
+            <div className="flex justify-between items-center pl-1">
+              <Label className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-widest">Customer Details <span className="opacity-50 font-medium lowercase">(optional)</span></Label>
+              {(customerName || customerPhone) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setCustomerName(""); setCustomerPhone(""); }}
+                  className="h-5 text-[10px] text-slate-400 hover:text-red-500 p-0"
+                >
+                  <UserX className="h-3 w-3 mr-1" /> Clear
+                </Button>
+              )}
+            </div>
             <div className="flex gap-2">
               <Input
                 placeholder="Name"
@@ -549,11 +650,25 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                   <div className="space-y-3">
                     {cart.map(item => (
                       <div key={item.cartId} className="flex flex-col gap-3 p-3.5 border rounded-2xl bg-white dark:bg-slate-900 border-slate-200/50 dark:border-slate-800/50 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
-                        <div className="flex justify-between items-start">
-                          <div className="font-bold text-sm leading-tight pr-4 text-slate-900 dark:text-white">
-                            {item.name} <span className="text-[11px] text-slate-500 font-semibold ml-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">({item.selectedVariant.name})</span>
+                        <div className="flex items-start gap-3">
+                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
+                            {item.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <UtensilsCrossed className="h-4 w-4 text-slate-300 dark:text-slate-600" />
+                              </div>
+                            )}
                           </div>
-                          <div className="font-extrabold text-sm text-blue-600 dark:text-blue-400">₹{(item.selectedVariant.price * item.quantity).toFixed(2)}</div>
+                          <div className="flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-bold text-sm leading-tight pr-2 text-slate-900 dark:text-white">
+                                {item.name} <span className="text-[11px] text-slate-500 font-semibold ml-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">({item.selectedVariant.name})</span>
+                              </div>
+                              <div className="font-extrabold text-sm text-blue-600 dark:text-blue-400">₹{(item.selectedVariant.price * item.quantity).toFixed(2)}</div>
+                            </div>
+                          </div>
                         </div>
 
                         <Input
@@ -562,6 +677,27 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                           onChange={(e) => updateNotes(item.cartId, e.target.value)}
                           className="h-8 text-xs bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-600 rounded-lg focus-visible:ring-blue-500/30"
                         />
+
+                        {/* Preset Note Pills */}
+                        <div className="flex flex-wrap gap-1">
+                          {PRESET_COOKING_NOTES.map(preset => {
+                            const isSelected = (item.notes || "").includes(preset);
+                            return (
+                              <button
+                                key={preset}
+                                type="button"
+                                onClick={() => togglePresetNote(item.cartId, preset)}
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all ${
+                                  isSelected
+                                    ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                                    : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
+                                }`}
+                              >
+                                {isSelected ? "✓ " : "+ "}{preset}
+                              </button>
+                            );
+                          })}
+                        </div>
 
                         <div className="flex items-center justify-between mt-1">
                           <div className="flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-100 dark:bg-slate-800 p-1">
@@ -616,7 +752,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         open={!!pickerMenu}
         onOpenChange={(open) => !open && setPickerMenu(null)}
         itemName={pickerMenu?.name || ""}
-        itemImage={pickerMenu?.image}
+        itemImage={pickerMenu?.imageUrl || undefined}
         variants={pickerMenu?.variants || []}
         onSelect={(variant) => pickerMenu && addToCart(pickerMenu, variant)}
       />

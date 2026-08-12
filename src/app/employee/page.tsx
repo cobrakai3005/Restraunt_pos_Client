@@ -75,7 +75,9 @@ export default function EmployeeDashboard() {
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between transition-colors">
         <div className="flex items-center gap-2">
           <Store className="w-6 h-6 text-blue-600 dark:text-blue-500" />
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">Vinimay POS</h1>
+          <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase">
+            {(user as any)?.restaurant?.name || (typeof user.restaurantId === 'object' ? (user.restaurantId as any)?.name : null) || "Vinimay Cafe"} POS
+          </h1>
         </div>
         <div className="flex items-center gap-4">
           <div className="text-sm text-slate-600 dark:text-slate-400">
@@ -89,7 +91,7 @@ export default function EmployeeDashboard() {
         </div>
       </header>
 
-      <main className="p-8 max-w-6xl mx-auto">
+      <main className="p-8 max-w-8xl mx-auto">
         {DashboardComponent}
       </main>
     </div>

@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { EditMenuItemDialog } from "./edit-menu-item-dialog";
+import { MenuImageField } from "./menu-image-field";
 import { Pagination } from "@/components/ui/pagination";
 
 const STATIONS = ["BAR", "TANDOOR", "GRILL", "MAIN_KITCHEN", "BAKERY", "COLD_KITCHEN"];
@@ -51,6 +52,7 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
     isActive: true,
     variants: [{ ...initialVariant }]
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -127,7 +129,7 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
 
     try {
       setIsSubmitting(true);
-      await restaurantService.createMenuItem(restaurantId, {
+      const created: any = await restaurantService.createMenuItem(restaurantId, {
         name: formData.name,
         description: formData.description,
         categoryId: formData.categoryId,
@@ -138,6 +140,10 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
         isActive: formData.isActive,
         variants: validVariants.map(v => ({ name: v.name, price: Number(v.price), sku: v.sku }))
       });
+      const createdId = created?.data?.menuItem?._id;
+      if (imageFile && createdId) {
+        await restaurantService.uploadMenuItemImage(restaurantId, createdId, imageFile);
+      }
       toast({ title: "Success", description: "Menu item created" });
       setIsAddOpen(false);
       setFormData({ 
@@ -145,6 +151,7 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
         isVeg: "true", isAvailable: true, isActive: true, 
         variants: [{ ...initialVariant }]
       });
+      setImageFile(null);
       fetchData(page, statusFilter);
     } catch (err: any) {
       toast({ title: "Error", description: err.response?.data?.message || "Failed to create", variant: "destructive" });
@@ -203,7 +210,12 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
               <tr key={item._id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 ${!item.isActive ? 'opacity-60' : ''}`}>
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-2 font-semibold text-slate-800 dark:text-slate-100">
-                    <Coffee className="w-4 h-4 text-slate-400" />
+                    {item.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.imageUrl} alt={item.name} className="h-9 w-9 rounded-lg border border-border object-cover" />
+                    ) : (
+                      <Coffee className="w-4 h-4 text-slate-400" />
+                    )}
                     {item.name}
                     {!item.isActive && <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-medium">Inactive</span>}
                     {!item.isAvailable && <span className="text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full font-medium">Out of Stock</span>}
@@ -260,7 +272,9 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Add Menu Item</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-4">
-            
+
+            <MenuImageField currentImage={null} onFileChange={setImageFile} />
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="mb-2 block">Item Name <span className="text-rose-500">*</span></Label>
