@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, Sparkles, UserX, UtensilsCrossed } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, UserX, UtensilsCrossed, Clock, RotateCcw, X, ChevronRight } from "lucide-react";
 import { employeeService } from "@/services/employee.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { VariantPickerDialog } from "./variant-picker-dialog";
@@ -101,6 +101,22 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   const isFirstLoadRef = useRef(true);
   const toastedItemsRef = useRef<Set<string>>(new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // UX: cart flash animation — pulses the FAB when a new item is added
+  const [cartFlash, setCartFlash] = useState(false);
+  // UX: cart drawer open/close
+  const [cartOpen, setCartOpen] = useState(false);
+  // UX: recently added strip — last 4 unique items added to cart for quick re-add
+  const [recentlyAdded, setRecentlyAdded] = useState<Menu[]>([]);
+  // UX: repeat last order loading state per table
+  const [repeatLoading, setRepeatLoading] = useState<string | null>(null);
+
+  // Close cart drawer on Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setCartOpen(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // Focus search input on '/' shortcut
   useEffect(() => {
@@ -202,6 +218,16 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
       }
       return [...prev, { ...menu, cartId: Math.random().toString(), quantity: 1, notes: "", selectedVariant }];
     });
+
+    // UX: pulse the FAB to confirm the item was added
+    setCartFlash(true);
+    setTimeout(() => setCartFlash(false), 700);
+
+    // UX: track recently added strip (last 4 unique items)
+    setRecentlyAdded(prev => {
+      const filtered = prev.filter(r => r._id !== menu._id);
+      return [menu, ...filtered].slice(0, 4);
+    });
   };
 
   const handleMenuClick = (menu: Menu) => {
@@ -217,13 +243,17 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   };
 
   const updateQuantity = (cartId: string, delta: number) => {
-    setCart(prev => prev.map(item => {
-      if (item.cartId === cartId) {
-        const newQ = item.quantity + delta;
-        return newQ > 0 ? { ...item, quantity: newQ } : item;
-      }
-      return item;
-    }));
+    setCart(prev => {
+      const newCart = prev.map(item => {
+        if (item.cartId === cartId) {
+          const newQ = item.quantity + delta;
+          // Bug Fix: auto-remove item when qty goes to 0 on minus press
+          return newQ > 0 ? { ...item, quantity: newQ } : null;
+        }
+        return item;
+      }).filter(Boolean) as CartItem[];
+      return newCart;
+    });
   };
 
   const removeFromCart = (cartId: string) => {
@@ -256,9 +286,22 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     return matchesCategory && matchesSearch;
   });
 
+  // UX: count items per category for badge display
+  const categoryCountMap = new Map<string, number>();
+  menus.forEach(m => {
+    const cid = m.categoryId?._id;
+    if (cid) categoryCountMap.set(cid, (categoryCountMap.get(cid) || 0) + 1);
+  });
+
   const subtotal = cart.reduce((sum, item) => sum + (item.selectedVariant.price * item.quantity), 0);
-  const taxes = subtotal * 0.05; // Assuming 5% tax for now, ideally comes from backend
+  // Use real per-item taxPercentage from menu data (same logic as backend generateBill)
+  const taxes = cart.reduce((sum, item) => {
+    const itemTotal = item.selectedVariant.price * item.quantity;
+    const taxPct = (item as any).taxPercentage ?? 0;
+    return sum + (itemTotal * taxPct) / 100;
+  }, 0);
   const total = subtotal + taxes;
+  const effectiveTaxPct = subtotal > 0 ? Math.round((taxes / subtotal) * 100) : 0;
 
   const placeOrder = async () => {
     if (cart.length === 0) return toast({ variant: "destructive", title: "Cart is empty" });
@@ -266,15 +309,23 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
     setIsSubmitting(true);
     try {
-      const kotPayload = {
-        station: "MAIN_KITCHEN",
-        items: cart.map(c => ({
+      // ── Bug Fix: Group cart items by their station for correct kitchen routing ──
+      // Each station gets its own KOT payload so the right kitchen screen sees it.
+      const stationMap = new Map<string, typeof cart>();
+      for (const c of cart) {
+        const station = (c as any).station || "MAIN_KITCHEN";
+        if (!stationMap.has(station)) stationMap.set(station, []);
+        stationMap.get(station)!.push(c);
+      }
+      const kotPayloads = Array.from(stationMap.entries()).map(([station, items]) => ({
+        station,
+        items: items.map(c => ({
           menuItemId: c._id,
           variantName: c.selectedVariant.name,
           quantity: c.quantity,
           notes: c.notes || undefined,
         })),
-      };
+      }));
 
       const existingOpenOrder = orderType === "DINE_IN"
         ? activeOrders.find(o => {
@@ -305,9 +356,13 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         });
       }
 
+      let targetOrderId: string;
+
       if (existingOpenOrder) {
-        await employeeService.addKot(existingOpenOrder._id, kotPayload);
-        toast({ title: "Additional KOT sent to kitchen successfully!" });
+        targetOrderId = existingOpenOrder._id;
+        // Fire all per-station KOTs to the existing order
+        await Promise.all(kotPayloads.map(kp => employeeService.addKot(targetOrderId, kp)));
+        toast({ title: `Additional KOT(s) sent to kitchen! (${kotPayloads.length} station${kotPayloads.length > 1 ? "s" : ""})` });
       } else {
         const orderPayload = {
           tableId: selectedTable || undefined,
@@ -316,10 +371,11 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         };
 
         const orderRes = await employeeService.createOrder(orderPayload);
-        const orderId = orderRes.data._id;
+        targetOrderId = orderRes.data._id;
 
-        await employeeService.addKot(orderId, kotPayload);
-        toast({ title: "New order sent to kitchen successfully!" });
+        // Fire all per-station KOTs to the newly created order
+        await Promise.all(kotPayloads.map(kp => employeeService.addKot(targetOrderId, kp)));
+        toast({ title: `New order fired to kitchen! (${kotPayloads.length} station${kotPayloads.length > 1 ? "s" : ""})` });
       }
 
       setCart([]);
@@ -337,6 +393,41 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     }
   };
 
+  // UX: One-tap Repeat Last Order — re-fire the last KOT items of an occupied table
+  const repeatLastOrder = async (tableId: string, order: Order) => {
+    if (!order.kots || order.kots.length === 0) return;
+    setRepeatLoading(tableId);
+    try {
+      const lastKot = order.kots[order.kots.length - 1];
+      if (!lastKot.items || lastKot.items.length === 0) {
+        toast({ variant: "destructive", title: "No items in last KOT" });
+        return;
+      }
+      // Group by station using item data from the KOT
+      const stationMap = new Map<string, typeof lastKot.items>();
+      lastKot.items.forEach((item: any) => {
+        const station = item.station || "MAIN_KITCHEN";
+        if (!stationMap.has(station)) stationMap.set(station, []);
+        stationMap.get(station)!.push(item);
+      });
+      const kotPayloads = Array.from(stationMap.entries()).map(([station, items]) => ({
+        station,
+        items: items.map((item: any) => ({
+          menuItemId: typeof item.menuItemId === "object" ? item.menuItemId._id || item.menuItemId : item.menuItemId,
+          variantName: item.variantName,
+          quantity: item.quantity,
+        })),
+      }));
+      await Promise.all(kotPayloads.map(kp => employeeService.addKot(order._id, kp)));
+      toast({ title: "🔁 Repeated last KOT!", description: `${lastKot.items.length} item(s) re-sent to kitchen.` });
+      fetchActiveOrders();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Repeat failed", description: err.message });
+    } finally {
+      setRepeatLoading(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-full min-h-[300px] items-center justify-center bg-slate-50 dark:bg-slate-950 transition-colors">
@@ -346,10 +437,10 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-full bg-slate-100/50 dark:bg-slate-900/50 rounded-xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 transition-colors backdrop-blur-xl shadow-2xl">
+    <div className="relative flex flex-col md:flex-row h-full bg-slate-100/50 dark:bg-slate-900/50 rounded-xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 transition-colors backdrop-blur-xl shadow-2xl">
 
       {/* Tables Sidebar */}
-      <div className="hidden md:flex flex-col w-[240px] lg:w-[470px] border-r border-white/30 dark:border-white/10 bg-white/60 dark:bg-slate-950/60 z-10 shrink-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] transition-colors backdrop-blur-xl">
+      <div className="hidden md:flex flex-col w-[240px] lg:w-[270px] border-r border-white/30 dark:border-white/10 bg-white/60 dark:bg-slate-950/60 z-10 shrink-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] transition-colors backdrop-blur-xl">
         <div className="p-4 border-b border-white/30 dark:border-slate-800/50 shrink-0 space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
@@ -410,7 +501,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                       setCustomerPhone("");
                     }
                   }}
-                  className={`p-3 rounded-2xl border cursor-pointer transition-all duration-200 flex flex-col justify-between h-24 relative overflow-hidden active:scale-95 ${
+                  className={`p-3 rounded-2xl border cursor-pointer transition-all duration-200 flex flex-col justify-between h-24 relative overflow-hidden active:scale-95 group ${
                     isSelected
                       ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/50 shadow-md'
                       : isOccupied
@@ -441,6 +532,37 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                       {t.capacity} Seats
                     </div>
                   </div>
+
+                  {/* UX: table hover preview — show order summary & Repeat button */}
+                  {isOccupied && order && (
+                    <div className="absolute inset-0 rounded-2xl bg-slate-900/90 dark:bg-slate-950/95 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center gap-1.5 p-2 z-10">
+                      {/* order item count + total */}
+                      {(() => {
+                        const allItems = order.kots?.flatMap(k => k.items || []) || [];
+                        const totalQty = allItems.reduce((s: number, i: any) => s + (i.quantity || 1), 0);
+                        const totalAmt = allItems.reduce((s: number, i: any) => s + ((i.variantPrice || 0) * (i.quantity || 1)), 0);
+                        return (
+                          <>
+                            <span className="text-[10px] font-bold text-white/80">{totalQty} item{totalQty !== 1 ? 's' : ''}</span>
+                            {totalAmt > 0 && <span className="text-[11px] font-extrabold text-emerald-400">₹{totalAmt.toFixed(0)}</span>}
+                          </>
+                        );
+                      })()}
+                      {/* Repeat last KOT button */}
+                      {order.status === "OPEN" && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); repeatLastOrder(t._id, order); }}
+                          disabled={repeatLoading === t._id}
+                          className="mt-0.5 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-bold transition-colors disabled:opacity-60"
+                        >
+                          {repeatLoading === t._id
+                            ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                            : <RotateCcw className="h-2.5 w-2.5" />}
+                          Repeat
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -467,30 +589,60 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
             </kbd>
           </div>
 
+          {/* UX: category tabs with item count badges */}
           <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar">
             <Button
               variant={activeCategoryId === "All" ? "default" : "outline"}
-              className={`rounded-xl whitespace-nowrap px-6 transition-all duration-200 ${activeCategoryId === "All" ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20" : "bg-white/60 dark:bg-slate-900/60 border-white/50 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-white/90 dark:hover:bg-slate-800 shadow-sm"}`}
+              className={`rounded-xl whitespace-nowrap px-6 transition-all duration-200 gap-2 ${activeCategoryId === "All" ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20" : "bg-white/60 dark:bg-slate-900/60 border-white/50 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-white/90 dark:hover:bg-slate-800 shadow-sm"}`}
               onClick={() => setActiveCategoryId("All")}
             >
               All Items
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                activeCategoryId === "All" ? "bg-white/20 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+              }`}>{menus.length}</span>
             </Button>
             {categories.map(cat => (
               <Button
                 key={cat._id}
                 variant={activeCategoryId === cat._id ? "default" : "outline"}
-                className={`rounded-xl whitespace-nowrap px-6 transition-all duration-200 ${activeCategoryId === cat._id ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20" : "bg-white/60 dark:bg-slate-900/60 border-white/50 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-white/90 dark:hover:bg-slate-800 shadow-sm"}`}
+                className={`rounded-xl whitespace-nowrap px-6 transition-all duration-200 gap-2 ${activeCategoryId === cat._id ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20" : "bg-white/60 dark:bg-slate-900/60 border-white/50 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-white/90 dark:hover:bg-slate-800 shadow-sm"}`}
                 onClick={() => setActiveCategoryId(cat._id)}
               >
                 {cat.name}
+                {categoryCountMap.has(cat._id) && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                    activeCategoryId === cat._id ? "bg-white/20 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                  }`}>{categoryCountMap.get(cat._id)}</span>
+                )}
               </Button>
             ))}
           </div>
+
+          {/* UX: Recently Added strip */}
+          {recentlyAdded.length > 0 && !searchQuery && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 dark:text-slate-500 shrink-0">
+                <Clock className="h-3 w-3" /> Recent
+              </span>
+              {recentlyAdded.map(item => (
+                <button
+                  key={item._id}
+                  onClick={() => handleMenuClick(item)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-slate-200/50 dark:border-slate-700/50 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all shadow-sm active:scale-95"
+                >
+                  {item.isVeg === true && <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />}
+                  {item.isVeg === false && <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />}
+                  {item.name}
+                  <span className="text-blue-600 dark:text-blue-400 font-bold">+</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Menu Grid */}
         <ScrollArea className="flex-1 -mx-6 px-6">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5 pb-10">
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pb-10">
             {filteredMenus.map(menu => {
               const inCartCount = cart.filter(item => item._id === menu._id).reduce((sum, item) => sum + item.quantity, 0);
 
@@ -518,9 +670,88 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         </ScrollArea>
       </div>
 
-      {/* Cart Section */}
-      <div className="w-full md:w-[350px] lg:w-[400px] border-l border-white/30 dark:border-white/10 bg-white/80 dark:bg-slate-950/80 backdrop-blur-2xl flex flex-col z-20 shrink-0 shadow-[-8px_0_30px_-15px_rgba(0,0,0,0.1)] transition-colors overflow-y-auto hide-scrollbar">
-        <div className="p-4 border-b border-slate-200/50 dark:border-slate-800/50 space-y-4 shrink-0">
+      {/* ── Floating Action Button Group ── */}
+      <div className={`absolute bottom-6 right-6 z-30 flex items-center gap-2 transition-all duration-300 ${cartFlash ? 'scale-105' : ''}`}>
+
+        {/* Fire to Kitchen FAB */}
+        <button
+          onClick={async () => { await placeOrder(); }}
+          disabled={cart.length === 0 || isSubmitting}
+          className={`flex items-center gap-2 px-4 h-14 rounded-2xl shadow-2xl font-extrabold text-white transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
+            cart.length > 0 && !isSubmitting
+              ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/40'
+              : 'bg-slate-600/70 shadow-slate-900/20'
+          }`}
+        >
+          {isSubmitting
+            ? <Loader2 className="h-5 w-5 animate-spin" />
+            : <span className="text-base">🔥</span>}
+          <span className="text-sm">{isSubmitting ? 'Firing...' : 'Fire'}</span>
+        </button>
+
+        {/* Cart / Review FAB */}
+        <button
+          onClick={() => setCartOpen(true)}
+          className={`flex items-center gap-2.5 px-5 h-14 rounded-2xl shadow-2xl font-extrabold text-white transition-all duration-300 active:scale-95 ${
+            cart.length > 0
+              ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/40'
+              : 'bg-slate-700/80 hover:bg-slate-600/80 shadow-slate-900/30'
+          } ${cartFlash ? 'ring-4 ring-blue-400/60' : ''}`}
+        >
+          <ShoppingBag className="h-5 w-5 shrink-0" />
+          <span className="text-sm">
+            {cart.length === 0 ? 'Cart' : `${cart.reduce((s, i) => s + i.quantity, 0)} item${cart.reduce((s, i) => s + i.quantity, 0) !== 1 ? 's' : ''}`}
+          </span>
+          {cart.length > 0 && (
+            <span className="bg-white text-blue-600 text-xs font-extrabold px-2 py-0.5 rounded-full">
+              ₹{total.toFixed(0)}
+            </span>
+          )}
+          <ChevronRight className="h-4 w-4 opacity-60" />
+        </button>
+
+      </div>
+
+      {/* ── Cart Backdrop ── */}
+      {cartOpen && (
+        <div
+          className="absolute inset-0 z-30 bg-black/30 backdrop-blur-[2px]"
+          onClick={() => setCartOpen(false)}
+        />
+      )}
+
+      {/* ── Cart Slide-out Drawer ── */}
+      <div
+        className={`absolute top-0 right-0 h-full z-40 flex flex-col
+          w-[340px] lg:w-[360px]
+          bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl
+          border-l border-white/30 dark:border-slate-800/60
+          shadow-[-20px_0_60px_-10px_rgba(0,0,0,0.25)]
+          transition-transform duration-300 ease-in-out
+          ${ cartOpen ? 'translate-x-0' : 'translate-x-full' }
+        `}
+      >
+        {/* Drawer header with close button */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200/50 dark:border-slate-800/50 shrink-0">
+          <div className="flex items-center gap-2">
+            <ShoppingBag className="h-4 w-4 text-blue-500" />
+            <span className="font-extrabold text-slate-900 dark:text-white text-sm">Order Cart</span>
+            {cart.length > 0 && (
+              <span className="bg-blue-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                {cart.reduce((s, i) => s + i.quantity, 0)}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => setCartOpen(false)}
+            className="h-8 w-8 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto hide-scrollbar">
+          <div className="p-4 space-y-4">
           <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/50 dark:bg-slate-900/50 rounded-xl border border-white/50 dark:border-slate-800/50 shadow-inner">
             <Button size="sm" variant={orderType === "DINE_IN" ? "default" : "ghost"} onClick={() => setOrderType("DINE_IN")} className={`rounded-lg transition-all ${orderType === "DINE_IN" ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-md font-bold" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"}`}>
               Dine In
@@ -537,7 +768,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           </div>
 
           {orderType === "DINE_IN" && (
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-widest pl-1">Select Table</Label>
               <Select value={selectedTable} onValueChange={(val) => {
                 setSelectedTable(val);
@@ -554,11 +785,31 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                   <SelectValue placeholder="Choose table" />
                 </SelectTrigger>
                 <SelectContent className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl shadow-xl">
-                  {tables.map(t => (
-                    <SelectItem key={t._id} value={t._id} className="focus:bg-slate-100 dark:focus:bg-slate-800 rounded-lg cursor-pointer">
-                      {t.tableNumber} <span className="text-slate-400 dark:text-slate-500 text-xs ml-2 font-medium">({t.status})</span>
-                    </SelectItem>
-                  ))}
+                  {tables.map(t => {
+                    // Bug Fix: disable tables that are BILLED (pending payment) — can still add KOT to OPEN tables
+                    const isBilled = activeOrders.some(o => {
+                      if (!o || o.status !== "BILLED") return false;
+                      const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
+                      return tId && String(tId) === String(t._id);
+                    });
+                    return (
+                      <SelectItem
+                        key={t._id}
+                        value={t._id}
+                        disabled={isBilled}
+                        className="focus:bg-slate-100 dark:focus:bg-slate-800 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {t.tableNumber}
+                        {isBilled ? (
+                          <span className="text-red-400 dark:text-red-500 text-xs ml-1 font-medium">(Bill Pending)</span>
+                        ) : t.status === "OCCUPIED" ? (
+                          <span className="text-amber-500 dark:text-amber-400 text-xs ml-1 font-medium">(Active Order)</span>
+                        ) : (
+                          <span className="text-emerald-500 dark:text-emerald-400 text-xs ml-1 font-medium">(Free)</span>
+                        )}
+                      </SelectItem>
+                    );
+                  })}
                   {tables.length === 0 && <SelectItem value="none" disabled>No tables available</SelectItem>}
                 </SelectContent>
               </Select>
@@ -642,7 +893,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
                 {cart.length === 0 ? (
                   !hasExistingItems && (
-                    <div className="h-full min-h-[200px] flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 space-y-4 py-12">
+                    <div className="h-full h-[100px] flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 space-y-4 py-12">
                       <div className="h-20 w-20 bg-slate-100 dark:bg-slate-800/50 rounded-full flex items-center justify-center">
                         <ShoppingBag className="h-10 w-10 opacity-50" />
                       </div>
@@ -724,15 +975,17 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
             );
           })()}
         </div>
+        </div>
 
-        <div className="p-4 border-t border-slate-200/50 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-950/50 space-y-4 shrink-0 mt-auto backdrop-blur-md">
+        {/* Sticky drawer footer: totals + FIRE button */}
+        <div className="p-4 border-t border-slate-200/50 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-950/50 space-y-4 shrink-0 backdrop-blur-md">
           <div className="space-y-2 text-sm font-medium">
             <div className="flex justify-between text-slate-500 dark:text-slate-400">
               <span>Subtotal</span>
               <span className="text-slate-700 dark:text-slate-300">₹{subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-slate-500 dark:text-slate-400">
-              <span>Taxes (5%)</span>
+              <span>Taxes ({effectiveTaxPct}%)</span>
               <span className="text-slate-700 dark:text-slate-300">₹{taxes.toFixed(2)}</span>
             </div>
             <div className="flex justify-between font-extrabold text-xl pt-3 border-t border-slate-200/50 dark:border-slate-800/50 mt-2 text-slate-900 dark:text-white">
@@ -743,13 +996,14 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           <Button
             className="w-full h-14 text-lg font-extrabold tracking-wide shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.23)] hover:bg-[rgba(37,99,235,0.9)] bg-blue-600 text-white rounded-xl active:scale-[0.98] transition-all duration-200"
             disabled={cart.length === 0 || isSubmitting}
-            onClick={placeOrder}
+            onClick={async () => { await placeOrder(); if (cart.length === 0) setCartOpen(false); }}
           >
             {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin inline" /> : null}
             {isSubmitting ? "Firing Order..." : "FIRE TO KITCHEN"}
           </Button>
         </div>
       </div>
+
 
       <VariantPickerDialog
         open={!!pickerMenu}

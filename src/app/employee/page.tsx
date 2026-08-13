@@ -72,7 +72,7 @@ export default function EmployeeDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-200 transition-colors">
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 flex items-center justify-between transition-colors">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-2 flex items-center justify-between transition-colors">
         <div className="flex items-center gap-2">
           <Store className="w-6 h-6 text-blue-600 dark:text-blue-500" />
           <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase">

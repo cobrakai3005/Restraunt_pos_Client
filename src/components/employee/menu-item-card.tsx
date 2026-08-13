@@ -50,7 +50,7 @@ export function MenuItemCard({
       onClick={onClick}
     >
       {/* Photo band */}
-      <div className="relative h-28 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900">
+      <div className="relative h-12 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900">
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -87,7 +87,7 @@ export function MenuItemCard({
         <div className="flex items-start gap-1.5">
           {isVeg === true && <VegMark />}
           {isVeg === false && <NonVegMark />}
-          <h3 className="line-clamp-2 pr-2 text-sm font-bold leading-tight text-slate-900 dark:text-white">
+          <h3 className="line-clamp-2 pr-2 text-[14px] font-bold leading-tight text-slate-900 dark:text-white">
             {name}
           </h3>
         </div>
@@ -96,7 +96,7 @@ export function MenuItemCard({
           {categoryName || "Uncategorized"}
         </span>
 
-        <div className="mt-auto flex items-end justify-between pt-2">
+        <div className="mt-auto flex flex-col items-center justify-between pt-2">
           <span className="font-mono text-lg font-bold tracking-tight text-blue-600 dark:text-blue-400">
             ₹{price.toFixed(2)}
           </span>

@@ -149,7 +149,7 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
   const readyKots = allKots.filter(k => k.items.every(i => i.itemStatus === "READY" || i.itemStatus === "SERVED") && k.items.some(i => i.itemStatus === "READY"));
 
   return (
-    <div className={`${embedded ? "h-full rounded-xl" : "h-[calc(100vh-80px)] -mx-8 -my-8"} bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-6 flex flex-col transition-colors ${embedded ? "border border-slate-200 dark:border-slate-800 overflow-hidden" : ""}`}>
+    <div className={`${embedded ? "h-full rounded-xl" : "h-[calc(100vh-69px)] -mx-8 -my-8"} bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-6 flex flex-col transition-colors ${embedded ? "border border-slate-200 dark:border-slate-800 overflow-hidden" : ""}`}>
       <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">

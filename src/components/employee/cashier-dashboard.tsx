@@ -92,7 +92,7 @@ export function CashierDashboard({ user }: DashboardProps) {
 
       const allOrders = [...(resActive.data || []), ...(resBilled.data || [])];
       // Filter out PAID orders just in case
-      setOrders(allOrders.filter(o => o.paymentStatus !== "PAID"));
+      setOrders(allOrders.filter(o => o.status !== "PAID"));
 
       // Update selected order reference if it exists
       if (selectedOrder) {
@@ -205,7 +205,7 @@ export function CashierDashboard({ user }: DashboardProps) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)] bg-slate-50 dark:bg-slate-950 -mx-8 -my-8 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 transition-colors">
+    <div className="flex flex-col h-[calc(100vh-70px)] bg-slate-50 dark:bg-slate-950 -mx-8 -my-8 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 transition-colors">
       {/* Professional Segmented Tab Bar */}
       <div className="shrink-0 z-20 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -293,7 +293,7 @@ export function CashierDashboard({ user }: DashboardProps) {
               {filteredOrders.length === 0 ? (
                 <div className="text-center text-slate-500 dark:text-slate-500 py-10">No pending orders.</div>
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                   {filteredOrders.map(order => (
                     <div
                       key={order._id}
@@ -334,7 +334,7 @@ export function CashierDashboard({ user }: DashboardProps) {
           </div>
 
           {/* Right: Order Details & Checkout */}
-          <div className=" md:w-[440px] lg:w-[680px] flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden relative transition-colors">
+          <div className="md:w-[440px] flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden relative transition-colors">
             {selectedOrder ? (
               <div className="flex flex-col h-full">
                 <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50">
@@ -423,7 +423,7 @@ export function CashierDashboard({ user }: DashboardProps) {
                       </Button>
                     </div>
                   ) : (
-                    <div className="w-full flex flex-col lg:flex-row lg:flex-wrap justify-between items-center gap-4">
+                    <div className="w-full flex flex-col lg:flex-row justify-between items-center gap-4">
                       <div className="flex gap-2 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 w-full lg:w-auto">
                         <Button
                           variant={paymentMethod === "CASH" ? "default" : "ghost"}

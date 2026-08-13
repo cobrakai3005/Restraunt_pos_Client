@@ -185,7 +185,7 @@ export function CashierPickupPanel({ user, embedded }: DashboardProps) {
         </div>
       ) : (
         <ScrollArea className="flex-1 -mx-2 px-2">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 pb-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
             {readyKots.map(({ order, kot }) => {
               const minutesOld = getTimeElapsed(kot.createdAt);
               const readyItems = kot.items.filter(i => i.itemStatus === "READY");

@@ -6,8 +6,8 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/:path*',
-        // destination: 'http://localhost:8745/api/:path*',
-        destination: 'https://resposbackend.onrender.com/api/:path*',
+        destination: 'http://localhost:8745/api/:path*',
+        // destination: 'https://resposbackend.onrender.com/api/:path*',
       },
     ];
   },
