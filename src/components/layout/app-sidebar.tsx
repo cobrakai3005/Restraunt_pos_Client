@@ -20,7 +20,7 @@ import { FileText, LayoutGrid, Package, Settings, Users, Building2, Store, LogOu
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const adminNavItems = [
-  { icon: LayoutGrid, label: "Playground", href: "/playground" },
+  
   { icon: ArrowLeftRight, label: "Transactions", href: "/transactions" },
   { icon: Building2, label: "Client Management", href: "/admin/clients" },
   { icon: Store, label: "Restaurants", href: "/admin/restaurants" },
