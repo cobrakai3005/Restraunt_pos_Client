@@ -86,7 +86,7 @@ export function CashierDashboard({ user }: DashboardProps) {
   const [paymentMethod, setPaymentMethod] = useState<string>("CASH");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
-  const [mode, setMode] = useState<Mode>("billing");
+  const [mode, setMode] = useState<Mode>("orders");
 
   // ── Multi-Payment / Split Payment state ──
   const [showSplitDialog, setShowSplitDialog] = useState(false);
@@ -456,7 +456,7 @@ export function CashierDashboard({ user }: DashboardProps) {
         <div className="flex flex-1 min-h-0 overflow-hidden">
 
           {/* ── Left: Order Cards ── */}
-          <div className="w-[260px] lg:w-[300px] shrink-0 flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <div className="w-[260px] lg:w-[500px] shrink-0 flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
             <div className="p-4 border-b border-slate-200 dark:border-slate-800 space-y-3 shrink-0">
               <h2 className="font-extrabold text-slate-900 dark:text-white flex items-center gap-2 text-sm">
                 <Receipt className="h-4 w-4 text-emerald-500" />
@@ -481,7 +481,7 @@ export function CashierDashboard({ user }: DashboardProps) {
             </div>
 
             <ScrollArea className="flex-1">
-              <div className="p-3 grid grid-cols-2 gap-2 space-y-2">
+              <div className="p-3 grid grid-cols-4 gap-2 space-y-2">
                 {filteredOrders.length === 0 ? (
                   <div className="text-center text-slate-400 dark:text-slate-600 py-10 text-sm">No pending orders.</div>
                 ) : (
