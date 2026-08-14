@@ -6,11 +6,17 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, LayoutGrid, Package, Settings, Users, Building2, Store, LogOut, BarChart3, ChefHat, Utensils, ArrowLeftRight, BookOpen } from "lucide-react";
+import { FileText, LayoutGrid, Package, Settings, Users, Building2, Store, LogOut, BarChart3, ChefHat, Utensils, ArrowLeftRight, BookOpen, ChevronRight, ClipboardList, Receipt, Clock, Sparkles } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const adminNavItems = [
@@ -33,6 +39,14 @@ const clientNavItems = [
   { icon: Users, label: "Employees", href: "/client/employees" },
   { icon: Package, label: "Inventory", href: "/client/inventory" },
   { icon: Settings, label: "Settings", href: "/client/settings" },
+];
+
+const reportNavItems = [
+  { icon: Utensils, label: "Menu Engineering", href: "/client/reports/menu-engineering" },
+  { icon: Receipt, label: "GSTR Tax Summary", href: "/client/reports/tax-summary" },
+  { icon: Users, label: "Staff Sales", href: "/client/reports/staff-sales" },
+  { icon: Clock, label: "Hourly Peak Sales", href: "/client/reports/hourly-sales" },
+  { icon: Sparkles, label: "Executive Summary", href: "/client/reports/executive-summary" },
 ];
 
 import { useAuth } from "@/context/auth-context";
@@ -64,6 +78,7 @@ export function AppSidebar() {
   const role = user?.role || "Guest workspace";
 
   const currentNavItems = (role === "MASTER_ADMIN" || role === "MASTER_USER") ? adminNavItems : clientNavItems;
+  const isReportsRoute = pathname.startsWith("/client/reports");
 
   return (
     <Sidebar className="border-r-0">
@@ -106,6 +121,37 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             ))}
+
+            <SidebarGroup>
+              <Collapsible defaultOpen={isReportsRoute} className="group/collapsible">
+                <SidebarGroupLabel asChild>
+                    <CollapsibleTrigger className="w-full cursor-pointer select-none gap-2 py-1.5 hover:bg-[#f3efff] hover:text-[#5038d5] rounded-lg dark:hover:bg-[#261f49] dark:hover:text-white transition-colors">
+                      <ClipboardList className="h-4 w-4 text-[#8b77ff] dark:text-[#a99bf5]" />
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Reports</span>
+                      <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                    </CollapsibleTrigger>
+                  </SidebarGroupLabel>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {reportNavItems.map((item) => (
+                        <SidebarMenuSubItem key={item.href}>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={pathname === item.href}
+                            onClick={handleNavClick}
+                            className="data-[active=true]:bg-[#8b77ff] data-[active=true]:text-white"
+                          >
+                            <Link href={item.href}>
+                              <item.icon />
+                              <span>{item.label}</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SidebarGroup>
           </SidebarMenu>
         </div>
 
