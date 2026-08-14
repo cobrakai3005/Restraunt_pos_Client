@@ -26,7 +26,8 @@ export default function HomePage() {
 
 
     default:
-      redirect("/");
+      redirect("/client/analytics");
+     
       break;
   }
 }
