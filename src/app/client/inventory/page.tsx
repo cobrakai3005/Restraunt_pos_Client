@@ -26,7 +26,10 @@ import { clientService } from "@/services/client.service";
 import { inventoryService, InventoryItem } from "@/services/inventory.service";
 import { AddInventoryDialog } from "@/components/client/add-inventory-dialog";
 import { EditInventoryDialog } from "@/components/client/edit-inventory-dialog";
+import { BulkImportDialog } from "@/components/client/bulk-import-dialog";
+import { inventoryBulkImportConfig } from "@/lib/bulk-import-configs";
 import { toast } from "@/components/ui/use-toast";
+import { UploadCloud } from "lucide-react";
 
 interface Restaurant {
   _id: string;
@@ -43,6 +46,7 @@ export default function ClientInventoryPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
 
   // Search + Pagination State
   const [search, setSearch] = useState("");
@@ -172,6 +176,10 @@ export default function ClientInventoryPage() {
             </SelectContent>
           </Select>
 
+          <Button variant="outline" onClick={() => setIsBulkImportOpen(true)} className="gap-2" disabled={!selectedRestaurantId}>
+            <UploadCloud className="h-4 w-4" />
+            Bulk Import
+          </Button>
           <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" />
             Create Product
@@ -296,6 +304,16 @@ export default function ClientInventoryPage() {
         restaurantId={selectedRestaurantId}
         item={editingItem}
         restaurants={restaurants}
+      />
+
+      <BulkImportDialog
+        open={isBulkImportOpen}
+        onOpenChange={setIsBulkImportOpen}
+        restaurantId={selectedRestaurantId}
+        config={inventoryBulkImportConfig}
+        onSuccess={() => {
+          if (selectedRestaurantId) fetchInventory(selectedRestaurantId, page, search);
+        }}
       />
     </div>
   );

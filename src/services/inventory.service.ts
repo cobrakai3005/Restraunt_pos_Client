@@ -56,5 +56,31 @@ export const inventoryService = {
   async deleteInventoryItem(id: string, restaurantId?: string) {
     const response = await apiClient.delete(`/inventory/${id}`, getHeaders(restaurantId));
     return response.data;
-  }
+  },
+
+  async downloadBulkTemplate(restaurantId?: string): Promise<Blob> {
+    const response = await apiClient.get("/inventory/bulk/template", { responseType: "blob", ...getHeaders(restaurantId) });
+    return response.data;
+  },
+
+  async validateBulk(file: File, restaurantId?: string) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await apiClient.post("/inventory/bulk/validate", formData, getHeaders(restaurantId));
+    return response.data;
+  },
+
+  async importBulk(file: File, restaurantId?: string) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await apiClient.post("/inventory/bulk/import", formData, getHeaders(restaurantId));
+    return response.data;
+  },
+
+  async downloadErrorReport(importId: string): Promise<Blob> {
+    const response = await apiClient.get(`/inventory/bulk/error-report/${importId}`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
 };

@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 interface MenuItemCardProps {
   name: string;
   categoryName?: string;
+  shortCode?: string;
   price: number;
   variantsCount: number;
   isAvailable: boolean;
@@ -34,6 +35,7 @@ function NonVegMark() {
 export function MenuItemCard({
   name,
   categoryName,
+  shortCode,
   price,
   variantsCount,
   isAvailable,
@@ -62,6 +64,12 @@ export function MenuItemCard({
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-50 to-slate-200 dark:from-slate-800/80 dark:to-slate-900">
             <UtensilsCrossed className="h-7 w-7 text-slate-300 dark:text-slate-600" />
+          </div>
+        )}
+
+        {shortCode && (
+          <div className="absolute left-2 top-2 z-20 flex items-center justify-center rounded-md bg-slate-950/80 px-1.5 py-0.5 text-[9px] font-mono font-extrabold uppercase text-amber-300 border border-slate-700/60 shadow-xs">
+            {shortCode}
           </div>
         )}
 

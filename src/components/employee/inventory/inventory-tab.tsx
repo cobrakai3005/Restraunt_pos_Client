@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Search, Edit, Trash2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Search, Edit, Trash2, AlertCircle, ChevronLeft, ChevronRight, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -7,6 +7,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { inventoryService, InventoryItem } from "@/services/inventory.service";
 import { AddInventoryDialog } from "./add-inventory-dialog";
 import { EditInventoryDialog } from "./edit-inventory-dialog";
+import { BulkImportDialog } from "@/components/client/bulk-import-dialog";
+import { inventoryBulkImportConfig } from "@/lib/bulk-import-configs";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
@@ -20,6 +22,7 @@ export function InventoryTab() {
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
 
   const fetchItems = async () => {
     try {
@@ -78,13 +81,23 @@ export function InventoryTab() {
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Inventory Management</h2>
           <p className="text-slate-500 dark:text-slate-400">Track and manage raw materials</p>
         </div>
-        <Button
-          onClick={() => setIsAddOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Item
-        </Button>
+                <div className="flex gap-2">
+          <Button
+            onClick={() => setIsBulkImportOpen(true)}
+            variant="outline"
+            className="w-full sm:w-auto border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+          >
+            <UploadCloud className="w-4 h-4 mr-2" />
+            Bulk Import
+          </Button>
+          <Button
+            onClick={() => setIsAddOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Item
+          </Button>
+        </div>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
@@ -323,6 +336,13 @@ export function InventoryTab() {
         open={!!editItem}
         onOpenChange={(open) => !open && setEditItem(null)}
         item={editItem}
+        onSuccess={fetchItems}
+      />
+
+      <BulkImportDialog
+        open={isBulkImportOpen}
+        onOpenChange={setIsBulkImportOpen}
+        config={inventoryBulkImportConfig}
         onSuccess={fetchItems}
       />
     </div>

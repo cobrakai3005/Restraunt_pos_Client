@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, ChefHat, Edit, Trash2 } from "lucide-react";
+import { Plus, ChefHat, Edit, Trash2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -19,6 +19,8 @@ import { AddRecipeDialog } from "@/components/client/add-recipe-dialog";
 import { EditRecipeDialog } from "@/components/client/edit-recipe-dialog";
 import { Pagination } from "@/components/ui/pagination";
 import { toast } from "@/components/ui/use-toast";
+import { BulkImportDialog } from "@/components/client/bulk-import-dialog";
+import { recipeBulkImportConfig } from "@/lib/bulk-import-configs";
 
 const PAGE_SIZE = 10;
 
@@ -30,6 +32,7 @@ export function RecipesTab({ restaurantId }: { restaurantId: string }) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
 
   // Pagination State
   const [page, setPage] = useState(1);
@@ -127,12 +130,22 @@ export function RecipesTab({ restaurantId }: { restaurantId: string }) {
           <h2 className="text-xl font-semibold">Recipes</h2>
           <p className="text-sm text-slate-500">Map menu items to their ingredients for automatic inventory deduction.</p>
         </div>
-        <Button 
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-          onClick={() => setIsAddDialogOpen(true)}
-        >
-          <Plus className="mr-2 h-4 w-4" /> Add Recipe
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsBulkImportOpen(true)}
+            disabled={menuItems.length === 0 || inventoryItems.length === 0}
+            title={menuItems.length === 0 || inventoryItems.length === 0 ? "Add menu items and inventory items first" : "Bulk import recipes"}
+          >
+            <UploadCloud className="mr-2 h-4 w-4" /> Bulk Import
+          </Button>
+          <Button 
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={() => setIsAddDialogOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" /> Add Recipe
+          </Button>
+        </div>
       </div>
 
       {recipes.length > 0 ? (
@@ -228,6 +241,14 @@ export function RecipesTab({ restaurantId }: { restaurantId: string }) {
         menuItems={menuItems}
         inventoryItems={inventoryItems}
         recipe={editingRecipe}
+      />
+
+      <BulkImportDialog
+        open={isBulkImportOpen}
+        onOpenChange={setIsBulkImportOpen}
+        restaurantId={restaurantId}
+        config={recipeBulkImportConfig}
+        onSuccess={() => fetchRecipes(restaurantId, page)}
       />
     </div>
   );

@@ -79,10 +79,16 @@ export const employeeService = {
     return response.data;
   },
 
+  async updateCustomer(orderId: string, data: { name?: string; phone?: string; discount?: number }) {
+    const response = await apiClient.patch(`/orders/${orderId}/customer`, data);
+    return response.data;
+  },
+
   async reopenOrder(orderId: string) {
     const response = await apiClient.post(`/orders/${orderId}/reopen`);
     return response.data;
   },
+
 
   async getEmployees() {
     try {

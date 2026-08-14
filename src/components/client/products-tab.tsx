@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Edit, Trash2, Package } from "lucide-react";
+import { Plus, Edit, Trash2, Package, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -17,6 +17,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { inventoryService, InventoryItem } from "@/services/inventory.service";
 import { AddInventoryDialog } from "@/components/client/add-inventory-dialog";
 import { EditInventoryDialog } from "@/components/client/edit-inventory-dialog";
+import { BulkImportDialog } from "@/components/client/bulk-import-dialog";
+import { inventoryBulkImportConfig } from "@/lib/bulk-import-configs";
 
 interface ProductsTabProps {
   restaurantId: string;
@@ -30,6 +32,7 @@ export function ProductsTab({ restaurantId }: ProductsTabProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
 
   useEffect(() => {
     if (restaurantId) {
@@ -93,10 +96,16 @@ export function ProductsTab({ restaurantId }: ProductsTabProps) {
           <h3 className="text-lg font-medium">Products & Inventory</h3>
           <p className="text-sm text-slate-500">Manage your inventory items for this restaurant.</p>
         </div>
-        <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Product
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setIsBulkImportOpen(true)} className="gap-2">
+            <UploadCloud className="h-4 w-4" />
+            Bulk Import
+          </Button>
+          <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Add Product
+          </Button>
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -171,6 +180,14 @@ export function ProductsTab({ restaurantId }: ProductsTabProps) {
         restaurantId={restaurantId}
         item={editingItem}
         restaurants={[{ _id: restaurantId, name: "Current Restaurant" } as any]}
+      />
+
+      <BulkImportDialog
+        open={isBulkImportOpen}
+        onOpenChange={setIsBulkImportOpen}
+        restaurantId={restaurantId}
+        config={inventoryBulkImportConfig}
+        onSuccess={fetchData}
       />
     </div>
   );

@@ -27,6 +27,8 @@ export function EditMenuItemDialog({ open, onOpenChange, restaurantId, item, cat
     isVeg: "true",
     isAvailable: true,
     isActive: true,
+    shortCode: "",
+    numericCode: "",
     variants: [{ name: "Regular", price: "", sku: "" }]
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,6 +46,8 @@ export function EditMenuItemDialog({ open, onOpenChange, restaurantId, item, cat
         isVeg: item.isVeg === true ? "true" : item.isVeg === false ? "false" : "null",
         isAvailable: item.isAvailable !== false,
         isActive: item.isActive !== false,
+        shortCode: item.shortCode || "",
+        numericCode: item.numericCode || "",
         variants: item.variants && item.variants.length > 0 
           ? item.variants.map((v: any) => ({ name: v.name, price: v.price?.toString(), sku: v.sku || "" }))
           : [{ name: "Regular", price: item.price?.toString() || "", sku: "" }]
@@ -96,6 +100,8 @@ export function EditMenuItemDialog({ open, onOpenChange, restaurantId, item, cat
         isVeg: formData.isVeg === "true" ? true : formData.isVeg === "false" ? false : null,
         isAvailable: formData.isAvailable,
         isActive: formData.isActive,
+        shortCode: formData.shortCode.trim().toLowerCase() || null,
+        numericCode: formData.numericCode.trim() || null,
         variants: validVariants.map(v => ({ name: v.name, price: Number(v.price), sku: v.sku }))
       });
 
@@ -172,6 +178,32 @@ export function EditMenuItemDialog({ open, onOpenChange, restaurantId, item, cat
             <div>
               <Label className="mb-2 block">Tax %</Label>
               <Input type="number" min="0" max="100" value={formData.taxPercentage} onChange={e => setFormData({...formData, taxPercentage: e.target.value})} />
+            </div>
+          </div>
+
+          {/* KOT Shortcodes */}
+          <div className="grid grid-cols-2 gap-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+            <div className="space-y-1.5">
+              <Label className="text-amber-800 dark:text-amber-300 font-semibold text-xs uppercase tracking-widest">⚡ Alphabetic Shortcode</Label>
+              <Input
+                value={formData.shortCode}
+                onChange={e => setFormData({...formData, shortCode: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, "")})}
+                placeholder="e.g. bn, pbm, cc"
+                maxLength={20}
+                className="font-mono"
+              />
+              <p className="text-[11px] text-amber-700 dark:text-amber-400">Cashier types this to punch fast. Unique per restaurant.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-amber-800 dark:text-amber-300 font-semibold text-xs uppercase tracking-widest">🔢 Numeric Code</Label>
+              <Input
+                value={formData.numericCode}
+                onChange={e => setFormData({...formData, numericCode: e.target.value.replace(/[^0-9]/g, "")})}
+                placeholder="e.g. 101, 202"
+                maxLength={10}
+                className="font-mono"
+              />
+              <p className="text-[11px] text-amber-700 dark:text-amber-400">Optional numeric alternative. Unique per restaurant.</p>
             </div>
           </div>
 

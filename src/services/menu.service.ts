@@ -34,6 +34,8 @@ export interface MenuItem {
   isActive: boolean;
   imageUrl?: string | null;
   imagePublicId?: string | null;
+  shortCode?: string | null;
+  numericCode?: string | null;
   createdAt: string;
 }
 
@@ -78,6 +80,45 @@ export const menuService = {
 
   async deleteMenuItem(id: string, restaurantId?: string) {
     const response = await apiClient.delete(`/restaurant/menu-items/${id}`, getHeaders(restaurantId));
+    return response.data;
+  },
+
+  // --- BULK IMPORT ---
+  async downloadBulkTemplate(restaurantId?: string): Promise<Blob> {
+    const response = await apiClient.get("/restaurant/menu-items/bulk/template", {
+      responseType: "blob",
+      ...getHeaders(restaurantId),
+    });
+    return response.data;
+  },
+
+  async validateBulk(file: File, restaurantId?: string) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await apiClient.post(
+      "/restaurant/menu-items/bulk/validate",
+      formData,
+      getHeaders(restaurantId)
+    );
+    return response.data;
+  },
+
+  async importBulk(file: File, restaurantId?: string) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await apiClient.post(
+      "/restaurant/menu-items/bulk/import",
+      formData,
+      getHeaders(restaurantId)
+    );
+    return response.data;
+  },
+
+  async downloadErrorReport(importId: string): Promise<Blob> {
+    const response = await apiClient.get(
+      `/restaurant/menu-items/bulk/error-report/${importId}`,
+      { responseType: "blob" }
+    );
     return response.data;
   },
 };

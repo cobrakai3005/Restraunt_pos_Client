@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Coffee, Trash2, Info, Pencil, Check, X, Tag } from "lucide-react";
+import { Plus, Coffee, Trash2, Info, Pencil, Check, X, Tag, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { restaurantService } from "@/services/restaurant.service";
 import { useToast } from "@/components/ui/use-toast";
@@ -19,6 +19,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { EditMenuItemDialog } from "./edit-menu-item-dialog";
 import { MenuImageField } from "./menu-image-field";
 import { Pagination } from "@/components/ui/pagination";
+import { BulkImportDialog } from "@/components/client/bulk-import-dialog";
+import { menuBulkImportConfig } from "@/lib/bulk-import-configs";
 
 const STATIONS = ["BAR", "TANDOOR", "GRILL", "MAIN_KITCHEN", "BAKERY", "COLD_KITCHEN"];
 const PAGE_SIZE = 10;
@@ -57,6 +59,7 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState<any>(null);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
 
   const fetchData = async (currentPage = page, filter = statusFilter) => {
     try {
@@ -187,6 +190,14 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
               <SelectItem value="false">Inactive Only</SelectItem>
             </SelectContent>
           </Select>
+          <Button
+              variant="outline"
+              onClick={() => setIsBulkImportOpen(true)}
+              disabled={categories.length === 0}
+              title={categories.length === 0 ? "Create a category first" : "Bulk import menu items"}
+            >
+              <UploadCloud className="mr-2 h-4 w-4" /> Bulk Import
+            </Button>
           <Button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700">
             <Plus className="mr-2 h-4 w-4" /> Add Item
           </Button>
@@ -393,6 +404,14 @@ export function MenuItemsTab({ restaurantId }: { restaurantId: string }) {
         item={selectedMenuItem}
         categories={categories}
         onSuccess={fetchData}
+      />
+
+      <BulkImportDialog
+        open={isBulkImportOpen}
+        onOpenChange={setIsBulkImportOpen}
+        restaurantId={restaurantId}
+        config={menuBulkImportConfig}
+        onSuccess={() => fetchData(page, statusFilter)}
       />
     </div>
   );

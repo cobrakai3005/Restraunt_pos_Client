@@ -8,9 +8,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Plus, Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Loader2, Search, ChevronLeft, ChevronRight, UploadCloud } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import CreateRecipeModal from "@/components/client/create-recipe-modal";
+import { BulkImportDialog } from "@/components/client/bulk-import-dialog";
+import { recipeBulkImportConfig } from "@/lib/bulk-import-configs";
 
 export default function RecipesPage() {
   const [restaurants, setRestaurants] = useState<any[]>([]);
@@ -21,6 +23,7 @@ export default function RecipesPage() {
   const [isRestaurantsLoading, setIsRestaurantsLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
 
   // Filters & Pagination
   const [searchQuery, setSearchQuery] = useState("");
@@ -123,9 +126,14 @@ export default function RecipesPage() {
             </Select>
           </div>
           
-          <Button onClick={() => { setEditingRecipe(null); setModalOpen(true); }} className="whitespace-nowrap">
-            <Plus className="mr-2 h-4 w-4" /> Add Recipe
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setIsBulkImportOpen(true)} className="whitespace-nowrap">
+              <UploadCloud className="mr-2 h-4 w-4" /> Bulk Import
+            </Button>
+            <Button onClick={() => { setEditingRecipe(null); setModalOpen(true); }} className="whitespace-nowrap">
+              <Plus className="mr-2 h-4 w-4" /> Add Recipe
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -230,6 +238,14 @@ export default function RecipesPage() {
           restaurantId={currentRestaurantId}
         />
       )}
+
+      <BulkImportDialog
+        open={isBulkImportOpen}
+        onOpenChange={setIsBulkImportOpen}
+        restaurantId={currentRestaurantId}
+        config={recipeBulkImportConfig}
+        onSuccess={loadRecipes}
+      />
     </div>
   );
 }

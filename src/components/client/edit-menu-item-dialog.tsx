@@ -32,6 +32,8 @@ export function EditMenuItemDialog({ item, restaurantId, categories, open, onOpe
   const [taxPercentage, setTaxPercentage] = useState("0");
   const [isVeg, setIsVeg] = useState(true);
   const [isAvailable, setIsAvailable] = useState(true);
+  const [shortCode, setShortCode] = useState("");
+  const [numericCode, setNumericCode] = useState("");
   const [variants, setVariants] = useState([{ name: "Regular", price: 0 }]);
 
   useEffect(() => {
@@ -43,6 +45,8 @@ export function EditMenuItemDialog({ item, restaurantId, categories, open, onOpe
       setTaxPercentage(item.taxPercentage.toString());
       setIsVeg(item.isVeg);
       setIsAvailable(item.isAvailable);
+      setShortCode(item.shortCode || "");
+      setNumericCode(item.numericCode || "");
       setVariants(item.variants.length > 0 ? [...item.variants] : [{ name: "Regular", price: 0 }]);
     }
   }, [item, open]);
@@ -81,6 +85,8 @@ export function EditMenuItemDialog({ item, restaurantId, categories, open, onOpe
         taxPercentage: parseFloat(taxPercentage) || 0,
         isVeg,
         isAvailable,
+        shortCode: shortCode.trim().toLowerCase() || null,
+        numericCode: numericCode.trim() || null,
         variants,
       }, restaurantId);
 
@@ -166,6 +172,32 @@ export function EditMenuItemDialog({ item, restaurantId, categories, open, onOpe
                   {isVeg ? "Veg" : "Non-Veg"}
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* KOT Shortcodes */}
+          <div className="grid grid-cols-2 gap-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+            <div className="space-y-1.5">
+              <Label className="text-amber-800 dark:text-amber-300 font-semibold text-xs uppercase tracking-widest">⚡ Alphabetic Shortcode</Label>
+              <Input
+                value={shortCode}
+                onChange={(e) => setShortCode(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))}
+                placeholder="e.g. bn, pbm, cc"
+                maxLength={20}
+                className="font-mono"
+              />
+              <p className="text-[11px] text-amber-700 dark:text-amber-400">Cashier types this to punch fast. Unique per restaurant.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-amber-800 dark:text-amber-300 font-semibold text-xs uppercase tracking-widest">🔢 Numeric Code</Label>
+              <Input
+                value={numericCode}
+                onChange={(e) => setNumericCode(e.target.value.replace(/[^0-9]/g, ""))}
+                placeholder="e.g. 101, 202"
+                maxLength={10}
+                className="font-mono"
+              />
+              <p className="text-[11px] text-amber-700 dark:text-amber-400">Optional numeric alternative. Unique per restaurant.</p>
             </div>
           </div>
 

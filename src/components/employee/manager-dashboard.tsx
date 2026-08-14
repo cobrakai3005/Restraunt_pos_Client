@@ -5,7 +5,8 @@ import {
   Users, 
   ShieldCheck, 
   Package, 
-  UserCheck 
+  UserCheck,
+  BarChart3,
 } from "lucide-react";
 import { User } from "@/services/auth.service";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +15,7 @@ import { ManagerOverview } from "./manager-overview";
 import { ManagerFloorView } from "./manager-floor-view";
 import { ManagerAuditTab } from "./manager-audit-tab";
 import { ManagerStaffTab } from "./manager-staff-tab";
+import { AnalyticsDashboard } from "@/components/client/AnalyticsDashboard";
 
 interface DashboardProps {
   user: User;
@@ -21,6 +23,7 @@ interface DashboardProps {
 
 export function ManagerDashboard({ user }: DashboardProps) {
   const [activeTab, setActiveTab] = useState("overview");
+  const restaurantId = typeof user.restaurantId === 'object' ? (user.restaurantId as any)?._id : user.restaurantId;
 
   return (
     <div className="space-y-6">
@@ -34,6 +37,13 @@ export function ManagerDashboard({ user }: DashboardProps) {
             Shift Overview
           </TabsTrigger>
           <TabsTrigger 
+            value="analytics"
+            className="rounded-xl px-4 py-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all gap-2"
+          >
+            <BarChart3 className="w-4 h-4" />
+            Reports &amp; Analytics
+          </TabsTrigger>
+          <TabsTrigger 
             value="floor"
             className="rounded-xl px-4 py-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all gap-2"
           >
@@ -45,14 +55,14 @@ export function ManagerDashboard({ user }: DashboardProps) {
             className="rounded-xl px-4 py-2 text-xs font-bold data-[state=active]:bg-purple-600 data-[state=active]:text-white transition-all gap-2"
           >
             <ShieldCheck className="w-4 h-4" />
-            Voids & Audit
+            Voids &amp; Audit
           </TabsTrigger>
           <TabsTrigger 
             value="inventory"
             className="rounded-xl px-4 py-2 text-xs font-bold data-[state=active]:bg-emerald-600 data-[state=active]:text-white transition-all gap-2"
           >
             <Package className="w-4 h-4" />
-            Inventory & Stock
+            Inventory &amp; Stock
           </TabsTrigger>
           <TabsTrigger 
             value="staff"
@@ -68,6 +78,10 @@ export function ManagerDashboard({ user }: DashboardProps) {
             onNavigateToFloor={() => setActiveTab("floor")} 
             onNavigateToAudit={() => setActiveTab("audit")} 
           />
+        </TabsContent>
+
+        <TabsContent value="analytics" className="mt-6 focus-visible:outline-none focus-visible:ring-0">
+          <AnalyticsDashboard initialRestaurantId={restaurantId} hideRestaurantSelector={true} />
         </TabsContent>
 
         <TabsContent value="floor" className="mt-6 focus-visible:outline-none focus-visible:ring-0">
@@ -89,4 +103,3 @@ export function ManagerDashboard({ user }: DashboardProps) {
     </div>
   );
 }
-

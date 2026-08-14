@@ -19,14 +19,15 @@ export interface ReceiptModalProps {
 export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModalProps) {
   if (!order) return null;
 
-  let subtotal = order.financials?.subtotal || 0;
-  let totalTax = order.financials?.totalTax || 0;
-  let grandTotal = order.financials?.grandTotal || 0;
+  const discount = Number(order.financials?.discount || 0);
+  let subtotal = Number(order.financials?.subtotal || 0);
+  let totalTax = Number(order.financials?.totalTax || 0);
+  let grandTotal = Number(order.financials?.grandTotal || 0);
 
-  if (order.status === "OPEN") {
+  if (order.status === "OPEN" || subtotal === 0) {
     subtotal = order.kots.flatMap((k: any) => k.items).reduce((sum: number, item: any) => sum + ((item.variantPrice || 0) * item.quantity), 0);
     totalTax = subtotal * 0.05;
-    grandTotal = subtotal + totalTax;
+    grandTotal = Math.max(0, subtotal + totalTax - discount);
   }
 
   const handlePrint = () => {
@@ -97,6 +98,12 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
                 <span className="min-w-0 break-words pr-2">SERVER: {order.waiterId?.contactName?.split(" ")[0].toUpperCase() || "STAFF"}</span>
                 <span className="shrink-0 whitespace-nowrap">GUESTS: 1</span>
               </div>
+              {(order.customerDetails?.name || order.customerDetails?.phone) && (
+                <div className="flex justify-between mt-1">
+                  <span className="min-w-0 break-words pr-2">CUSTOMER: {order.customerDetails.name?.toUpperCase() || "WALK-IN"}</span>
+                  {order.customerDetails?.phone && <span className="shrink-0 whitespace-nowrap">{order.customerDetails.phone}</span>}
+                </div>
+              )}
             </div>
 
             <div className="border-t-2 border-black border-dashed my-3"></div>
@@ -124,7 +131,14 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
                 <span className="min-w-0 break-words pr-2">TAX (5%):</span>
                 <span className="shrink-0 whitespace-nowrap">₹{totalTax.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between font-bold text-base mt-2">
+              {discount > 0 && (
+                <div className="flex justify-between mb-1">
+                  <span className="min-w-0 break-words pr-2">DISCOUNT:</span>
+                  <span className="shrink-0 whitespace-nowrap">- ₹{discount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="border-t border-black border-dashed my-1" />
+              <div className="flex justify-between font-bold text-base mt-1">
                 <span className="min-w-0 break-words pr-2">TOTAL:</span>
                 <span className="shrink-0 whitespace-nowrap">₹{grandTotal.toFixed(2)}</span>
               </div>
@@ -138,10 +152,19 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
                   <span className="min-w-0 break-words pr-2">PAYMENT:</span>
                   <span className="shrink-0 whitespace-nowrap">COMPLETED</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="min-w-0 break-words pr-2">STATUS:</span>
-                  <span className="shrink-0 whitespace-nowrap">APPROVED</span>
-                </div>
+                {order.financials?.payments && order.financials.payments.length > 0 ? (
+                  order.financials.payments.map((p: any, i: number) => (
+                    <div key={i} className="flex justify-between text-xs font-mono">
+                      <span className="min-w-0 break-words pr-2">↳ {p.method}:</span>
+                      <span className="shrink-0 whitespace-nowrap">₹{p.amount.toFixed(2)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex justify-between">
+                    <span className="min-w-0 break-words pr-2">STATUS:</span>
+                    <span className="shrink-0 whitespace-nowrap">APPROVED</span>
+                  </div>
+                )}
               </div>
             )}
 

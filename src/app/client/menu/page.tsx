@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Utensils, LayoutList, Trash2, Edit } from "lucide-react";
+import { Utensils, LayoutList, Trash2, Edit, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -26,6 +26,8 @@ import { menuService, Category, MenuItem } from "@/services/menu.service";
 import { AddCategoryDialog } from "@/components/client/add-category-dialog";
 import { AddMenuItemDialog } from "@/components/client/add-menu-item-dialog";
 import { EditMenuItemDialog } from "@/components/client/edit-menu-item-dialog";
+import { BulkImportDialog } from "@/components/client/bulk-import-dialog";
+import { menuBulkImportConfig } from "@/lib/bulk-import-configs";
 import { toast } from "@/components/ui/use-toast";
 
 interface Restaurant {
@@ -42,6 +44,7 @@ export default function ClientMenuPage() {
   
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
 
   useEffect(() => {
     fetchRestaurants();
@@ -204,17 +207,29 @@ export default function ClientMenuPage() {
                   <CardTitle className="text-slate-900 dark:text-white">Active Menu Items</CardTitle>
                   <CardDescription className="text-slate-500 dark:text-slate-400">Dishes available for order.</CardDescription>
                 </div>
-                {categories.length > 0 ? (
-                  <AddMenuItemDialog 
-                    restaurantId={selectedRestaurantId} 
-                    categories={categories}
-                    onSuccess={() => fetchMenuItems(selectedRestaurantId)} 
-                  />
-                ) : (
-                  <Button disabled variant="outline" title="Create a category first">
-                    Add Menu Item
+                <div className="flex gap-2">
+                  {categories.length > 0 ? (
+                    <AddMenuItemDialog 
+                      restaurantId={selectedRestaurantId} 
+                      categories={categories}
+                      onSuccess={() => fetchMenuItems(selectedRestaurantId)} 
+                    />
+                  ) : (
+                    <Button disabled variant="outline" title="Create a category first">
+                      Add Menu Item
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsBulkImportOpen(true)}
+                    disabled={categories.length === 0}
+                    title={categories.length === 0 ? "Create a category first" : "Bulk import menu items"}
+                    className="gap-2"
+                  >
+                    <UploadCloud className="h-4 w-4" />
+                    Bulk Import
                   </Button>
-                )}
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -371,6 +386,14 @@ export default function ClientMenuPage() {
           onSuccess={() => fetchMenuItems(selectedRestaurantId)}
         />
       )}
+
+      <BulkImportDialog
+        open={isBulkImportOpen}
+        onOpenChange={setIsBulkImportOpen}
+        restaurantId={selectedRestaurantId}
+        config={menuBulkImportConfig}
+        onSuccess={() => fetchMenuItems(selectedRestaurantId)}
+      />
     </div>
   );
 }

@@ -45,4 +45,31 @@ export const recipeService = {
     const res = await apiClient.delete(`/recipes/${id}`, getHeaders(restaurantId));
     return res.data;
   },
+
+  // --- BULK IMPORT ---
+  downloadBulkTemplate: async (restaurantId?: string): Promise<Blob> => {
+    const res = await apiClient.get("/recipes/bulk/template", { responseType: "blob", ...getHeaders(restaurantId) });
+    return res.data;
+  },
+
+  validateBulk: async (file: File, restaurantId?: string) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await apiClient.post("/recipes/bulk/validate", formData, getHeaders(restaurantId));
+    return res.data;
+  },
+
+  importBulk: async (file: File, restaurantId?: string) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await apiClient.post("/recipes/bulk/import", formData, getHeaders(restaurantId));
+    return res.data;
+  },
+
+  downloadErrorReport: async (importId: string): Promise<Blob> => {
+    const res = await apiClient.get(`/recipes/bulk/error-report/${importId}`, {
+      responseType: "blob",
+    });
+    return res.data;
+  },
 };

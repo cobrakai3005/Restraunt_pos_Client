@@ -26,11 +26,14 @@ interface Menu {
     _id?: string;
     name: string;
     price: number;
+    sku?: string;
   }[];
   station: string;
   isAvailable: boolean;
   imageUrl?: string | null;
   isVeg?: boolean | null;
+  shortCode?: string | null;
+  numericCode?: string | null;
 }
 
 interface Table {
@@ -203,7 +206,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     };
   }, [toast, fetchActiveOrders]);
 
-  const addToCart = (menu: Menu, chosenVariant?: { name: string; price: number }) => {
+  const addToCart = (menu: Menu, chosenVariant?: { name: string; price: number }, addedQty: number = 1) => {
     if (!menu.isAvailable) {
       toast({ variant: "destructive", title: "Item Unavailable", description: "This item is currently marked as unavailable." });
       return;
@@ -214,9 +217,9 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     setCart(prev => {
       const existing = prev.find(item => item._id === menu._id && !item.notes && item.selectedVariant.name === selectedVariant.name);
       if (existing) {
-        return prev.map(item => item._id === menu._id && !item.notes && item.selectedVariant.name === selectedVariant.name ? { ...item, quantity: item.quantity + 1 } : item);
+        return prev.map(item => item._id === menu._id && !item.notes && item.selectedVariant.name === selectedVariant.name ? { ...item, quantity: item.quantity + addedQty } : item);
       }
-      return [...prev, { ...menu, cartId: Math.random().toString(), quantity: 1, notes: "", selectedVariant }];
+      return [...prev, { ...menu, cartId: Math.random().toString(), quantity: addedQty, notes: "", selectedVariant }];
     });
 
     // UX: pulse the FAB to confirm the item was added
@@ -230,7 +233,158 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     });
   };
 
-  const handleMenuClick = (menu: Menu) => {
+  const handleQuickPunch = (inputStr: string) => {
+    const raw = inputStr.trim().toLowerCase();
+    if (!raw) return;
+
+    let qty = 1;
+    let codeStr = raw;
+
+    // Support "3*bn" or "bn*3" or "2*101" or "101*2"
+    if (raw.includes("*")) {
+      const parts = raw.split("*").map(p => p.trim());
+      if (parts.length === 2) {
+        if (!isNaN(parseInt(parts[0]))) {
+          qty = parseInt(parts[0]);
+          codeStr = parts[1];
+        } else if (!isNaN(parseInt(parts[1]))) {
+          qty = parseInt(parts[1]);
+          codeStr = parts[0];
+        }
+      }
+    }
+
+    if (qty <= 0) qty = 1;
+
+    // Support dot syntax for variant picking e.g. "101.1", "101.2", "bn.1", "3*bn.2"
+    let variantIdx: number | null = null;
+    if (codeStr.includes(".")) {
+      const subParts = codeStr.split(".");
+      codeStr = subParts[0];
+      const parsedV = parseInt(subParts[1]);
+      if (!isNaN(parsedV) && parsedV > 0) {
+        variantIdx = parsedV - 1; // 0-based index
+      }
+    }
+
+    // Find match by server-side shortCode, numericCode, or explicit SKU
+    let matchedIndex = menus.findIndex((m) => {
+      const sc = m.shortCode?.toLowerCase().trim();
+      const nc = m.numericCode?.trim();
+      const sku = m.variants?.[0]?.sku?.toLowerCase().trim();
+      return (sc && sc === codeStr) || (nc && nc === codeStr) || (sku && sku === codeStr);
+    });
+
+    // Fallback: search top filtered menu item
+    if (matchedIndex === -1 && filteredMenus.length > 0) {
+      const topItem = filteredMenus[0];
+      matchedIndex = menus.findIndex(m => m._id === topItem._id);
+    }
+
+    if (matchedIndex !== -1) {
+      const targetMenu = menus[matchedIndex];
+      const codeDisplay = [
+        targetMenu.shortCode ? targetMenu.shortCode.toUpperCase() : null,
+        targetMenu.numericCode ? `#${targetMenu.numericCode}` : null,
+      ].filter(Boolean).join(" / ") || targetMenu.name;
+
+      if (variantIdx !== null && targetMenu.variants && targetMenu.variants[variantIdx]) {
+        const chosenVariant = targetMenu.variants[variantIdx];
+        addToCart(targetMenu, chosenVariant, qty);
+        toast({
+          title: `⚡ Punched ${qty}x ${targetMenu.name} (${chosenVariant.name})`,
+          description: `Code: ${codeDisplay}.${variantIdx + 1}`,
+        });
+      } else {
+        handleMenuClickWithQty(targetMenu, qty);
+        toast({
+          title: `⚡ Punched ${qty}x ${targetMenu.name}`,
+          description: `Code: ${codeDisplay}`,
+        });
+      }
+      setSearchQuery("");
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Item Code Not Found ❌",
+        description: `No menu item matching "${codeStr}"`,
+      });
+    }
+  };
+
+  // Instant Auto-Punch: triggers as soon as the typed code exactly matches an item's shortcode / numeric code / SKU
+  const tryAutoPunch = (inputStr: string): boolean => {
+    const raw = inputStr.trim().toLowerCase();
+    if (!raw) return false;
+
+    let qty = 1;
+    let codeStr = raw;
+
+    // Support "3*bn" or "bn*3" or "2*101" or "101*2"
+    if (raw.includes("*")) {
+      const parts = raw.split("*").map(p => p.trim());
+      if (parts.length === 2) {
+        if (!isNaN(parseInt(parts[0]))) {
+          qty = parseInt(parts[0]);
+          codeStr = parts[1];
+        } else if (!isNaN(parseInt(parts[1]))) {
+          qty = parseInt(parts[1]);
+          codeStr = parts[0];
+        }
+      }
+    }
+
+    if (qty <= 0) qty = 1;
+
+    // Support dot syntax for variant picking e.g. "101.1", "101.2", "bn.1", "3*bn.2"
+    let variantIdx: number | null = null;
+    if (codeStr.includes(".")) {
+      const subParts = codeStr.split(".");
+      codeStr = subParts[0];
+      const parsedV = parseInt(subParts[1]);
+      if (!isNaN(parsedV) && parsedV > 0) {
+        variantIdx = parsedV - 1;
+      }
+    }
+
+    if (!codeStr) return false;
+
+    // Exact match ONLY against shortCode, numericCode, or variant sku
+    const targetMenu = menus.find((m) => {
+      const sc = m.shortCode?.toLowerCase().trim();
+      const nc = m.numericCode?.trim();
+      const sku = m.variants?.[0]?.sku?.toLowerCase().trim();
+      return (sc && sc === codeStr) || (nc && nc === codeStr) || (sku && sku === codeStr);
+    });
+
+    if (targetMenu) {
+      const codeDisplay = [
+        targetMenu.shortCode ? targetMenu.shortCode.toUpperCase() : null,
+        targetMenu.numericCode ? `#${targetMenu.numericCode}` : null,
+      ].filter(Boolean).join(" / ") || targetMenu.name;
+
+      if (variantIdx !== null && targetMenu.variants && targetMenu.variants[variantIdx]) {
+        const chosenVariant = targetMenu.variants[variantIdx];
+        addToCart(targetMenu, chosenVariant, qty);
+        toast({
+          title: `⚡ Punched ${qty}x ${targetMenu.name} (${chosenVariant.name})`,
+          description: `Code: ${codeDisplay}.${variantIdx + 1}`,
+        });
+      } else {
+        handleMenuClickWithQty(targetMenu, qty);
+        toast({
+          title: `⚡ Punched ${qty}x ${targetMenu.name}`,
+          description: `Code: ${codeDisplay}`,
+        });
+      }
+      setSearchQuery("");
+      return true;
+    }
+
+    return false;
+  };
+
+  const handleMenuClickWithQty = (menu: Menu, qty: number = 1) => {
     if (!menu.isAvailable) {
       toast({ variant: "destructive", title: "Item Unavailable", description: "This item is currently marked as unavailable." });
       return;
@@ -238,8 +392,12 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     if (menu.variants && menu.variants.length > 1) {
       setPickerMenu(menu);
     } else {
-      addToCart(menu);
+      addToCart(menu, undefined, qty);
     }
+  };
+
+  const handleMenuClick = (menu: Menu) => {
+    handleMenuClickWithQty(menu, 1);
   };
 
   const updateQuantity = (cartId: string, delta: number) => {
@@ -280,10 +438,30 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     }));
   };
 
-  const filteredMenus = menus.filter(m => {
+  const filteredMenus = menus.filter((m) => {
     const matchesCategory = activeCategoryId === "All" || m.categoryId?._id === activeCategoryId;
-    const matchesSearch = m.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return matchesCategory;
+
+    // Extract quantity pattern e.g. "3*bn" or "bn*3" -> query is "bn"
+    let cleanQ = q;
+    if (q.includes("*")) {
+      const parts = q.split("*").map(p => p.trim());
+      if (parts.length === 2) {
+        if (!isNaN(parseInt(parts[0]))) cleanQ = parts[1];
+        else if (!isNaN(parseInt(parts[1]))) cleanQ = parts[0];
+      }
+    }
+
+    const sc = m.shortCode?.toLowerCase().trim() || "";
+    const nc = m.numericCode?.trim() || "";
+    const sku = m.variants?.[0]?.sku?.toLowerCase().trim() || "";
+
+    const matchesName = m.name.toLowerCase().includes(cleanQ);
+    const matchesCode = (sc && sc === cleanQ) || (nc && nc === cleanQ) || (sku && sku === cleanQ);
+    const matchesPrefix = (sc && sc.startsWith(cleanQ)) || (nc && nc.startsWith(cleanQ)) || (sku && sku.startsWith(cleanQ));
+
+    return matchesCategory && (matchesName || matchesCode || matchesPrefix);
   });
 
   // UX: count items per category for badge display
@@ -426,6 +604,19 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     } finally {
       setRepeatLoading(null);
     }
+  };
+
+  const handleResetAll = () => {
+    setCart([]);
+    setSelectedTable("");
+    setCustomerName("");
+    setCustomerPhone("");
+    setSearchQuery("");
+    setOrderType("DINE_IN");
+    toast({
+      title: "Order Reset 🧹",
+      description: "Cart, selected table, and customer details cleared.",
+    });
   };
 
   if (isLoading) {
@@ -571,21 +762,33 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
       </div>
 
       {/* Menu Section */}
-      <div className="flex-1 flex flex-col p-6 gap-6 overflow-hidden bg-transparent">
+      <div className="flex-1 flex flex-col p-4 gap-6 overflow-hidden bg-transparent">
 
         {/* Search & Categories */}
-        <div className="space-y-4 shrink-0">
+        <div className="space-y-2 shrink-0">
           <div className="relative group">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors" />
             <Input
               ref={searchInputRef}
-              placeholder="Search menu items... (Press '/' to focus)"
+              placeholder="Search or type shortcode e.g. 'bn', '101', '3*bn' (Punches instantly on match)..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 pr-14 h-14 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-white/50 dark:border-slate-700/50 shadow-sm text-lg rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:ring-offset-0 transition-all hover:bg-white/90 dark:hover:bg-slate-900/90"
+              onChange={(e) => {
+                const val = e.target.value;
+                const punched = tryAutoPunch(val);
+                if (!punched) {
+                  setSearchQuery(val);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && searchQuery.trim()) {
+                  e.preventDefault();
+                  handleQuickPunch(searchQuery);
+                }
+              }}
+              className="pl-12 pr-14 h-11 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-white/50 dark:border-slate-700/50 shadow-sm text-base font-medium rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:ring-offset-0 transition-all hover:bg-white/90 dark:hover:bg-slate-900/90"
             />
-            <kbd className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:inline-flex h-6 select-none items-center gap-1 rounded border border-slate-300 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2 font-mono text-[10px] font-medium text-slate-500 dark:text-slate-400">
-              /
+            <kbd className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:inline-flex h-6 select-none items-center gap-1 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/80 px-2 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300">
+              ⚡ Instant
             </kbd>
           </div>
 
@@ -645,12 +848,18 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pb-10">
             {filteredMenus.map(menu => {
               const inCartCount = cart.filter(item => item._id === menu._id).reduce((sum, item) => sum + item.quantity, 0);
+              const badgeParts = [
+                menu.shortCode ? menu.shortCode.toUpperCase() : null,
+                menu.numericCode ? `#${menu.numericCode}` : null,
+              ].filter(Boolean);
+              const shortBadge = badgeParts.length > 0 ? badgeParts.join(" / ") : undefined;
 
               return (
                 <MenuItemCard
                   key={menu._id}
                   name={menu.name}
                   categoryName={menu.categoryId?.name}
+                  shortCode={shortBadge}
                   price={menu.variants?.[0]?.price || 0}
                   variantsCount={menu.variants?.length || 0}
                   isAvailable={menu.isAvailable}
@@ -672,6 +881,18 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
       {/* ── Floating Action Button Group ── */}
       <div className={`absolute bottom-6 right-6 z-30 flex items-center gap-2 transition-all duration-300 ${cartFlash ? 'scale-105' : ''}`}>
+
+        {/* Reset / Unselect All Button */}
+        {(cart.length > 0 || selectedTable || customerName || customerPhone) && (
+          <button
+            onClick={handleResetAll}
+            title="Unselect items, clear table & reset order details"
+            className="flex items-center justify-center h-14 px-4 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-600 dark:text-amber-400 border border-amber-500/40 font-extrabold text-xs transition-all active:scale-95 shadow-lg backdrop-blur-md gap-1.5"
+          >
+            <RotateCcw className="h-4 w-4" />
+            <span className="hidden sm:inline">Reset Order</span>
+          </button>
+        )}
 
         {/* Fire to Kitchen FAB */}
         <button
@@ -731,7 +952,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           ${ cartOpen ? 'translate-x-0' : 'translate-x-full' }
         `}
       >
-        {/* Drawer header with close button */}
+        {/* Drawer header with close and clear buttons */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200/50 dark:border-slate-800/50 shrink-0">
           <div className="flex items-center gap-2">
             <ShoppingBag className="h-4 w-4 text-blue-500" />
@@ -742,12 +963,23 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
               </span>
             )}
           </div>
-          <button
-            onClick={() => setCartOpen(false)}
-            className="h-8 w-8 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {(cart.length > 0 || selectedTable) && (
+              <button
+                onClick={handleResetAll}
+                title="Clear all items and unselect table"
+                className="px-2 py-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors flex items-center gap-1"
+              >
+                <Trash2 className="h-3 w-3" /> Clear All
+              </button>
+            )}
+            <button
+              onClick={() => setCartOpen(false)}
+              className="h-8 w-8 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto hide-scrollbar">
