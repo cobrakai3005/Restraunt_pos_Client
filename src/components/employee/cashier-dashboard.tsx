@@ -24,6 +24,8 @@ interface KotItem {
   variantPrice: number;
   quantity: number;
   itemStatus: string;
+  cgstPercent: number;
+  sgstPercent: number
 }
 
 interface Order {
@@ -671,149 +673,149 @@ export function CashierDashboard({ user }: DashboardProps) {
               {billingTab === "discount" && (() => {
                 // Same calculation as Bill tab — fall back to per-item for OPEN orders
                 let dSubtotal = selectedOrder.financials?.subtotal ?? 0;
-                let dTax      = selectedOrder.financials?.totalTax ?? 0;
-                let dGrand    = selectedOrder.financials?.grandTotal ?? 0;
+                let dTax = selectedOrder.financials?.totalTax ?? 0;
+                let dGrand = selectedOrder.financials?.grandTotal ?? 0;
                 if (selectedOrder.status === "OPEN" || dSubtotal === 0) {
                   dSubtotal = selectedOrder.kots
                     .flatMap((k: any) => k.items)
                     .reduce((sum: number, item: any) => sum + (item.variantPrice || 0) * item.quantity, 0);
-                  dTax   = selectedOrder.kots.flatMap((k: any) => k.items)
+                  dTax = selectedOrder.kots.flatMap((k: any) => k.items)
                     .reduce((sum: number, item: any) => sum + ((item.variantPrice || 0) * item.quantity * (item.taxPercentage || 0)) / 100, 0);
                   dGrand = dSubtotal + dTax;
                 }
                 return (
-                <div className="flex-1 overflow-y-auto min-h-0">
-                  <div className="p-5 max-w-lg mx-auto space-y-5">
+                  <div className="flex-1 overflow-y-auto min-h-0">
+                    <div className="p-5 max-w-lg mx-auto space-y-5">
 
-                    {/* Info banner */}
-                    <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-4 py-3 flex items-start gap-3">
-                      <Tag className="h-4 w-4 mt-0.5 text-emerald-500 shrink-0" />
-                      <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium leading-relaxed">
-                        Apply a flat rupee discount to this order. The grand total will be recalculated automatically when you save.
-                      </p>
-                    </div>
-
-                    {/* Current totals summary */}
-                    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
-                      <div className="flex justify-between px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-                        <span>Subtotal</span>
-                        <span className="font-semibold">₹{dSubtotal.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-                        <span>GST / Tax</span>
-                        <span className="font-semibold">₹{dTax.toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between px-4 py-3 text-sm font-extrabold text-slate-900 dark:text-white">
-                        <span>Grand Total (before discount)</span>
-                        <span className="text-blue-600 dark:text-blue-400">₹{dGrand.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    {/* Discount input */}
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                        <Percent className="h-3.5 w-3.5" /> Flat Discount (₹)
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
-                        <Input
-                          id="discount-amount"
-                          type="number"
-                          min={0}
-                          step={1}
-                          placeholder="0"
-                          value={discountAmount}
-                          onChange={(e) => setDiscountAmount(e.target.value)}
-                          className="h-12 pl-8 font-extrabold text-base bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                        />
-                      </div>
-                      {discountAmount && !isNaN(parseFloat(discountAmount)) && parseFloat(discountAmount) > 0 && (
-                        <p className="text-[12px] text-emerald-600 dark:text-emerald-400 font-bold pl-1">
-                          New total: ₹{Math.max(0, dGrand - parseFloat(discountAmount)).toFixed(2)}
+                      {/* Info banner */}
+                      <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-4 py-3 flex items-start gap-3">
+                        <Tag className="h-4 w-4 mt-0.5 text-emerald-500 shrink-0" />
+                        <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium leading-relaxed">
+                          Apply a flat rupee discount to this order. The grand total will be recalculated automatically when you save.
                         </p>
-                      )}
-                    </div>
+                      </div>
 
-                    {/* Quick presets (Percentage & Flat Rupee) */}
-                    <div className="space-y-2.5">
-                      <div>
-                        <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-1.5">Quick % Off</label>
-                        <div className="flex flex-wrap gap-2">
-                          {[5, 10, 15, 20].map(pct => {
-                            const calculatedAmt = Math.round((dSubtotal * pct) / 100);
-                            const isSelected = discountAmount === String(calculatedAmt);
-                            return (
+                      {/* Current totals summary */}
+                      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+                        <div className="flex justify-between px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                          <span>Subtotal</span>
+                          <span className="font-semibold">₹{dSubtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
+                          <span>GST / Tax</span>
+                          <span className="font-semibold">₹{dTax.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between px-4 py-3 text-sm font-extrabold text-slate-900 dark:text-white">
+                          <span>Grand Total (before discount)</span>
+                          <span className="text-blue-600 dark:text-blue-400">₹{dGrand.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      {/* Discount input */}
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                          <Percent className="h-3.5 w-3.5" /> Flat Discount (₹)
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                          <Input
+                            id="discount-amount"
+                            type="number"
+                            min={0}
+                            step={1}
+                            placeholder="0"
+                            value={discountAmount}
+                            onChange={(e) => setDiscountAmount(e.target.value)}
+                            className="h-12 pl-8 font-extrabold text-base bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                          />
+                        </div>
+                        {discountAmount && !isNaN(parseFloat(discountAmount)) && parseFloat(discountAmount) > 0 && (
+                          <p className="text-[12px] text-emerald-600 dark:text-emerald-400 font-bold pl-1">
+                            New total: ₹{Math.max(0, dGrand - parseFloat(discountAmount)).toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Quick presets (Percentage & Flat Rupee) */}
+                      <div className="space-y-2.5">
+                        <div>
+                          <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-1.5">Quick % Off</label>
+                          <div className="flex flex-wrap gap-2">
+                            {[5, 10, 15, 20].map(pct => {
+                              const calculatedAmt = Math.round((dSubtotal * pct) / 100);
+                              const isSelected = discountAmount === String(calculatedAmt);
+                              return (
+                                <button
+                                  key={`pct-${pct}`}
+                                  type="button"
+                                  onClick={() => setDiscountAmount(String(calculatedAmt))}
+                                  className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold transition-all flex items-center gap-1.5 ${isSelected
+                                    ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-sm"
+                                    : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-emerald-400"
+                                    }`}
+                                >
+                                  <span>{pct}%</span>
+                                  <span className="text-[10px] opacity-70 font-semibold">(₹{calculatedAmt})</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-1.5">Quick Flat ₹ Off</label>
+                          <div className="flex flex-wrap gap-2">
+                            {[10, 20, 50, 100].map(amt => (
                               <button
-                                key={`pct-${pct}`}
+                                key={`flat-${amt}`}
                                 type="button"
-                                onClick={() => setDiscountAmount(String(calculatedAmt))}
-                                className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold transition-all flex items-center gap-1.5 ${isSelected
+                                onClick={() => setDiscountAmount(String(amt))}
+                                className={`px-4 py-1.5 rounded-xl border text-xs font-extrabold transition-all ${discountAmount === String(amt)
                                   ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-sm"
                                   : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-emerald-400"
                                   }`}
                               >
-                                <span>{pct}%</span>
-                                <span className="text-[10px] opacity-70 font-semibold">(₹{calculatedAmt})</span>
+                                ₹{amt}
                               </button>
-                            );
-                          })}
+                            ))}
+                          </div>
                         </div>
                       </div>
 
-                      <div>
-                        <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-1.5">Quick Flat ₹ Off</label>
-                        <div className="flex flex-wrap gap-2">
-                          {[10, 20, 50, 100].map(amt => (
-                            <button
-                              key={`flat-${amt}`}
-                              type="button"
-                              onClick={() => setDiscountAmount(String(amt))}
-                              className={`px-4 py-1.5 rounded-xl border text-xs font-extrabold transition-all ${discountAmount === String(amt)
-                                ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-sm"
-                                : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-emerald-400"
-                                }`}
-                            >
-                              ₹{amt}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Save */}
-                    <button
-                      id="save-discount-btn"
-                      disabled={isSavingDiscount}
-                      onClick={handleUpdateDiscount}
-                      className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-md shadow-emerald-600/25 hover:shadow-emerald-600/40 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isSavingDiscount ? <Loader2 className="h-4 w-4 animate-spin" /> : <Percent className="h-4 w-4" />}
-                      {isSavingDiscount ? "Applying..." : "Apply Discount"}
-                    </button>
-
-                    {/* Remove discount */}
-                    {(selectedOrder.financials?.discount ?? 0) > 0 && (
+                      {/* Save */}
                       <button
+                        id="save-discount-btn"
                         disabled={isSavingDiscount}
-                        onClick={async () => {
-                          try {
-                            setIsSavingDiscount(true);
-                            await employeeService.updateCustomer(selectedOrder._id, { discount: 0 });
-                            setDiscountAmount("");
-                            toast({ title: "Discount removed" });
-                            await fetchOrders();
-                            setBillingTab("bill");
-                          } catch (e: any) {
-                            toast({ variant: "destructive", title: "Error", description: e.message });
-                          } finally { setIsSavingDiscount(false); }
-                        }}
-                        className="w-full h-10 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        onClick={handleUpdateDiscount}
+                        className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-md shadow-emerald-600/25 hover:shadow-emerald-600/40 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                        Remove Discount
+                        {isSavingDiscount ? <Loader2 className="h-4 w-4 animate-spin" /> : <Percent className="h-4 w-4" />}
+                        {isSavingDiscount ? "Applying..." : "Apply Discount"}
                       </button>
-                    )}
+
+                      {/* Remove discount */}
+                      {(selectedOrder.financials?.discount ?? 0) > 0 && (
+                        <button
+                          disabled={isSavingDiscount}
+                          onClick={async () => {
+                            try {
+                              setIsSavingDiscount(true);
+                              await employeeService.updateCustomer(selectedOrder._id, { discount: 0 });
+                              setDiscountAmount("");
+                              toast({ title: "Discount removed" });
+                              await fetchOrders();
+                              setBillingTab("bill");
+                            } catch (e: any) {
+                              toast({ variant: "destructive", title: "Error", description: e.message });
+                            } finally { setIsSavingDiscount(false); }
+                          }}
+                          className="w-full h-10 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                        >
+                          Remove Discount
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
                 );
               })()}
 
@@ -824,19 +826,67 @@ export function CashierDashboard({ user }: DashboardProps) {
 
                 <div className="flex-1 overflow-y-auto min-h-0">
                   {(() => {
-                    const discount = selectedOrder.financials?.discount || 0;
-                    let subtotal = selectedOrder.financials?.subtotal || 0;
-                    let totalTax = selectedOrder.financials?.totalTax || 0;
-                    let grandTotal = selectedOrder.financials?.grandTotal || 0;
+                    // const discount = selectedOrder.financials?.discount || 0;
+                    // let subtotal = selectedOrder.financials?.subtotal || 0;
+                    // let totalTax = selectedOrder.financials?.totalTax || 0;
+                    // let grandTotal = selectedOrder.financials?.grandTotal || 0;
 
-                    if (selectedOrder.status === 'OPEN' || subtotal === 0) {
-                      subtotal = selectedOrder.kots.flatMap(k => k.items).reduce((sum, item) => sum + ((item.variantPrice || 0) * item.quantity), 0);
-                      totalTax = subtotal * 0.05;
-                      grandTotal = Math.max(0, Math.round(subtotal + totalTax - discount));
-                    } else if (discount > 0 && grandTotal === (subtotal + totalTax)) {
-                      grandTotal = Math.max(0, Math.round(subtotal + totalTax - discount));
-                    }
+                    // if (selectedOrder.status === 'OPEN' || subtotal === 0) {
+                    //   subtotal = selectedOrder.kots.flatMap(k => k.items).reduce((sum, item) => sum + ((item.variantPrice || 0) * item.quantity), 0);
+                    //   totalTax = subtotal * 0.05;
+                    //   grandTotal = Math.max(0, Math.round(subtotal + totalTax - discount));
+                    // } else if (discount > 0 && grandTotal === (subtotal + totalTax)) {
+                    //   grandTotal = Math.max(0, Math.round(subtotal + totalTax - discount));
+                    // }
 
+
+
+                    const discount = Math.max(
+                      0,
+                      Number(selectedOrder.financials?.discount || 0)
+                    );
+
+                    let subtotal = 0;
+                    let totalCgst = 0;
+                    let totalSgst = 0;
+
+                    // Calculate from KOT items
+                    selectedOrder.kots?.forEach((kot) => {
+                      kot.items?.forEach((item) => {
+                        const itemTotal =
+                          Number(item.variantPrice || 0) *
+                          Number(item.quantity || 0);
+
+                        subtotal += itemTotal;
+
+                        const cgstPercent = Number(item.cgstPercent || 0);
+                        const sgstPercent = Number(item.sgstPercent || 0);
+
+                        totalCgst += (itemTotal * cgstPercent) / 100;
+                        totalSgst += (itemTotal * sgstPercent) / 100;
+                      });
+                    });
+
+                    // Same rounding as backend
+                    subtotal = Math.round(subtotal);
+
+                    const roundedCgst = Math.round(totalCgst);
+                    const roundedSgst = Math.round(totalSgst);
+
+                    const totalTax = roundedCgst + roundedSgst;
+
+                    // Same packaging logic as backend
+                    const packagingCharge =
+                      selectedOrder.orderType === "TAKEAWAY" ? 20 : 0;
+
+                    // Same final calculation as backend
+                    const grandTotal = Math.max(
+                      0,
+                      subtotal +
+                      totalTax +
+                      packagingCharge -
+                      discount
+                    );
                     return (
                       <div className="p-5 space-y-5 max-w-3xl mx-auto">
 

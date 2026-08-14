@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Package, Edit, Trash2, Search } from "lucide-react";
+import { Plus, Package, Edit, Trash2, Search, UploadCloud, Download, AlertTriangle } from "lucide-react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -29,7 +30,6 @@ import { EditInventoryDialog } from "@/components/client/edit-inventory-dialog";
 import { BulkImportDialog } from "@/components/client/bulk-import-dialog";
 import { inventoryBulkImportConfig } from "@/lib/bulk-import-configs";
 import { toast } from "@/components/ui/use-toast";
-import { UploadCloud } from "lucide-react";
 
 interface Restaurant {
   _id: string;
@@ -47,6 +47,7 @@ export default function ClientInventoryPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Search + Pagination State
   const [search, setSearch] = useState("");
@@ -142,6 +143,99 @@ export default function ClientInventoryPage() {
     }
   };
 
+  const handleExportLowStock = async () => {
+    if (!selectedRestaurantId) {
+      toast({
+        title: "No restaurant selected",
+        description: "Please select a restaurant branch first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      // Fetch all inventory items (without pagination limit) for this restaurant
+      const res = await inventoryService.getInventoryItems(selectedRestaurantId);
+      const allItems: InventoryItem[] = Array.isArray(res) ? res : res.data || [];
+
+      // Filter items where currentStock <= reorderLevel
+      const lowStockItems = allItems.filter(
+        (item) => Number(item.currentStock ?? 0) <= Number(item.reorderLevel ?? 0)
+      );
+
+      if (lowStockItems.length === 0) {
+        toast({
+          title: "All stocks are healthy",
+          description: "No items found where current stock is equal to or below the reorder level.",
+        });
+        return;
+      }
+
+      // Generate CSV Content
+      const headers = [
+        "Item Name",
+        "Current Stock",
+        "Unit",
+        "Reorder Level",
+        "Shortage / Deficit",
+        "Cost Per Unit (INR)",
+        "Estimated Reorder Cost (INR)",
+        "Stock Status",
+      ];
+
+      const rows = lowStockItems.map((item) => {
+        const currentStock = Number(item.currentStock || 0);
+        const reorderLevel = Number(item.reorderLevel || 0);
+        const shortage = Math.max(0, reorderLevel - currentStock);
+        const costPerUnit = Number(item.costPerUnit || 0);
+        const estimatedCost = shortage * costPerUnit;
+        const status = currentStock <= 0 ? "OUT OF STOCK" : "LOW STOCK";
+
+        return [
+          `"${(item.name || "").replace(/"/g, '""')}"`,
+          currentStock,
+          item.unit || "PCS",
+          reorderLevel,
+          shortage,
+          costPerUnit.toFixed(2),
+          estimatedCost.toFixed(2),
+          status,
+        ];
+      });
+
+      const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      const restaurantName = restaurants.find((r) => r._id === selectedRestaurantId)?.name || "Restaurant";
+      const sanitizedName = restaurantName.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const dateStr = format(new Date(), "yyyy-MM-dd");
+
+      link.setAttribute("href", url);
+      link.setAttribute("download", `Low_Stock_Report_${sanitizedName}_${dateStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Export Successful",
+        description: `Exported ${lowStockItems.length} low stock item${lowStockItems.length === 1 ? "" : "s"}.`,
+      });
+    } catch (error) {
+      console.error("Failed to export low stock items:", error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export low stock items. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="flex-1 space-y-6 p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -176,6 +270,15 @@ export default function ClientInventoryPage() {
             </SelectContent>
           </Select>
 
+          <Button 
+            variant="outline" 
+            onClick={handleExportLowStock} 
+            className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-500/30 dark:text-amber-400 dark:hover:bg-amber-500/10" 
+            disabled={!selectedRestaurantId || isExporting}
+          >
+            <Download className="h-4 w-4" />
+            {isExporting ? "Exporting..." : "Export Low Stock"}
+          </Button>
           <Button variant="outline" onClick={() => setIsBulkImportOpen(true)} className="gap-2" disabled={!selectedRestaurantId}>
             <UploadCloud className="h-4 w-4" />
             Bulk Import

@@ -16,37 +16,57 @@ import {
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText,Package, Settings, Users, Building2, Store, LogOut, BarChart3, ChefHat, Utensils, ArrowLeftRight, BookOpen, ChevronRight, ClipboardList, Receipt, Clock, Sparkles } from "lucide-react";
+import { 
+  FileText, 
+  Package, 
+  Settings, 
+  Users, 
+  Building2, 
+  Store, 
+  LogOut, 
+  BarChart3, 
+  ChefHat, 
+  Utensils, 
+  UtensilsCrossed,
+  Tags,
+  ArrowLeftRight, 
+  BookOpen, 
+  ChevronRight, 
+  ClipboardList, 
+  Receipt, 
+  Clock, 
+  Sparkles,
+  LayoutGrid,
+  UserCog,
+  SlidersHorizontal
+} from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const adminNavItems = [
-  
   { icon: ArrowLeftRight, label: "Transactions", href: "/transactions" },
   { icon: Building2, label: "Client Management", href: "/admin/clients" },
   { icon: Store, label: "Restaurants", href: "/admin/restaurants" },
   { icon: FileText, label: "Documents", href: "#" },
-  // { icon: Users, label: "Users", href: "/admin/users" },
   { icon: Settings, label: "Settings", href: "#" },
 ];
 
-const clientNavItems = [
-  { icon: BarChart3, label: "Analytics", href: "/client/analytics" },
+const clientDirectNavItems = [
   { icon: Store, label: "Restaurants", href: "/client/restaurants" },
   { icon: ArrowLeftRight, label: "Transactions", href: "/transactions" },
-  { icon: BookOpen, label: "Ledgers", href: "/client/ledgers" },
-  { icon: Utensils, label: "Menu", href: "/client/menu" },
-  { icon: ChefHat, label: "Recipes (BOM)", href: "/client/menu/recipes" },
-  { icon: Users, label: "Employees", href: "/client/employees" },
-  { icon: Package, label: "Inventory", href: "/client/inventory" },
-  { icon: Settings, label: "Settings", href: "/client/settings" },
+  { icon: BookOpen, label: "Ledger", href: "/client/ledgers" },
 ];
 
-const reportNavItems = [
-  { icon: Utensils, label: "Menu Engineering", href: "/client/reports/menu-engineering" },
-  { icon: Receipt, label: "GSTR Tax Summary", href: "/client/reports/tax-summary" },
-  { icon: Users, label: "Staff Sales", href: "/client/reports/staff-sales" },
-  { icon: Clock, label: "Hourly Peak Sales", href: "/client/reports/hourly-sales" },
-  { icon: Sparkles, label: "Executive Summary", href: "/client/reports/executive-summary" },
+const managementSubItems = [
+  { icon: Utensils, label: "Menu", href: "/client/menu" },
+  { icon: Tags, label: "Categories", href: "/client/categories" },
+  { icon: UtensilsCrossed, label: "Tables", href: "/client/tables" },
+  { icon: ChefHat, label: "Recipes", href: "/client/menu/recipes" },
+  { icon: Package, label: "Inventory", href: "/client/inventory" },
+];
+
+const employeeSettingsSubItems = [
+  { icon: Users, label: "Employees", href: "/client/employees" },
+  { icon: Settings, label: "Settings & Config", href: "/client/settings" },
 ];
 
 import { useAuth } from "@/context/auth-context";
@@ -77,17 +97,25 @@ export function AppSidebar() {
     .toUpperCase();
   const role = user?.role || "Guest workspace";
 
-  const currentNavItems = (role === "MASTER_ADMIN" || role === "MASTER_USER") ? adminNavItems : clientNavItems;
-  const isReportsRoute = pathname.startsWith("/client/reports");
+  const isAdmin = role === "MASTER_ADMIN" || role === "MASTER_USER";
+  
+  const isManagementRoute = 
+    pathname.startsWith("/client/menu") || 
+    pathname.startsWith("/client/categories") || 
+    pathname.startsWith("/client/tables") || 
+    pathname.startsWith("/client/inventory");
+  const isEmployeeSettingsRoute = 
+    pathname.startsWith("/client/employees") || 
+    pathname.startsWith("/client/settings");
 
   return (
     <Sidebar className="border-r-0">
-      <div className="relative  flex min-h-0 flex-1 flex-col overflow-hidden border border-[#ddd4ff] bg-gradient-to-b from-[#fcfbff] via-white to-[#f6f2ff] shadow-[0_28px_72px_-52px_rgba(139,119,255,0.9)] dark:border-[#2c2459] dark:from-[#000] dark:via-[#0000] dark:to-[#000]">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden border border-[#ddd4ff] bg-gradient-to-b from-[#fcfbff] via-white to-[#f6f2ff] shadow-[0_28px_72px_-52px_rgba(139,119,255,0.9)] dark:border-[#2c2459] dark:from-[#000] dark:via-[#0000] dark:to-[#000]">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top_right,_rgba(139,119,255,0.2),_transparent_58%)]" />
         <div className="pointer-events-none absolute -right-10 top-16 h-28 w-28 rounded-full bg-[#8b77ff]/16 blur-3xl" />
 
         <SidebarHeader className="relative p-4 pb-3">
-          <div className="">
+          <div>
             <div className="flex items-center gap-2 justify-center mt-6">
               <img
                 src="/vinimaylogov.webp"
@@ -105,53 +133,120 @@ export function AppSidebar() {
 
         <div className="relative flex min-h-0 flex-1 flex-col">
           <SidebarMenu className="flex-1 space-y-1.5 overflow-y-auto px-4 pb-4 pt-1">
-            {currentNavItems.map((item, index) => (
-              <SidebarMenuItem key={index}>
-                <SidebarMenuButton
-                  asChild
-                  isActive={pathname === item.href}
-                  tooltip={item.label}
-                  className={menuButtonClass}
-                  onClick={handleNavClick}
-                >
-                  <Link href={item.href}>
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+            {isAdmin ? (
+              adminNavItems.map((item, index) => (
+                <SidebarMenuItem key={index}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === item.href}
+                    tooltip={item.label}
+                    className={menuButtonClass}
+                    onClick={handleNavClick}
+                  >
+                    <Link href={item.href}>
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))
+            ) : (
+              <>
+                {/* 1. Restaurants, 2. Transactions, 3. Ledger */}
+                {clientDirectNavItems.map((item, index) => (
+                  <SidebarMenuItem key={index}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === item.href}
+                      tooltip={item.label}
+                      className={menuButtonClass}
+                      onClick={handleNavClick}
+                    >
+                      <Link href={item.href}>
+                        <item.icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
 
-            <SidebarGroup>
-              <Collapsible defaultOpen={isReportsRoute} className="group/collapsible">
-                <SidebarGroupLabel asChild>
-                    <CollapsibleTrigger className="w-full cursor-pointer select-none gap-2 py-1.5 hover:bg-[#f3efff] hover:text-[#5038d5] rounded-lg dark:hover:bg-[#261f49] dark:hover:text-white transition-colors">
-                      <ClipboardList className="h-4 w-4 text-[#8b77ff] dark:text-[#a99bf5]" />
-                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Reports</span>
-                      <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                    </CollapsibleTrigger>
-                  </SidebarGroupLabel>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {reportNavItems.map((item) => (
-                        <SidebarMenuSubItem key={item.href}>
-                          <SidebarMenuSubButton
-                            asChild
-                            isActive={pathname === item.href}
-                            onClick={handleNavClick}
-                            className="data-[active=true]:bg-[#8b77ff] data-[active=true]:text-white"
-                          >
-                            <Link href={item.href}>
-                              <item.icon />
-                              <span>{item.label}</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </Collapsible>
-              </SidebarGroup>
+                {/* 4. Management Collapsible (Menu, Tables, Recipes, Inventory only) */}
+                <SidebarGroup className="p-0 pt-1">
+                  <Collapsible defaultOpen={isManagementRoute} className="group/management">
+                    <SidebarGroupLabel asChild>
+                      <CollapsibleTrigger 
+                        className={`w-full cursor-pointer select-none gap-2 py-2 px-3 hover:bg-[#f3efff] hover:text-[#5038d5] rounded-xl dark:hover:bg-[#261f49] dark:hover:text-white transition-all flex items-center ${
+                          isManagementRoute 
+                            ? "bg-[#ede8ff] text-[#5038d5] font-semibold dark:bg-[#2e265c] dark:text-[#ddd5ff]" 
+                            : "text-slate-700 dark:text-slate-200"
+                        }`}
+                      >
+                        <LayoutGrid className="h-4 w-4 text-[#8b77ff] dark:text-[#a99bf5]" />
+                        <span className="text-sm font-medium">Management</span>
+                        <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/management:rotate-90" />
+                      </CollapsibleTrigger>
+                    </SidebarGroupLabel>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="space-y-1 my-1">
+                        {managementSubItems.map((item) => (
+                          <SidebarMenuSubItem key={item.href}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={pathname === item.href}
+                              onClick={handleNavClick}
+                              className="rounded-xl data-[active=true]:bg-[#8b77ff] data-[active=true]:text-white transition-colors"
+                            >
+                              <Link href={item.href} className="flex items-center gap-2">
+                                <item.icon className="h-4 w-4" />
+                                <span>{item.label}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </SidebarGroup>
+
+                {/* 5. Employee Settings Collapsible */}
+                <SidebarGroup className="p-0 pt-1">
+                  <Collapsible defaultOpen={isEmployeeSettingsRoute} className="group/empSettings">
+                    <SidebarGroupLabel asChild>
+                      <CollapsibleTrigger 
+                        className={`w-full cursor-pointer select-none gap-2 py-2 px-3 hover:bg-[#f3efff] hover:text-[#5038d5] rounded-xl dark:hover:bg-[#261f49] dark:hover:text-white transition-all flex items-center ${
+                          isEmployeeSettingsRoute 
+                            ? "bg-[#ede8ff] text-[#5038d5] font-semibold dark:bg-[#2e265c] dark:text-[#ddd5ff]" 
+                            : "text-slate-700 dark:text-slate-200"
+                        }`}
+                      >
+                        <UserCog className="h-4 w-4 text-[#8b77ff] dark:text-[#a99bf5]" />
+                        <span className="text-sm font-medium">Employee Settings</span>
+                        <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/empSettings:rotate-90" />
+                      </CollapsibleTrigger>
+                    </SidebarGroupLabel>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="space-y-1 my-1">
+                        {employeeSettingsSubItems.map((item) => (
+                          <SidebarMenuSubItem key={item.href}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={pathname === item.href}
+                              onClick={handleNavClick}
+                              className="rounded-xl data-[active=true]:bg-[#8b77ff] data-[active=true]:text-white transition-colors"
+                            >
+                              <Link href={item.href} className="flex items-center gap-2">
+                                <item.icon className="h-4 w-4" />
+                                <span>{item.label}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </SidebarGroup>
+              </>
+            )}
           </SidebarMenu>
         </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, FileText, ReceiptText, Calendar as CalendarIcon, Search, ChevronDown, MoreVertical, Check, Utensils } from "lucide-react";
+import { Plus, FileText, Calendar as CalendarIcon, Search, ChevronDown, MoreVertical } from "lucide-react";
 import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
@@ -39,7 +39,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { clientService } from "@/services/client.service";
 import { transactionService, Transaction } from "@/services/transaction.service";
-import { orderService } from "@/services/order.service";
 import { CreateTransactionModal } from "@/components/client/create-transaction-modal";
 import { InvoicePreviewModal } from "@/components/client/invoice-preview-modal";
 import { toast } from "@/components/ui/use-toast";
@@ -60,11 +59,6 @@ export default function TransactionsPage() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState<string>("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [billedOrders, setBilledOrders] = useState<any[]>([]);
-  const [creatingInvoiceId, setCreatingInvoiceId] = useState<string | null>(null);
-  const [billingOrderId, setBillingOrderId] = useState<string | null>(null);
-  const [checkingOutOrderId, setCheckingOutOrderId] = useState<string | null>(null);
-  const [checkoutMethod, setCheckoutMethod] = useState<"CASH" | "UPI" | "CARD">("CASH");
   const [activeTab, setActiveTab] = useState<TabType>("All");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
@@ -96,10 +90,8 @@ export default function TransactionsPage() {
   useEffect(() => {
     if (selectedRestaurantId) {
       fetchTransactions();
-      fetchBilledOrders();
     } else {
       setTransactions([]);
-      setBilledOrders([]);
       setTotalPages(1);
       setTotalRecords(0);
       setSummaryRevenue(0);
@@ -135,71 +127,6 @@ export default function TransactionsPage() {
     }
   };
 
-  const fetchBilledOrders = async () => {
-    try {
-      const list = await orderService.getSettlementOrders(selectedRestaurantId);
-      setBilledOrders(list);
-    } catch (error) {
-      console.error("Failed to fetch settlement orders:", error);
-    }
-  };
-
-  const handleGenerateBill = async (orderId: string) => {
-    try {
-      setBillingOrderId(orderId);
-      await orderService.generateBill(selectedRestaurantId, orderId);
-      toast({ title: "Bill generated", description: "The order is ready for payment." });
-      await fetchBilledOrders();
-    } catch (error: any) {
-      toast({
-        title: "Billing error",
-        description: error.response?.data?.message || "Failed to generate bill.",
-        variant: "destructive",
-      });
-    } finally {
-      setBillingOrderId(null);
-    }
-  };
-
-  const handleCreateInvoice = async (orderId: string) => {
-    try {
-      setCreatingInvoiceId(orderId);
-      await orderService.createInvoice(selectedRestaurantId, orderId);
-      toast({ title: "Invoice created", description: "The order is now available as a sales invoice." });
-      await Promise.all([fetchTransactions(), fetchBilledOrders()]);
-    } catch (error: any) {
-      toast({
-        title: "Invoice error",
-        description: error.response?.data?.message || "Failed to create invoice.",
-        variant: "destructive",
-      });
-    } finally {
-      setCreatingInvoiceId(null);
-    }
-  };
-
-  const handleCheckoutOrder = async (order: any) => {
-    try {
-      setCheckingOutOrderId(order._id);
-      await orderService.checkoutOrder(
-        selectedRestaurantId,
-        order._id,
-        checkoutMethod,
-        Number(order.financials?.grandTotal || 0),
-      );
-      toast({ title: "Payment successful", description: "The order has been paid and closed." });
-      await Promise.all([fetchTransactions(), fetchBilledOrders()]);
-    } catch (error: any) {
-      toast({
-        title: "Checkout error",
-        description: error.response?.data?.message || "Failed to checkout order.",
-        variant: "destructive",
-      });
-    } finally {
-      setCheckingOutOrderId(null);
-    }
-  };
-
   const openTransactionModal = (type: "PURCHASE" | "PAYMENT" | "JOURNAL") => {
     setTransactionToEdit(null);
     setNewTransactionType(type);
@@ -229,14 +156,22 @@ export default function TransactionsPage() {
 
       const res = await transactionService.getTransactions(query, selectedRestaurantId);
       const payload = res.data;
-      setTransactions(Array.isArray(payload) ? payload : (payload as any).data || []);
+      const txList = Array.isArray(payload) ? payload : (payload as any).data || [];
+      setTransactions(txList);
       const meta = (payload as any)?.meta;
       if (meta) {
         setTotalPages(meta.totalPages);
         setTotalRecords(meta.totalRecords);
       }
       const summary = (payload as any)?.summary;
-      if (summary) setSummaryRevenue(summary.revenue ?? 0);
+      if (summary && typeof summary.revenue === "number") {
+        setSummaryRevenue(summary.revenue);
+      } else {
+        const calculated = txList
+          .filter((t: any) => t.type === "SALES" || t.type === "RECEIPT")
+          .reduce((sum: number, t: any) => sum + (t.totalAmount || 0), 0);
+        setSummaryRevenue(calculated);
+      }
       setPage(targetPage);
     } catch (error) {
       console.error("Failed to fetch transactions:", error);
@@ -255,40 +190,6 @@ export default function TransactionsPage() {
       toast({ title: "Error", description: error.response?.data?.message || "Failed to delete transaction.", variant: "destructive" });
     }
   };
-
-  /*
-  const handleConvertProforma = async (transaction: Transaction) => {
-    try {
-      const companyId = typeof transaction.companyId === "object"
-        ? transaction.companyId._id
-        : transaction.companyId;
-      await transactionService.updateTransaction(transaction._id, {
-        companyId,
-        companyName: transaction.companyName,
-        customerName: transaction.customerName,
-        type: "SALES",
-        transactionDate: transaction.transactionDate,
-        dueDate: transaction.dueDate,
-        subtotal: transaction.subtotal,
-        taxAmount: transaction.taxAmount,
-        discountAmount: transaction.discountAmount,
-        totalAmount: transaction.totalAmount,
-        items: transaction.items,
-        paymentMethod: transaction.paymentMethod,
-        bank: transaction.bank,
-        referenceNumber: transaction.referenceNumber,
-        description: transaction.description,
-        isExpense: false,
-        paidAmount: transaction.paidAmount,
-        status: transaction.status,
-      }, selectedRestaurantId);
-      toast({ title: "Success", description: "Proforma converted to Sales successfully." });
-      fetchTransactions();
-    } catch (error: any) {
-      toast({ title: "Error", description: error.response?.data?.message || "Failed to convert proforma.", variant: "destructive" });
-    }
-  };
-  */
 
   const dailyRevenue = summaryRevenue;
 
@@ -328,137 +229,6 @@ export default function TransactionsPage() {
           {/* Transaction creation is intentionally disabled. Sales invoices come from orders. */}
         </div>
       </div>
-
-      {billedOrders.length > 0 && (
-        <section className="space-y-5">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <ReceiptText className="h-5 w-5 text-emerald-600" />
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Open and Billed orders</h2>
-            </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Review open and billed orders, generate bills, or collect payment.</p>
-          </div>
-
-          {/* <div className="flex gap-2 overflow-x-auto pb-1">
-            {billedOrders.map((order) => (
-              <a
-                key={order._id}
-                href={`#billed-order-${order._id}`}
-                className="flex shrink-0 items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 shadow-sm transition-colors hover:bg-emerald-50 dark:hover:bg-emerald-500/10"
-              >
-                <Check className="h-4 w-4" />
-                #{order._id.slice(-6).toUpperCase()}
-              </a>
-            ))}
-          </div> */}
-
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {billedOrders.map((order) => {
-              const items = (order.kots || []).flatMap((kot: any) => kot.items || []);
-              const visibleItems = items.slice(0, 2);
-              const remainingItems = Math.max(items.length - visibleItems.length, 0);
-              const itemTotal = items.reduce((sum: number, item: any) => sum + Number(item.variantPrice || 0) * Number(item.quantity || 0), 0);
-              const total = Number(order.financials?.grandTotal || 0) || itemTotal;
-
-              return (
-                <article id={`billed-order-${order._id}`} key={order._id} className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-                  <div className="flex items-start justify-between border-b border-gray-100 dark:border-slate-800 p-4">
-                    <div>
-                      <p className="font-semibold text-gray-900 dark:text-white">Order #{order._id.slice(-6).toUpperCase()}</p>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        {order.orderType === "DINE_IN" ? `Table ${order.tableId?.tableNumber || "-"}` : "Takeaway"}
-                        {order.customerDetails?.name ? ` · ${order.customerDetails.name}` : ""}
-                      </p>
-                    </div>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${order.status === "OPEN" ? "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400" : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"}`}>
-                      {order.status === "OPEN" ? "Open" : "Billed"}
-                    </span>
-                  </div>
-
-                  <div className="divide-y divide-gray-100 dark:divide-slate-800 px-4">
-                    {visibleItems.length > 0 ? visibleItems.map((item: any, index: number) => (
-                      <div key={`${item._id || item.menuItemId || item.variantName}-${index}`} className="flex items-center gap-3 py-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-lime-100 dark:bg-lime-500/10 text-lime-700 dark:text-lime-400">
-                          <Utensils className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-900 dark:text-white">{item.menuItemId?.name || "Menu item"}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">{item.variantName || "Standard"}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">Rs {(Number(item.variantPrice || 0) * Number(item.quantity || 0)).toFixed(2)}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Qty: {item.quantity || 0}</p>
-                        </div>
-                      </div>
-                    )) : <p className="py-5 text-sm text-gray-500 dark:text-gray-400">No item details available.</p>}
-                  </div>
-
-                  <div className="border-t border-gray-100 dark:border-slate-800 px-4 py-3">
-                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                      <span>{remainingItems > 0 ? `+${remainingItems} items` : `${items.length} item${items.length === 1 ? "" : "s"}`}</span>
-                      <span className="font-medium text-gray-900 dark:text-white">Total</span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between">
-                      <span className="text-lg font-semibold text-gray-900 dark:text-white">Rs {total.toFixed(2)}</span>
-                      <div className="flex gap-2">
-                        <Select value={checkoutMethod} onValueChange={(value) => setCheckoutMethod(value as "CASH" | "UPI" | "CARD")}>
-                          <SelectTrigger className="h-9 w-24 bg-white dark:bg-slate-800 text-xs"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="CASH">Cash</SelectItem>
-                            <SelectItem value="UPI">UPI</SelectItem>
-                            <SelectItem value="CARD">Card</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          size="sm"
-                          disabled={order.status !== "BILLED" || checkingOutOrderId === order._id}
-                          onClick={() => handleCheckoutOrder(order)}
-                          className="bg-emerald-600 text-white hover:bg-emerald-700"
-                        >
-                          {checkingOutOrderId === order._id ? "Paying..." : "Pay & Close"}
-                        </Button>
-                      </div>
-                    </div>
-                    {order.status === "OPEN" ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={billingOrderId === order._id}
-                        onClick={() => handleGenerateBill(order._id)}
-                        className="mt-3 w-full border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10"
-                      >
-                        <ReceiptText className="mr-2 h-4 w-4" />
-                        {billingOrderId === order._id ? "Generating bill..." : "Generate Bill"}
-                      </Button>
-                    ) : order.invoiceId ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled
-                        className="mt-3 w-full border-emerald-200 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 opacity-100"
-                      >
-                        <Check className="mr-2 h-4 w-4" />
-                        Invoice already created
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={creatingInvoiceId === order._id}
-                        onClick={() => handleCreateInvoice(order._id)}
-                        className="mt-3 w-full border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10"
-                      >
-                        <ReceiptText className="mr-2 h-4 w-4" />
-                        {creatingInvoiceId === order._id ? "Creating invoice..." : "Create Invoice"}
-                      </Button>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-2 overflow-x-auto">
         <div className="flex space-x-1 bg-white dark:bg-slate-900 rounded-full p-1 border border-gray-100 dark:border-slate-800 shadow-sm min-w-max">

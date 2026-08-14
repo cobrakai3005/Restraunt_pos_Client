@@ -17,6 +17,10 @@ apiClient.interceptors.request.use(
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+      const activeRestId = localStorage.getItem("vinimay_active_restaurant_id");
+      if (activeRestId && config.headers && !config.headers["x-restaurant-id"]) {
+        config.headers["x-restaurant-id"] = activeRestId;
+      }
     }
     return config;
   },

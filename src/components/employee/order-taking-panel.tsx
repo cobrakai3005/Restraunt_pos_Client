@@ -90,6 +90,15 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
   const [activeCategoryId, setActiveCategoryId] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+
+  // Debounce search query to prevent lag on fast typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedTable, setSelectedTable] = useState("");
@@ -353,7 +362,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
     if (!codeStr) return false;
 
-    // Exact match ONLY against shortCode, numericCode, or variant sku
+    // Exact match against shortCode, numericCode, or variant sku
     const targetMenu = menus.find((m) => {
       const sc = m.shortCode?.toLowerCase().trim();
       const nc = m.numericCode?.trim();
@@ -362,6 +371,25 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     });
 
     if (targetMenu) {
+      // Collision prevention: Check if another menu item has a longer code starting with codeStr (e.g. "ccc" starts with "cc")
+      const hasLongerPrefixMatch = menus.some((m) => {
+        if (m._id === targetMenu._id) return false;
+        const sc = m.shortCode?.toLowerCase().trim();
+        const nc = m.numericCode?.trim();
+        const sku = m.variants?.[0]?.sku?.toLowerCase().trim();
+        return (
+          (sc && sc.startsWith(codeStr) && sc.length > codeStr.length) ||
+          (nc && nc.startsWith(codeStr) && nc.length > codeStr.length) ||
+          (sku && sku.startsWith(codeStr) && sku.length > codeStr.length)
+        );
+      });
+
+      // If a longer code exists (e.g. user might be typing "CCC" while "CC" also exists),
+      // DO NOT auto-punch immediately on keystroke. Wait for exact completion or Enter press!
+      if (hasLongerPrefixMatch) {
+        return false;
+      }
+
       const codeDisplay = [
         targetMenu.shortCode ? targetMenu.shortCode.toUpperCase() : null,
         targetMenu.numericCode ? `#${targetMenu.numericCode}` : null,
@@ -382,6 +410,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         });
       }
       setSearchQuery("");
+      setDebouncedSearchQuery("");
       return true;
     }
 
@@ -444,7 +473,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
   const filteredMenus = menus.filter((m) => {
     const matchesCategory = activeCategoryId === "All" || m.categoryId?._id === activeCategoryId;
-    const q = searchQuery.trim().toLowerCase();
+    const q = debouncedSearchQuery.trim().toLowerCase();
     if (!q) return matchesCategory;
 
     // Extract quantity pattern e.g. "3*bn" or "bn*3" -> query is "bn"
@@ -941,11 +970,28 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && searchQuery.trim()) {
                     e.preventDefault();
+                    setDebouncedSearchQuery(searchQuery);
                     handleQuickPunch(searchQuery);
+                  } else if (e.key === "Escape") {
+                    setSearchQuery("");
+                    setDebouncedSearchQuery("");
                   }
                 }}
-                className="pl-12 pr-28 h-11 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-white/60 dark:border-slate-700/60 shadow-sm text-sm font-medium rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:ring-offset-0 transition-all hover:bg-white dark:hover:bg-slate-900"
+                className="pl-12 pr-32 h-11 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-white/60 dark:border-slate-700/60 shadow-sm text-sm font-medium rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:ring-offset-0 transition-all hover:bg-white dark:hover:bg-slate-900"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setDebouncedSearchQuery("");
+                    searchInputRef.current?.focus();
+                  }}
+                  className="absolute right-28 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
               <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:inline-flex h-6 select-none items-center gap-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/80 px-2 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300 shadow-xs">
                 ⚡ Instant Punch
               </kbd>
