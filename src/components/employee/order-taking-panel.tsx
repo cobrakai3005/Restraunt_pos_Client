@@ -7,11 +7,12 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, UserX, UtensilsCrossed, Clock, RotateCcw, X, ChevronRight } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, UserX, UtensilsCrossed, Clock, RotateCcw, X, ChevronRight, Receipt, Layers } from "lucide-react";
 import { employeeService } from "@/services/employee.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { VariantPickerDialog } from "./variant-picker-dialog";
 import { MenuItemCard } from "./menu-item-card";
+import { ReceiptModal } from "./ReceiptModal";
 
 const PRESET_COOKING_NOTES = ["Less Spicy", "No Onion/Garlic", "Extra Spicy", "Jain", "Less Oil", "Takeaway Pack"];
 
@@ -97,8 +98,11 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   const [customerPhone, setCustomerPhone] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isQuickReceiptSubmitting, setIsQuickReceiptSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [pickerMenu, setPickerMenu] = useState<Menu | null>(null);
+  const [receiptOrder, setReceiptOrder] = useState<any | null>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
   const { toast } = useToast();
 
   const isFirstLoadRef = useRef(true);
@@ -571,6 +575,97 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     }
   };
 
+  // ── Quick Receipt for Takeaway ──
+  // Automatically creates a takeaway order, fires KOT to kitchen, generates bill & opens the printable receipt
+  const handleQuickReceipt = async () => {
+    if (cart.length === 0) {
+      return toast({ variant: "destructive", title: "Cart is empty", description: "Please select menu items to print a quick receipt." });
+    }
+    if (selectedTable) {
+      return toast({ variant: "destructive", title: "Table is selected", description: "Quick Receipt is for takeaway orders only. Please unselect the table first." });
+    }
+
+    setIsQuickReceiptSubmitting(true);
+    try {
+      // 1. Group items by station
+      const stationMap = new Map<string, typeof cart>();
+      for (const c of cart) {
+        const station = (c as any).station || "MAIN_KITCHEN";
+        if (!stationMap.has(station)) stationMap.set(station, []);
+        stationMap.get(station)!.push(c);
+      }
+      const kotPayloads = Array.from(stationMap.entries()).map(([station, items]) => ({
+        station,
+        items: items.map(c => ({
+          menuItemId: c._id,
+          variantName: c.selectedVariant.name,
+          quantity: c.quantity,
+          notes: c.notes || undefined,
+        })),
+      }));
+
+      // 2. Automatically create order as TAKEAWAY (no table needed)
+      const orderPayload = {
+        orderType: "TAKEAWAY" as const,
+        customerDetails: customerName || customerPhone ? { name: customerName, phone: customerPhone } : { name: "Takeaway Customer" },
+      };
+
+      const orderRes = await employeeService.createOrder(orderPayload);
+      const targetOrderId = orderRes.data._id;
+
+      // 3. Fire per-station KOTs
+      await Promise.all(kotPayloads.map(kp => employeeService.addKot(targetOrderId, kp)));
+
+      // 4. Generate bill snapshot
+      let billedOrder: any = null;
+      try {
+        const billRes = await employeeService.generateBill(targetOrderId);
+        billedOrder = billRes.data;
+      } catch {
+        const fetched = await employeeService.getOrderById(targetOrderId);
+        billedOrder = fetched.data;
+      }
+
+      // 5. Automatically checkout and settle as PAID (CASH by default)
+      const grandTotal = Number(billedOrder?.financials?.grandTotal || total);
+      let paidOrder = billedOrder;
+      try {
+        const checkoutRes = await employeeService.checkoutOrder(targetOrderId, {
+          payments: [{ method: "CASH", amount: grandTotal }],
+        });
+        paidOrder = checkoutRes.data?.order || checkoutRes.data || billedOrder;
+      } catch (checkoutErr: any) {
+        console.warn("Auto checkout fallback:", checkoutErr.message);
+      }
+
+      // 6. Open printable receipt modal for the finalized PAID order
+      setReceiptOrder(paidOrder);
+      setShowReceiptModal(true);
+
+      toast({
+        title: "⚡ Takeaway Paid & Settle Complete! 🧾",
+        description: `Order #${paidOrder?.orderNumber || targetOrderId.slice(-4)} (₹${grandTotal}) paid & receipt ready.`,
+      });
+
+      // 7. Reset state
+      setCart([]);
+      setCustomerName("");
+      setCustomerPhone("");
+      setSelectedTable("");
+      setOrderType("DINE_IN");
+      fetchActiveOrders();
+      onOrderFired?.();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error processing quick takeaway",
+        description: error.message || "Failed to process quick takeaway order.",
+      });
+    } finally {
+      setIsQuickReceiptSubmitting(false);
+    }
+  };
+
   // UX: One-tap Repeat Last Order — re-fire the last KOT items of an occupied table
   const repeatLastOrder = async (tableId: string, order: Order) => {
     if (!order.kots || order.kots.length === 0) return;
@@ -628,10 +723,10 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   }
 
   return (
-    <div className="relative flex flex-col md:flex-row h-full bg-slate-100/50 dark:bg-slate-900/50 rounded-xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 transition-colors backdrop-blur-xl shadow-2xl">
+    <div className="relative  flex flex-col md:flex-row h-full bg-slate-100/50 dark:bg-slate-900/50 rounded-xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 transition-colors backdrop-blur-xl shadow-2xl">
 
       {/* Tables Sidebar */}
-      <div className="hidden md:flex flex-col w-[240px] lg:w-[270px] border-r border-white/30 dark:border-white/10 bg-white/60 dark:bg-slate-950/60 z-10 shrink-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] transition-colors backdrop-blur-xl">
+      <div className="hidden md:flex flex-col w-[200px]  border-r border-white/30 dark:border-white/10 bg-white/60 dark:bg-slate-950/60 z-10 shrink-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] transition-colors backdrop-blur-xl">
         <div className="p-4 border-b border-white/30 dark:border-slate-800/50 shrink-0 space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
@@ -692,7 +787,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                       setCustomerPhone("");
                     }
                   }}
-                  className={`p-3 rounded-2xl border cursor-pointer transition-all duration-200 flex flex-col justify-between h-24 relative overflow-hidden active:scale-95 group ${
+                  className={`p-3 rounded-2xl border cursor-pointer transition-all duration-200 flex flex-col justify-between h-[70px] relative overflow-hidden active:scale-95 group ${
                     isSelected
                       ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/50 shadow-md'
                       : isOccupied
@@ -760,65 +855,133 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           </div>
         </ScrollArea>
       </div>
+      {/* Categories Vertical Navigation Sidebar */}
+      <div className="hidden lg:flex flex-col w-[175px] border-r border-white/30 dark:border-white/10 bg-white/40 dark:bg-slate-950/40 z-10 shrink-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.05)] transition-colors backdrop-blur-xl">
+        <div className="p-4 border-b border-white/30 dark:border-slate-800/50 shrink-0 flex items-center justify-between">
+          <h2 className="font-extrabold tracking-tight text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+            <Layers className="h-4 w-4 text-blue-500" /> Categories
+          </h2>
+          <span className="text-[10px] font-extrabold bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full">
+            {categories.length + 1}
+          </span>
+        </div>
+        <ScrollArea className="flex-1 p-2.5">
+          <div className="space-y-1.5">
+            <button
+              onClick={() => setActiveCategoryId("All")}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 text-left ${
+                activeCategoryId === "All"
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-[1.02]"
+                  : "text-slate-700 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-800/80 bg-white/30 dark:bg-slate-900/30"
+              }`}
+            >
+              <span className="truncate">All Items</span>
+              <span
+                className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
+                  activeCategoryId === "All"
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-200/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300"
+                }`}
+              >
+                {menus.length}
+              </span>
+            </button>
+            {categories.map((cat) => {
+              const count = categoryCountMap.get(cat._id) || 0;
+              const isActive = activeCategoryId === cat._id;
+              return (
+                <button
+                  key={cat._id}
+                  onClick={() => setActiveCategoryId(cat._id)}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[0.9rem] font-bold transition-all duration-200 text-left ${
+                    isActive
+                      ? "bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-[1.02]"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-800/80 bg-white/30 dark:bg-slate-900/30"
+                  }`}
+                >
+                  <span className="truncate">{cat.name}</span>
+                  {count > 0 && (
+                    <span
+                      className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
+                        isActive
+                          ? "bg-white/20 text-white"
+                          : "bg-slate-200/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      </div>
 
       {/* Menu Section */}
-      <div className="flex-1 flex flex-col p-4 gap-6 overflow-hidden bg-transparent">
+      <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden bg-transparent">
 
-        {/* Search & Categories */}
-        <div className="space-y-2 shrink-0">
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors" />
-            <Input
-              ref={searchInputRef}
-              placeholder="Search or type shortcode e.g. 'bn', '101', '3*bn' (Punches instantly on match)..."
-              value={searchQuery}
-              onChange={(e) => {
-                const val = e.target.value;
-                const punched = tryAutoPunch(val);
-                if (!punched) {
-                  setSearchQuery(val);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && searchQuery.trim()) {
-                  e.preventDefault();
-                  handleQuickPunch(searchQuery);
-                }
-              }}
-              className="pl-12 pr-14 h-11 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border-white/50 dark:border-slate-700/50 shadow-sm text-base font-medium rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:ring-offset-0 transition-all hover:bg-white/90 dark:hover:bg-slate-900/90"
-            />
-            <kbd className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:inline-flex h-6 select-none items-center gap-1 rounded border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/80 px-2 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300">
-              ⚡ Instant
-            </kbd>
-          </div>
+        {/* Search & Active Table / Mode Bar */}
+        <div className="space-y-3 shrink-0">
+          <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+            {/* Search Input with Auto-Punch */}
+            <div className="relative flex-1 group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors" />
+              <Input
+                ref={searchInputRef}
+                placeholder="Search dish or type shortcode e.g. 'bn', '101', '3*bn' (Punches instantly on match)..."
+                value={searchQuery}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const punched = tryAutoPunch(val);
+                  if (!punched) {
+                    setSearchQuery(val);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && searchQuery.trim()) {
+                    e.preventDefault();
+                    handleQuickPunch(searchQuery);
+                  }
+                }}
+                className="pl-12 pr-28 h-11 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-white/60 dark:border-slate-700/60 shadow-sm text-sm font-medium rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:ring-offset-0 transition-all hover:bg-white dark:hover:bg-slate-900"
+              />
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:inline-flex h-6 select-none items-center gap-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/80 px-2 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300 shadow-xs">
+                ⚡ Instant Punch
+              </kbd>
+            </div>
 
-          {/* UX: category tabs with item count badges */}
-          <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar">
-            <Button
-              variant={activeCategoryId === "All" ? "default" : "outline"}
-              className={`rounded-xl whitespace-nowrap px-6 transition-all duration-200 gap-2 ${activeCategoryId === "All" ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20" : "bg-white/60 dark:bg-slate-900/60 border-white/50 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-white/90 dark:hover:bg-slate-800 shadow-sm"}`}
-              onClick={() => setActiveCategoryId("All")}
-            >
-              All Items
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                activeCategoryId === "All" ? "bg-white/20 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-              }`}>{menus.length}</span>
-            </Button>
-            {categories.map(cat => (
-              <Button
-                key={cat._id}
-                variant={activeCategoryId === cat._id ? "default" : "outline"}
-                className={`rounded-xl whitespace-nowrap px-6 transition-all duration-200 gap-2 ${activeCategoryId === cat._id ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20" : "bg-white/60 dark:bg-slate-900/60 border-white/50 dark:border-slate-700/50 text-slate-700 dark:text-slate-300 hover:bg-white/90 dark:hover:bg-slate-800 shadow-sm"}`}
-                onClick={() => setActiveCategoryId(cat._id)}
-              >
-                {cat.name}
-                {categoryCountMap.has(cat._id) && (
-                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                    activeCategoryId === cat._id ? "bg-white/20 text-white" : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
-                  }`}>{categoryCountMap.get(cat._id)}</span>
-                )}
-              </Button>
-            ))}
+            {/* Active Table / Mode Status Chip */}
+            <div className="flex items-center gap-2 shrink-0">
+              {orderType === "TAKEAWAY" ? (
+                <div className="flex items-center gap-2 px-3.5 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-extrabold shadow-sm">
+                  <span>🛵 Takeaway Mode</span>
+                  <button
+                    onClick={() => setOrderType("DINE_IN")}
+                    className="ml-1 text-[10px] underline hover:text-emerald-700 dark:hover:text-emerald-300"
+                  >
+                    Switch to Dine-In
+                  </button>
+                </div>
+              ) : selectedTable ? (
+                <div className="flex items-center gap-2 px-3.5 h-11 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 text-xs font-extrabold shadow-sm">
+                  <span>
+                    🍽️ Table {tables.find((t) => t._id === selectedTable)?.tableNumber || selectedTable}
+                  </span>
+                  <button
+                    onClick={() => setSelectedTable("")}
+                    className="p-1 hover:bg-blue-500/20 rounded-md text-blue-600 dark:text-blue-400 transition-colors"
+                    title="Unselect table"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 h-11 rounded-2xl bg-slate-200/50 dark:bg-slate-800/50 border border-slate-300/40 dark:border-slate-700/40 text-slate-500 dark:text-slate-400 text-xs font-medium">
+                  <span>👈 Select Table on Left</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* UX: Recently Added strip */}
@@ -827,7 +990,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
               <span className="flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 dark:text-slate-500 shrink-0">
                 <Clock className="h-3 w-3" /> Recent
               </span>
-              {recentlyAdded.map(item => (
+              {recentlyAdded.map((item) => (
                 <button
                   key={item._id}
                   onClick={() => handleMenuClick(item)}
@@ -894,12 +1057,31 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           </button>
         )}
 
+        {/* Quick Receipt FAB (Takeaway & Print) */}
+        <button
+          onClick={handleQuickReceipt}
+          disabled={cart.length === 0 || !!selectedTable || isSubmitting || isQuickReceiptSubmitting}
+          title={selectedTable ? "Quick Receipt is for Takeaway only (unselect table to use)" : "Create Takeaway Order & Print Receipt Instantly"}
+          className={`flex items-center gap-2 px-4 h-14 rounded-2xl shadow-2xl font-extrabold text-white transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
+            cart.length > 0 && !selectedTable && !isSubmitting && !isQuickReceiptSubmitting
+              ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/40 ring-2 ring-emerald-400/50'
+              : 'bg-slate-600/70 shadow-slate-900/20'
+          }`}
+        >
+          {isQuickReceiptSubmitting ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Receipt className="h-5 w-5" />
+          )}
+          <span className="text-sm">{isQuickReceiptSubmitting ? 'Printing...' : 'Quick Receipt'}</span>
+        </button>
+
         {/* Fire to Kitchen FAB */}
         <button
           onClick={async () => { await placeOrder(); }}
-          disabled={cart.length === 0 || isSubmitting}
+          disabled={cart.length === 0 || !selectedTable|| isSubmitting || isQuickReceiptSubmitting}
           className={`flex items-center gap-2 px-4 h-14 rounded-2xl shadow-2xl font-extrabold text-white transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
-            cart.length > 0 && !isSubmitting
+            cart.length > 0 && !isSubmitting && !isQuickReceiptSubmitting
               ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/40'
               : 'bg-slate-600/70 shadow-slate-900/20'
           }`}
@@ -1225,17 +1407,35 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
               <span className="text-blue-600 dark:text-blue-400">₹{total.toFixed(2)}</span>
             </div>
           </div>
-          <Button
-            className="w-full h-14 text-lg font-extrabold tracking-wide shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.23)] hover:bg-[rgba(37,99,235,0.9)] bg-blue-600 text-white rounded-xl active:scale-[0.98] transition-all duration-200"
-            disabled={cart.length === 0 || isSubmitting}
-            onClick={async () => { await placeOrder(); if (cart.length === 0) setCartOpen(false); }}
-          >
-            {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin inline" /> : null}
-            {isSubmitting ? "Firing Order..." : "FIRE TO KITCHEN"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              className="flex-1 h-14 text-sm font-extrabold tracking-wide shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl active:scale-[0.98] transition-all duration-200"
+              disabled={cart.length === 0 || selectedTable !== "" || isSubmitting || isQuickReceiptSubmitting}
+              onClick={async () => {
+                await handleQuickReceipt();
+                setCartOpen(false);
+              }}
+            >
+              {isQuickReceiptSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin inline" /> : <Receipt className="mr-2 h-5 w-5 inline" />}
+              {isQuickReceiptSubmitting ? "Printing..." : "QUICK RECEIPT"}
+            </Button>
+            <Button
+              className="flex-1 h-14 text-sm font-extrabold tracking-wide shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.23)] hover:bg-[rgba(37,99,235,0.9)] bg-blue-600 text-white rounded-xl active:scale-[0.98] transition-all duration-200"
+              disabled={cart.length === 0 || isSubmitting || isQuickReceiptSubmitting}
+              onClick={async () => { await placeOrder(); if (cart.length === 0) setCartOpen(false); }}
+            >
+              {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin inline" /> : null}
+              {isSubmitting ? "Firing..." : "FIRE TO KITCHEN"}
+            </Button>
+          </div>
         </div>
       </div>
 
+      <ReceiptModal
+        isOpen={showReceiptModal}
+        onClose={() => setShowReceiptModal(false)}
+        order={receiptOrder}
+      />
 
       <VariantPickerDialog
         open={!!pickerMenu}

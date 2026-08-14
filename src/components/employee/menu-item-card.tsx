@@ -104,7 +104,7 @@ export function MenuItemCard({
           {categoryName || "Uncategorized"}
         </span>
 
-        <div className="mt-auto flex flex-col items-center justify-between pt-2">
+        <div className="mt-2 flex flex-col items-center justify-between">
           <span className="font-mono text-lg font-bold tracking-tight text-blue-600 dark:text-blue-400">
             ₹{price.toFixed(2)}
           </span>
