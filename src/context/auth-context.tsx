@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await authService.logout();
     setUser(null);
     
-    if (role === "SUPER_ADMIN") {
+    if (role === "MASTER_ADMIN") {
       window.location.href = "/admin-login";
     } else if (role === "CLIENT") {
       window.location.href = "/client-login";

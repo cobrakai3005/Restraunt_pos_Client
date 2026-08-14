@@ -16,7 +16,7 @@ import {
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FileText, LayoutGrid, Package, Settings, Users, Building2, Store, LogOut, BarChart3, ChefHat, Utensils, ArrowLeftRight, BookOpen, ChevronRight, ClipboardList, Receipt, Clock, Sparkles } from "lucide-react";
+import { FileText,Package, Settings, Users, Building2, Store, LogOut, BarChart3, ChefHat, Utensils, ArrowLeftRight, BookOpen, ChevronRight, ClipboardList, Receipt, Clock, Sparkles } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 const adminNavItems = [
