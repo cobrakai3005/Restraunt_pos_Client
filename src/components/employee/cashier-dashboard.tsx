@@ -3,29 +3,38 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { Calculator, CheckCircle2, Receipt, Search, CreditCard, Banknote, Loader2, UtensilsCrossed, Flame, Smartphone, RotateCcw, Split, Zap, User, Phone, Percent, Tag } from "lucide-react";
+import { Calculator, CheckCircle2, Receipt, Search, CreditCard, Banknote, Loader2, UtensilsCrossed, Flame, Smartphone, RotateCcw, Split, Zap, User, Phone, Percent, Tag, Menu, Printer, Lock, Gift, Sparkles, Star, Heart, Briefcase, UserPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { User as AuthUser } from "@/services/auth.service";
 import { employeeService } from "@/services/employee.service";
+import { customerService, Customer } from "@/services/customer.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { OrderTakingPanel } from "./order-taking-panel";
 import { CashierPickupPanel } from "./cashier-pickup-panel";
+import { ComplimentaryItemDialog } from "./complimentary-item-dialog";
+import { CreateCustomerDialog } from "./create-customer-dialog";
 
 interface DashboardProps {
   user: AuthUser;
+  onOpenDrawer?: () => void;
 }
 
 interface KotItem {
   _id: string;
   menuItemId: { name: string; station?: string; imageUrl?: string };
+  variantName?: string;
   variantPrice: number;
   quantity: number;
   itemStatus: string;
   cgstPercent: number;
-  sgstPercent: number
+  sgstPercent: number;
+  isComplimentary?: boolean;
+  complimentaryReason?: string;
+  complimentaryBy?: any;
+  complimentaryAt?: string;
 }
 
 interface Order {
@@ -43,9 +52,24 @@ interface Order {
     totalSgst?: number;
     packagingCharge?: number;
     discount?: number;
+    discountType?: "NONE" | "PERCENTAGE" | "FIXED" | "MANUAL";
+    discountValue?: number;
+    discountReason?: string;
+    discountAppliedBy?: { contactName: string; role: string };
     grandTotal: number;
   };
-  customerDetails?: { name?: string; phone?: string };
+  customerDetails?: {
+    name?: string;
+    phone?: string;
+    customerId?: {
+      _id: string;
+      name: string;
+      phone?: string;
+      tags?: "NORMAL" | "FRIEND" | "VIP" | "STAFF";
+      discountType?: "NONE" | "PERCENTAGE" | "FIXED";
+      discountValue?: number;
+    } | string | null;
+  };
 }
 
 import { ReceiptModal } from "./ReceiptModal";
@@ -79,7 +103,7 @@ const TABS: { id: Mode; label: string; description: string; icon: React.ElementT
   },
 ];
 
-export function CashierDashboard({ user }: DashboardProps) {
+export function CashierDashboard({ user, onOpenDrawer }: DashboardProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -100,11 +124,96 @@ export function CashierDashboard({ user }: DashboardProps) {
   const [billingTab, setBillingTab] = useState<"bill" | "customer" | "discount">("bill");
   const [custPhone, setCustPhone] = useState("");
   const [custName, setCustName] = useState("");
+  const [matchedCustomer, setMatchedCustomer] = useState<Customer | null>(null);
+  const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
+  const [showCreateCustomerDialog, setShowCreateCustomerDialog] = useState(false);
   const [isSavingCustomer, setIsSavingCustomer] = useState(false);
 
   // ── Discount Tab state ──
   const [discountAmount, setDiscountAmount] = useState("");
   const [isSavingDiscount, setIsSavingDiscount] = useState(false);
+
+  // ── Complimentary (FOC) state ──
+  const [complimentaryItem, setComplimentaryItem] = useState<KotItem | null>(null);
+  const [showComplimentaryDialog, setShowComplimentaryDialog] = useState(false);
+
+  // Sync state on order change
+  useEffect(() => {
+    if (selectedOrder) {
+      setCustName(selectedOrder.customerDetails?.name || "");
+      const ph = selectedOrder.customerDetails?.phone || "";
+      setCustPhone(ph);
+      if (selectedOrder.customerDetails?.customerId && typeof selectedOrder.customerDetails.customerId === "object") {
+        setMatchedCustomer(selectedOrder.customerDetails.customerId as any);
+      } else if (ph.trim().length >= 4) {
+        customerService.searchCustomerByPhone(ph.trim()).then(res => {
+          if (res?.data) setMatchedCustomer(res.data);
+        }).catch(() => {});
+      } else {
+        setMatchedCustomer(null);
+      }
+      if (selectedOrder.financials?.discount) {
+        setDiscountAmount(String(selectedOrder.financials.discount));
+      } else {
+        setDiscountAmount("");
+      }
+    } else {
+      setCustName("");
+      setCustPhone("");
+      setMatchedCustomer(null);
+      setDiscountAmount("");
+    }
+  }, [selectedOrder?._id]);
+
+  // Debounced phone search
+  useEffect(() => {
+    if (!custPhone || custPhone.trim().length < 3) {
+      if (!selectedOrder?.customerDetails?.customerId) {
+        setMatchedCustomer(null);
+      }
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        setIsSearchingCustomer(true);
+        const res = await customerService.searchCustomerByPhone(custPhone.trim());
+        if (res?.data) {
+          setMatchedCustomer(res.data);
+          if (!custName.trim() || custName === "Walk-in Guest") {
+            setCustName(res.data.name);
+          }
+        } else {
+          setMatchedCustomer(null);
+        }
+      } catch {
+        setMatchedCustomer(null);
+      } finally {
+        setIsSearchingCustomer(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [custPhone]);
+
+  const handleToggleComplimentary = async (itemId: string, isComplimentary: boolean, complimentaryReason?: string) => {
+    if (!selectedOrder) return;
+    try {
+      const response = await employeeService.toggleComplimentaryItem(selectedOrder._id, itemId, {
+        isComplimentary,
+        complimentaryReason,
+      });
+      toast({
+        title: isComplimentary ? "Item marked Complimentary 🎁" : "Complimentary status removed",
+        description: isComplimentary ? `Reason: ${complimentaryReason || ""}` : "Item returned to standard billing."
+      });
+      if (response?.data) {
+        setSelectedOrder(response.data);
+      }
+      await fetchOrders();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error?.message || "Failed to update item" });
+      throw error;
+    }
+  };
 
   const getOrderGrandTotal = (order: Order | null) => {
     if (!order) return 0;
@@ -112,7 +221,7 @@ export function CashierDashboard({ user }: DashboardProps) {
     if (order.financials?.grandTotal && order.financials.grandTotal > 0) {
       return order.financials.grandTotal;
     }
-    const sub = order.kots?.flatMap(k => k.items).reduce((s, i) => s + (i.variantPrice || 0) * i.quantity, 0) || 0;
+    const sub = order.kots?.flatMap(k => k.items).reduce((s, i) => s + (i.isComplimentary ? 0 : (i.variantPrice || 0) * i.quantity), 0) || 0;
     return Math.max(0, Math.round(sub * 1.05 - discount));
   };
 
@@ -157,56 +266,75 @@ export function CashierDashboard({ user }: DashboardProps) {
       socket.on("table_status_change", debouncedFetchOrders);
       socket.on("order_billed", debouncedFetchOrders);
       socket.on("item_status_update", debouncedFetchOrders);
+      socket.on("item_complimentary_updated", debouncedFetchOrders);
     }
+
     return () => {
-      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
       if (socket) {
         socket.off("table_status_change", debouncedFetchOrders);
         socket.off("order_billed", debouncedFetchOrders);
         socket.off("item_status_update", debouncedFetchOrders);
+        socket.off("item_complimentary_updated", debouncedFetchOrders);
       }
-      disconnectSocket();
+      if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]);
+  }, [debouncedFetchOrders]);
 
-  // Keyboard Shortcuts (F2: Search, F4: Discount Tab, Esc: Close Modals)
+  // Global Keydown Listeners for Pos Terminal Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "F2" || (e.ctrlKey && e.key.toLowerCase() === "k")) {
+      if (e.key === "F2") {
         e.preventDefault();
-        const input = document.getElementById("cashier-search-input");
-        if (input) input.focus();
-      }
-      if (e.key === "F4") {
-        e.preventDefault();
-        setBillingTab("discount");
-        if (selectedOrder) {
-          setDiscountAmount(String(selectedOrder.financials?.discount ?? ""));
+        const searchInput = document.getElementById("cashier-search-input") as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
         }
-      }
-      if (e.key === "Escape") {
-        if (showReceipt) setShowReceipt(false);
-        if (showSplitDialog) setShowSplitDialog(false);
+      } else if (e.key === "F8") {
+        e.preventDefault();
+        setPaymentMethod("CASH");
+      } else if (e.key === "F9") {
+        e.preventDefault();
+        setPaymentMethod("UPI");
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showReceipt, showSplitDialog, selectedOrder]);
+  }, []);
+
+  // When selected order changes, initialize customer form
+  useEffect(() => {
+    if (selectedOrder?.customerDetails) {
+      setCustPhone(selectedOrder.customerDetails.phone || "");
+      setCustName(selectedOrder.customerDetails.name || "");
+    } else {
+      setCustPhone("");
+      setCustName("");
+    }
+    if (selectedOrder?.financials?.discount !== undefined) {
+      setDiscountAmount(selectedOrder.financials.discount.toString());
+    } else {
+      setDiscountAmount("0");
+    }
+    setBillingTab("bill");
+  }, [selectedOrder]);
 
   const handleGenerateBill = async (orderId: string) => {
     try {
       setIsProcessing(true);
-      const response = await employeeService.generateBill(orderId);
-      if (response.success) {
-        toast({ title: "Bill Generated successfully" });
-        await fetchOrders();
-        // Use fresh order data so any pre-applied discount appears on receipt
-        const freshRes = await employeeService.getOrderById(orderId);
-        setCompletedReceiptOrder(freshRes.data || selectedOrder);
+      const res = await employeeService.generateBill(orderId);
+      toast({
+        title: "Bill Generated 🧾",
+        description: `Order #${selectedOrder?._id?.slice(-4)} is now locked for payment.`,
+      });
+      const targetOrder = res?.data || selectedOrder;
+      if (targetOrder) {
+        setSelectedOrder(targetOrder);
+        setCompletedReceiptOrder(targetOrder);
         setShowReceipt(true);
       }
+      await fetchOrders();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Billing Error", description: error.message });
     } finally {
@@ -223,7 +351,6 @@ export function CashierDashboard({ user }: DashboardProps) {
         payments: [{ method: paymentMethod, amount: grandTotal }],
       });
       toast({ title: "Payment Successful 🎉", description: "Order settled and table released." });
-      // Use the order returned by the server — it has the final discounted financials
       setCompletedReceiptOrder(result.data?.order || selectedOrder);
       setShowReceipt(true);
       setSelectedOrder(null);
@@ -281,7 +408,6 @@ export function CashierDashboard({ user }: DashboardProps) {
       setIsProcessing(true);
       let targetOrder = selectedOrder;
 
-      // 1. If UNBILLED, generate bill first
       if (selectedOrder.status === "OPEN") {
         const billRes = await employeeService.generateBill(orderId);
         if (billRes?.data) {
@@ -289,8 +415,7 @@ export function CashierDashboard({ user }: DashboardProps) {
         }
       }
 
-      // 2. Checkout with CASH
-      const grandTotal = targetOrder.financials?.grandTotal || 0;
+      const grandTotal = targetOrder.financials?.grandTotal || getOrderGrandTotal(targetOrder);
       const checkoutResult = await employeeService.checkoutOrder(orderId, {
         payments: [{ method: "CASH", amount: grandTotal }]
       });
@@ -306,6 +431,8 @@ export function CashierDashboard({ user }: DashboardProps) {
       setIsProcessing(false);
     }
   };
+
+  const handleQuickCash = handleQuickCashAndPrint;
 
   const handleReopenOrder = async (orderId: string) => {
     try {
@@ -325,13 +452,29 @@ export function CashierDashboard({ user }: DashboardProps) {
 
   const handleUpdateCustomer = async () => {
     if (!selectedOrder) return;
+    if (selectedOrder.status === "BILLED" || selectedOrder.status === "PAID") {
+      toast({
+        variant: "destructive",
+        title: "Customer Details Locked 🔒",
+        description: "Customer details cannot be altered after generating the bill/receipt.",
+      });
+      return;
+    }
     try {
       setIsSavingCustomer(true);
-      const payload: { name?: string; phone?: string } = {};
-      if (custName.trim()) payload.name = custName.trim();
-      if (custPhone.trim()) payload.phone = custPhone.trim();
-      await employeeService.updateCustomer(selectedOrder._id, payload);
-      toast({ title: "Customer saved ✅", description: "Name and phone added to order." });
+      const payload: { name?: string; phone?: string; customerId?: string | null } = {
+        name: custName.trim(),
+        phone: custPhone.trim(),
+        customerId: matchedCustomer?._id || null,
+      };
+      const response = await employeeService.updateCustomer(selectedOrder._id, payload);
+      toast({
+        title: matchedCustomer ? `Linked to ${matchedCustomer.tags || "Customer"} Profile ✅` : "Customer saved ✅",
+        description: matchedCustomer ? `${matchedCustomer.name} (${matchedCustomer.tags || "NORMAL"}) linked to order.` : "Name and phone added to order."
+      });
+      if (response?.data) {
+        setSelectedOrder(response.data);
+      }
       await fetchOrders();
       setBillingTab("bill");
     } catch (error: any) {
@@ -341,14 +484,86 @@ export function CashierDashboard({ user }: DashboardProps) {
     }
   };
 
-  const handleUpdateDiscount = async () => {
+  const handleApplyCustomerDiscount = async (customer: Customer) => {
     if (!selectedOrder) return;
+    if (selectedOrder.status === "BILLED" || selectedOrder.status === "PAID") {
+      toast({
+        variant: "destructive",
+        title: "Discount Locked 🔒",
+        description: "Discounts cannot be altered after generating the bill/receipt.",
+      });
+      return;
+    }
+    if (selectedOrder.status === "BILLED" || selectedOrder.status === "PAID") {
+      toast({
+        variant: "destructive",
+        title: "Discount Locked 🔒",
+        description: "Discounts cannot be added or changed after generating the bill/receipt."
+      });
+      return;
+    }
+
+    if (!customer.discountType || customer.discountType === "NONE" || !customer.discountValue) {
+      toast({ variant: "destructive", title: "No Discount Configured", description: "This customer profile does not have a configured discount." });
+      return;
+    }
+
     try {
       setIsSavingDiscount(true);
-      const disc = parseFloat(discountAmount);
+      const reason = `${customer.tags || "Customer"} Discount (${customer.discountType === "PERCENTAGE" ? `${customer.discountValue}%` : `₹${customer.discountValue}`})`;
+      const response = await employeeService.updateCustomer(selectedOrder._id, {
+        customerId: customer._id,
+        name: customer.name,
+        phone: customer.phone,
+        discountType: customer.discountType,
+        discountValue: customer.discountValue,
+        discountReason: reason,
+      });
+
+      toast({
+        title: `${customer.tags || "Customer"} Discount Applied! 🎁`,
+        description: `${reason} applied to order #${selectedOrder._id.slice(-4)}.`
+      });
+
+      if (response?.data) {
+        setSelectedOrder(response.data);
+        if (response.data.financials?.discount) {
+          setDiscountAmount(String(response.data.financials.discount));
+        }
+      }
+      await fetchOrders();
+      setBillingTab("bill");
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Discount Error", description: error.message });
+    } finally {
+      setIsSavingDiscount(false);
+    }
+  };
+
+  const handleUpdateDiscount = async (customDisc?: number) => {
+    if (!selectedOrder) return;
+    if (selectedOrder.status === "BILLED" || selectedOrder.status === "PAID") {
+      toast({
+        variant: "destructive",
+        title: "Discount Locked 🔒",
+        description: "Discounts cannot be added or changed after generating the bill/receipt."
+      });
+      return;
+    }
+    try {
+      setIsSavingDiscount(true);
+      const disc = customDisc !== undefined ? customDisc : parseFloat(discountAmount);
       if (isNaN(disc) || disc < 0) return toast({ variant: "destructive", title: "Invalid amount" });
-      const response = await employeeService.updateCustomer(selectedOrder._id, { discount: disc });
-      toast({ title: "Discount applied ✅", description: `₹${disc.toFixed(2)} discount saved.` });
+      const response = await employeeService.updateCustomer(selectedOrder._id, {
+        discount: disc,
+        discountType: disc > 0 ? "MANUAL" : "NONE",
+        discountValue: disc,
+        discountReason: disc > 0 ? "Manual Discount" : "",
+      });
+      toast({
+        title: disc > 0 ? "Discount applied ✅" : "Discount removed 🗑️",
+        description: disc > 0 ? `₹${disc.toFixed(2)} discount saved.` : "Order returned to standard total."
+      });
       if (response?.data) {
         setSelectedOrder(response.data);
       }
@@ -383,7 +598,7 @@ export function CashierDashboard({ user }: DashboardProps) {
 
   if (isLoading) {
     return (
-      <div className="flex h-[calc(100vh-100px)] items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
         <div className="flex flex-col items-center gap-3 text-slate-500 dark:text-slate-400">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-500" />
           <p className="font-medium">Loading Cashier Terminal...</p>
@@ -393,10 +608,21 @@ export function CashierDashboard({ user }: DashboardProps) {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-60px)] bg-slate-50 dark:bg-slate-950 -mx-8 -my-8 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 transition-colors">
+    <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden transition-colors">
       {/* Professional Segmented Tab Bar */}
-      <div className="shrink-0 z-20 px-4 py-1 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      <div className="shrink-0 z-20 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
+          {onOpenDrawer && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onOpenDrawer}
+              title="Open Restaurant POS Menu & Settings"
+              className="h-10 w-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400 shadow-sm shrink-0"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          )}
           <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-slate-800 to-slate-950 dark:from-slate-700 dark:to-slate-800 text-white shadow-md">
             <Calculator className="h-5 w-5" />
           </div>
@@ -409,34 +635,56 @@ export function CashierDashboard({ user }: DashboardProps) {
         </div>
 
         {/* Segmented control */}
-        <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-950/80 border border-slate-800 shadow-inner">
-          {TABS.map(tab => {
+
+
+        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/90 p-1.5 shadow-sm backdrop-blur-sm transition-colors dark:border-slate-800 dark:bg-slate-950/80 dark:shadow-inner">
+          {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = mode === tab.id;
-            const badge = tab.id === "kitchen" ? readyItemCount : tab.id === "billing" ? pendingCount : 0;
+
+            const badge =
+              tab.id === "kitchen"
+                ? readyItemCount
+                : tab.id === "billing"
+                  ? pendingCount
+                  : 0;
+
             return (
               <Button
                 key={tab.id}
                 size="sm"
                 onClick={() => setMode(tab.id)}
-                className={`relative rounded-xl h-11 px-4 md:px-6 text-sm font-extrabold transition-all duration-200 ${isActive
-                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/40 ring-2 ring-blue-400 ring-offset-2 ring-offset-slate-950 scale-105"
-                  : "bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/80 border border-slate-800/60"
+                className={`relative h-11 rounded-xl px-4 text-sm font-extrabold transition-all duration-200 md:px-6 ${isActive
+                    ? "scale-105 bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-950"
+                    : "border border-slate-200 bg-slate-100/80 text-slate-600 hover:bg-slate-200 hover:text-slate-900 dark:border-slate-800/60 dark:bg-slate-900/60 dark:text-slate-400 dark:hover:bg-slate-800/80 dark:hover:text-white"
                   }`}
               >
-                <Icon className={`mr-2 h-4 w-4 ${isActive ? "text-white" : "text-slate-400"}`} />
+                <Icon
+                  className={`mr-2 h-4 w-4 ${isActive
+                      ? "text-white"
+                      : "text-slate-500 dark:text-slate-400"
+                    }`}
+                />
+
                 <span className="hidden md:inline">{tab.label}</span>
-                <span className="md:hidden">{tab.label.split(" ")[0]}</span>
+                <span className="md:hidden">
+                  {tab.label.split(" ")[0]}
+                </span>
+
                 {badge > 0 && (
-                  <span className={`ml-2.5 px-2 py-0.5 rounded-full text-xs font-black flex items-center justify-center ${isActive ? "bg-white text-blue-700 shadow-sm" : "bg-orange-500 text-white"
-                    }`}>
+                  <span
+                    className={`ml-2.5 flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-black ${isActive
+                        ? "bg-white text-blue-700 shadow-sm"
+                        : "bg-orange-500 text-white shadow-sm"
+                      }`}
+                  >
                     {badge}
                   </span>
                 )}
 
-                {/* Active Underline Pill Indicator */}
+                {/* Active Underline */}
                 {isActive && (
-                  <span className="absolute -bottom-1 left-4 right-4 h-1 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse" />
+                  <span className="absolute -bottom-1 left-4 right-4 h-1 animate-pulse rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
                 )}
               </Button>
             );
@@ -542,158 +790,374 @@ export function CashierDashboard({ user }: DashboardProps) {
                 </div>
                 {/* Sub-tabs: Bill | Customer | Discount */}
                 <div className="px-6 flex gap-1 pb-0">
-                  {([
-                    { id: "bill", label: "Bill", icon: Receipt, dot: false },
-                    { id: "customer", label: "Customer", icon: User, dot: !!(selectedOrder.customerDetails?.name || selectedOrder.customerDetails?.phone) },
-                    { id: "discount", label: "Discount", icon: Percent, dot: (selectedOrder.financials?.discount ?? 0) > 0 },
-                  ] as const).map((t) => {
-                    const Icon = t.icon;
-                    const isActive = billingTab === t.id;
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => {
-                          setBillingTab(t.id);
-                          if (t.id === "customer") {
-                            setCustPhone(selectedOrder.customerDetails?.phone || "");
-                            setCustName(selectedOrder.customerDetails?.name || "");
-                          }
-                          if (t.id === "discount") {
-                            setDiscountAmount(String(selectedOrder.financials?.discount ?? ""));
-                          }
-                        }}
-                        className={`px-4 py-2 text-[11px] font-extrabold uppercase tracking-wider border-b-2 transition-all ${isActive
-                          ? t.id === "customer"
-                            ? "border-violet-500 text-violet-600 dark:text-violet-400"
-                            : t.id === "discount"
-                              ? "border-emerald-500 text-emerald-600 dark:text-emerald-400"
-                              : "border-blue-500 text-blue-600 dark:text-blue-400"
-                          : "border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                          }`}
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <Icon className="h-3.5 w-3.5" /> {t.label}
-                          {t.dot && <span className={`ml-0.5 w-1.5 h-1.5 rounded-full inline-block ${t.id === "discount" ? "bg-emerald-500" : "bg-violet-500"}`} />}
-                        </span>
-                      </button>
-                    );
-                  })}
+                  {(() => {
+                    const isBillLocked = selectedOrder.status === 'BILLED' || selectedOrder.status === 'PAID';
+                    return ([
+                      { id: "bill", label: "Bill", icon: Receipt, dot: false },
+                      {
+                        id: "customer",
+                        label: isBillLocked ? "Customer (Locked)" : "Customer",
+                        icon: isBillLocked ? Lock : User,
+                        dot: !!(selectedOrder.customerDetails?.name || selectedOrder.customerDetails?.phone)
+                      },
+                      {
+                        id: "discount",
+                        label: isBillLocked ? "Discount (Locked)" : "Discount",
+                        icon: isBillLocked ? Lock : Percent,
+                        dot: (selectedOrder.financials?.discount ?? 0) > 0
+                      },
+                    ] as const).map((t) => {
+                      const Icon = t.icon;
+                      const isActive = billingTab === t.id;
+                      const isLockedTab = (t.id === "customer" || t.id === "discount") && isBillLocked;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setBillingTab(t.id);
+                            if (t.id === "customer") {
+                              setCustPhone(selectedOrder.customerDetails?.phone || "");
+                              setCustName(selectedOrder.customerDetails?.name || "");
+                            }
+                            if (t.id === "discount") {
+                              setDiscountAmount(String(selectedOrder.financials?.discount ?? ""));
+                            }
+                          }}
+                          className={`px-4 py-2 text-[11px] font-extrabold uppercase tracking-wider border-b-2 transition-all ${isActive
+                            ? t.id === "customer"
+                              ? "border-violet-500 text-violet-600 dark:text-violet-400"
+                              : t.id === "discount"
+                                ? "border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                                : "border-blue-500 text-blue-600 dark:text-blue-400"
+                            : "border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                            }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Icon className={`h-3.5 w-3.5 ${isLockedTab ? "text-amber-500" : ""}`} /> {t.label}
+                            {t.dot && <span className={`ml-0.5 w-1.5 h-1.5 rounded-full inline-block ${t.id === "discount" ? "bg-emerald-500" : "bg-violet-500"}`} />}
+                          </span>
+                        </button>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 
               {/* ── Customer Tab Content ── */}
+              {billingTab === "customer" && (() => {
+                const isCustomerLocked = selectedOrder.status === "BILLED" || selectedOrder.status === "PAID";
+                return (
+                  <div className="flex-1 overflow-y-auto min-h-0">
+                    <div className="p-5 max-w-lg mx-auto space-y-5">
 
+                      {/* Locked alert banner */}
+                      {isCustomerLocked ? (
+                        <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700/80 p-4 flex items-start gap-3 shadow-xs">
+                          <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <h4 className="text-xs font-black text-amber-900 dark:text-amber-200 uppercase tracking-wide">
+                              Customer Details Locked (Bill Generated)
+                            </h4>
+                            <p className="text-xs text-amber-800 dark:text-amber-300 mt-1 leading-relaxed">
+                              A bill/receipt has already been generated for this order. Customer details and VIP/Friend discounts cannot be altered after generating the bill. Re-open the order to make changes.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Info banner */
+                        <div className="rounded-2xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 px-4 py-3 flex items-start gap-3">
+                          <User className="h-4 w-4 mt-0.5 text-violet-500 shrink-0" />
+                          <p className="text-xs text-violet-700 dark:text-violet-300 font-medium leading-relaxed">
+                            Search registered <strong>VIP / Friend / Staff</strong> profiles by phone number, or enter a walk-in guest name. Profile discount rules will be detected automatically.
+                          </p>
+                        </div>
+                      )}
 
-              {billingTab === "customer" && (
-                <div className="flex-1 overflow-y-auto min-h-0">
-                  <div className="p-5 max-w-lg mx-auto space-y-5">
+                      {/* Phone Search */}
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" /> Customer Phone</span>
+                          {isSearchingCustomer && (
+                            <span className="text-[10px] text-blue-600 dark:text-blue-400 flex items-center gap-1 font-bold lowercase">
+                              <Loader2 className="h-3 w-3 animate-spin" /> searching...
+                            </span>
+                          )}
+                        </label>
+                        <div className="relative">
+                          <Input
+                            id="cust-phone"
+                            type="tel"
+                            inputMode="numeric"
+                            maxLength={10}
+                            disabled={isCustomerLocked}
+                            placeholder={isCustomerLocked ? "Customer phone (locked)" : "Enter 10-digit mobile number"}
+                            value={custPhone}
+                            onChange={(e) => setCustPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                            className={`h-11 pl-4 font-bold text-sm rounded-xl ${
+                              isCustomerLocked
+                                ? "bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed"
+                                : "bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                            }`}
+                          />
+                          {custPhone.length === 10 && !isCustomerLocked && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 text-xs font-bold">✓</span>
+                          )}
+                        </div>
+                      </div>
 
-                    {/* Info banner */}
-                    <div className="rounded-2xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 px-4 py-3 flex items-start gap-3">
-                      <User className="h-4 w-4 mt-0.5 text-violet-500 shrink-0" />
-                      <p className="text-xs text-violet-700 dark:text-violet-300 font-medium leading-relaxed">
-                        Enter the customer's phone number to identify them, optionally set their name, and apply a flat discount. The grand total updates automatically.
-                      </p>
-                    </div>
+                      {/* Matched Customer Profile Card */}
+                      {matchedCustomer ? (
+                        <div className="rounded-2xl border border-violet-200 dark:border-violet-800/80 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-2 rounded-xl bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 font-black text-sm">
+                                {matchedCustomer.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <h4 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                                  {matchedCustomer.name}
+                                </h4>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                  {matchedCustomer.phone || "No phone"} {matchedCustomer.email ? `• ${matchedCustomer.email}` : ""}
+                                </p>
+                              </div>
+                            </div>
 
-                    {/* Phone */}
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                        <Phone className="h-3.5 w-3.5" /> Phone Number
-                      </label>
-                      <div className="relative">
+                            {/* Tag Badge */}
+                            <div>
+                              {matchedCustomer.tags === "FRIEND" && (
+                                <span className="px-2.5 py-1 rounded-full text-[11px] font-black uppercase bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1 shadow-2xs">
+                                  <Heart className="w-3 h-3 text-emerald-600 fill-emerald-600" /> FRIEND
+                                </span>
+                              )}
+                              {matchedCustomer.tags === "VIP" && (
+                                <span className="px-2.5 py-1 rounded-full text-[11px] font-black uppercase bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 flex items-center gap-1 shadow-2xs">
+                                  <Star className="w-3 h-3 text-purple-600 fill-purple-600" /> VIP
+                                </span>
+                              )}
+                              {matchedCustomer.tags === "STAFF" && (
+                                <span className="px-2.5 py-1 rounded-full text-[11px] font-black uppercase bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 flex items-center gap-1 shadow-2xs">
+                                  <Briefcase className="w-3 h-3 text-amber-600" /> STAFF
+                                </span>
+                              )}
+                              {(!matchedCustomer.tags || matchedCustomer.tags === "NORMAL") && (
+                                <span className="px-2.5 py-1 rounded-full text-[11px] font-black uppercase bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 flex items-center gap-1">
+                                  <User className="w-3 h-3" /> REGULAR
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {matchedCustomer.notes && (
+                            <p className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 px-3 py-1.5 rounded-lg italic">
+                              "{matchedCustomer.notes}"
+                            </p>
+                          )}
+
+                          {/* Available Discount Banner */}
+                          {matchedCustomer.discountType && matchedCustomer.discountType !== "NONE" && (matchedCustomer.discountValue || 0) > 0 && (
+                            <div className="p-3 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 border border-emerald-300 dark:border-emerald-700/80 rounded-xl flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <div className="min-w-0">
+                                  <div className="text-xs font-black text-emerald-900 dark:text-emerald-200 truncate">
+                                    {matchedCustomer.tags || "Customer"} — {matchedCustomer.discountType === "PERCENTAGE" ? `${matchedCustomer.discountValue}% Discount Available` : `₹${matchedCustomer.discountValue} Flat Discount Available`}
+                                  </div>
+                                  <p className="text-[11px] text-emerald-700 dark:text-emerald-400 truncate">
+                                    Configured discount rule for this customer
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={isSavingDiscount || isCustomerLocked}
+                                onClick={() => handleApplyCustomerDiscount(matchedCustomer)}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl px-3.5 shrink-0 shadow-sm disabled:opacity-50"
+                              >
+                                Apply Discount
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        custPhone.trim().length >= 3 && !isSearchingCustomer && !isCustomerLocked && (
+                          <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-4 text-center space-y-2 bg-white/50 dark:bg-slate-900/50">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              No VIP or Friend profile found for <strong>{custPhone}</strong>.
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={isCustomerLocked}
+                              onClick={() => setShowCreateCustomerDialog(true)}
+                              className="rounded-xl text-xs font-extrabold border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 gap-1.5"
+                            >
+                              <UserPlus className="w-3.5 h-3.5" /> Register as VIP / Friend
+                            </Button>
+                          </div>
+                        )
+                      )}
+
+                      {/* Name input */}
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                          <User className="h-3.5 w-3.5" /> Customer Name
+                        </label>
                         <Input
-                          id="cust-phone"
-                          type="tel"
-                          inputMode="numeric"
-                          maxLength={10}
-                          placeholder="10-digit mobile number"
-                          value={custPhone}
-                          onChange={(e) => setCustPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                          className="h-11 pl-4 font-bold text-sm bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                          id="cust-name"
+                          type="text"
+                          disabled={isCustomerLocked}
+                          placeholder={isCustomerLocked ? "Customer name (locked)" : "e.g. Ramesh Sharma"}
+                          value={custName}
+                          onChange={(e) => setCustName(e.target.value)}
+                          className={`h-11 font-bold text-sm rounded-xl ${
+                            isCustomerLocked
+                              ? "bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 cursor-not-allowed"
+                              : "bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
+                          }`}
                         />
-                        {custPhone.length === 10 && (
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 text-xs font-bold">✓</span>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="space-y-2 pt-1">
+                        {isCustomerLocked ? (
+                          <div className="w-full h-12 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 font-extrabold text-xs flex items-center justify-center gap-2 cursor-not-allowed">
+                            <Lock className="h-4 w-4 text-amber-500" /> Customer Details Locked (Bill Generated)
+                          </div>
+                        ) : (
+                          <button
+                            id="save-customer-btn"
+                            disabled={isSavingCustomer}
+                            onClick={handleUpdateCustomer}
+                            className="w-full h-12 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-extrabold text-sm shadow-md shadow-violet-600/25 hover:shadow-violet-600/40 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            {isSavingCustomer ? <Loader2 className="h-4 w-4 animate-spin" /> : <User className="h-4 w-4" />}
+                            {isSavingCustomer ? "Saving..." : matchedCustomer ? "Link Customer & Update Order" : "Save Customer Info"}
+                          </button>
+                        )}
+
+                        {!isCustomerLocked && (selectedOrder.customerDetails?.name || selectedOrder.customerDetails?.phone || selectedOrder.customerDetails?.customerId) && (
+                          <button
+                            disabled={isSavingCustomer}
+                            onClick={async () => {
+                              try {
+                                setIsSavingCustomer(true);
+                                await employeeService.updateCustomer(selectedOrder._id, { name: "", phone: "", customerId: null });
+                                setCustName("");
+                                setCustPhone("");
+                                setMatchedCustomer(null);
+                                toast({ title: "Customer info unlinked" });
+                                await fetchOrders();
+                                setBillingTab("bill");
+                              } catch (e: any) {
+                                toast({ variant: "destructive", title: "Error", description: e.message });
+                              } finally {
+                                setIsSavingCustomer(false);
+                              }
+                            }}
+                            className="w-full h-10 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            Unlink / Clear Customer
+                          </button>
                         )}
                       </div>
                     </div>
-
-                    {/* Name */}
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                        <User className="h-3.5 w-3.5" /> Customer Name
-                      </label>
-                      <Input
-                        id="cust-name"
-                        type="text"
-                        placeholder="e.g. Ramesh Sharma"
-                        value={custName}
-                        onChange={(e) => setCustName(e.target.value)}
-                        className="h-11 font-bold text-sm bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                      />
-                    </div>
-
-                    {/* Save */}
-                    <button
-                      id="save-customer-btn"
-                      disabled={isSavingCustomer}
-                      onClick={handleUpdateCustomer}
-                      className="w-full h-12 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-extrabold text-sm shadow-md shadow-violet-600/25 hover:shadow-violet-600/40 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isSavingCustomer ? <Loader2 className="h-4 w-4 animate-spin" /> : <User className="h-4 w-4" />}
-                      {isSavingCustomer ? "Saving..." : "Save Customer"}
-                    </button>
-
-                    {/* Clear */}
-                    {(selectedOrder.customerDetails?.name || selectedOrder.customerDetails?.phone) && (
-                      <button
-                        disabled={isSavingCustomer}
-                        onClick={async () => {
-                          try {
-                            setIsSavingCustomer(true);
-                            await employeeService.updateCustomer(selectedOrder._id, { name: "", phone: "" });
-                            setCustName(""); setCustPhone("");
-                            toast({ title: "Customer info cleared" });
-                            await fetchOrders();
-                            setBillingTab("bill");
-                          } catch (e: any) {
-                            toast({ variant: "destructive", title: "Error", description: e.message });
-                          } finally { setIsSavingCustomer(false); }
-                        }}
-                        className="w-full h-10 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                      >
-                        Clear Customer Info
-                      </button>
-                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* ── Discount Tab Content ── */}
               {billingTab === "discount" && (() => {
-                // Same calculation as Bill tab — fall back to per-item for OPEN orders
+                const isDiscountLocked = selectedOrder.status === "BILLED" || selectedOrder.status === "PAID";
                 let dSubtotal = selectedOrder.financials?.subtotal ?? 0;
                 let dTax = selectedOrder.financials?.totalTax ?? 0;
                 let dGrand = selectedOrder.financials?.grandTotal ?? 0;
                 if (selectedOrder.status === "OPEN" || dSubtotal === 0) {
                   dSubtotal = selectedOrder.kots
                     .flatMap((k: any) => k.items)
-                    .reduce((sum: number, item: any) => sum + (item.variantPrice || 0) * item.quantity, 0);
+                    .reduce((sum: number, item: any) => sum + (item.isComplimentary ? 0 : (item.variantPrice || 0) * item.quantity), 0);
                   dTax = selectedOrder.kots.flatMap((k: any) => k.items)
-                    .reduce((sum: number, item: any) => sum + ((item.variantPrice || 0) * item.quantity * (item.taxPercentage || 0)) / 100, 0);
+                    .reduce((sum: number, item: any) => sum + (item.isComplimentary ? 0 : ((item.variantPrice || 0) * item.quantity * (item.taxPercentage || 0)) / 100), 0);
                   dGrand = dSubtotal + dTax;
                 }
                 return (
                   <div className="flex-1 overflow-y-auto min-h-0">
                     <div className="p-5 max-w-lg mx-auto space-y-5">
 
-                      {/* Info banner */}
-                      <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-4 py-3 flex items-start gap-3">
-                        <Tag className="h-4 w-4 mt-0.5 text-emerald-500 shrink-0" />
-                        <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium leading-relaxed">
-                          Apply a flat rupee discount to this order. The grand total will be recalculated automatically when you save.
-                        </p>
-                      </div>
+                      {/* Lock or Info banner */}
+                      {isDiscountLocked ? (
+                        <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 p-4 flex items-start gap-3 shadow-xs">
+                          <Lock className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <h4 className="text-xs font-black text-amber-900 dark:text-amber-200 uppercase tracking-wide">
+                              Discount Locked (Bill Generated)
+                            </h4>
+                            <p className="text-xs text-amber-800 dark:text-amber-300 mt-1 leading-relaxed">
+                              A receipt / bill has already been generated for this order. Discounts cannot be altered after generating the bill.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-4 py-3 flex items-start gap-3">
+                          <Tag className="h-4 w-4 mt-0.5 text-emerald-500 shrink-0" />
+                          <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium leading-relaxed">
+                            Apply a customized discount or use the customer profile's entitlement. Grand total will recalculate automatically.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Customer Entitlement Discount Banner */}
+                      {matchedCustomer && matchedCustomer.discountType && matchedCustomer.discountType !== "NONE" && (matchedCustomer.discountValue || 0) > 0 && !isDiscountLocked && (
+                        <div className="rounded-2xl border border-emerald-300 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 p-4 space-y-2 shadow-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-extrabold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                              <Sparkles className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                              {matchedCustomer.tags || "Customer"} Discount Profile
+                            </span>
+                            <span className="text-[11px] font-black px-2 py-0.5 rounded-full bg-emerald-200 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
+                              {matchedCustomer.discountType === "PERCENTAGE" ? `${matchedCustomer.discountValue}% OFF` : `₹${matchedCustomer.discountValue} OFF`}
+                            </span>
+                          </div>
+                          <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                            Customer <strong>{matchedCustomer.name}</strong> is entitled to a {matchedCustomer.discountType === "PERCENTAGE" ? `${matchedCustomer.discountValue}%` : `₹${matchedCustomer.discountValue}`} waiver.
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={isSavingDiscount}
+                            onClick={() => handleApplyCustomerDiscount(matchedCustomer)}
+                            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs rounded-xl shadow-xs gap-1.5 mt-1"
+                          >
+                            Apply {matchedCustomer.tags || "Customer"} Discount
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Active Applied Discount Breakdown */}
+                      {(selectedOrder.financials?.discount ?? 0) > 0 && (
+                        <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-extrabold text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Currently Applied Discount
+                            </span>
+                            <span className="text-sm font-black text-emerald-700 dark:text-emerald-400">
+                              - ₹{(selectedOrder.financials!.discount!).toFixed(2)}
+                            </span>
+                          </div>
+                          {selectedOrder.financials?.discountReason && (
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                              Reason: {selectedOrder.financials.discountReason}
+                            </p>
+                          )}
+                          {selectedOrder.financials?.discountAppliedBy && (
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              Applied by: {(selectedOrder.financials.discountAppliedBy as any).contactName || "Manager"}
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       {/* Current totals summary */}
                       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
@@ -711,10 +1175,10 @@ export function CashierDashboard({ user }: DashboardProps) {
                         </div>
                       </div>
 
-                      {/* Discount input */}
+                      {/* Manual Discount input */}
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                          <Percent className="h-3.5 w-3.5" /> Flat Discount (₹)
+                          <Percent className="h-3.5 w-3.5" /> Manual Flat Discount (₹)
                         </label>
                         <div className="relative">
                           <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
@@ -723,10 +1187,11 @@ export function CashierDashboard({ user }: DashboardProps) {
                             type="number"
                             min={0}
                             step={1}
+                            disabled={isDiscountLocked}
                             placeholder="0"
                             value={discountAmount}
                             onChange={(e) => setDiscountAmount(e.target.value)}
-                            className="h-12 pl-8 font-extrabold text-base bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                            className="h-12 pl-8 font-extrabold text-base bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white disabled:opacity-60 disabled:bg-slate-100 dark:disabled:bg-slate-800"
                           />
                         </div>
                         {discountAmount && !isNaN(parseFloat(discountAmount)) && parseFloat(discountAmount) > 0 && (
@@ -736,7 +1201,7 @@ export function CashierDashboard({ user }: DashboardProps) {
                         )}
                       </div>
 
-                      {/* Quick presets (Percentage & Flat Rupee) */}
+                      {/* Quick presets (% & ₹) */}
                       <div className="space-y-2.5">
                         <div>
                           <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-1.5">Quick % Off</label>
@@ -748,8 +1213,9 @@ export function CashierDashboard({ user }: DashboardProps) {
                                 <button
                                   key={`pct-${pct}`}
                                   type="button"
+                                  disabled={isDiscountLocked}
                                   onClick={() => setDiscountAmount(String(calculatedAmt))}
-                                  className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold transition-all flex items-center gap-1.5 ${isSelected
+                                  className={`px-3 py-1.5 rounded-xl border text-xs font-extrabold transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
                                     ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-sm"
                                     : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-emerald-400"
                                     }`}
@@ -769,8 +1235,9 @@ export function CashierDashboard({ user }: DashboardProps) {
                               <button
                                 key={`flat-${amt}`}
                                 type="button"
+                                disabled={isDiscountLocked}
                                 onClick={() => setDiscountAmount(String(amt))}
-                                className={`px-4 py-1.5 rounded-xl border text-xs font-extrabold transition-all ${discountAmount === String(amt)
+                                className={`px-4 py-1.5 rounded-xl border text-xs font-extrabold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${discountAmount === String(amt)
                                   ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-sm"
                                   : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-emerald-400"
                                   }`}
@@ -782,33 +1249,29 @@ export function CashierDashboard({ user }: DashboardProps) {
                         </div>
                       </div>
 
-                      {/* Save */}
-                      <button
-                        id="save-discount-btn"
-                        disabled={isSavingDiscount}
-                        onClick={handleUpdateDiscount}
-                        className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-md shadow-emerald-600/25 hover:shadow-emerald-600/40 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {isSavingDiscount ? <Loader2 className="h-4 w-4 animate-spin" /> : <Percent className="h-4 w-4" />}
-                        {isSavingDiscount ? "Applying..." : "Apply Discount"}
-                      </button>
+                      {/* Save or Locked State */}
+                      {isDiscountLocked ? (
+                        <div className="w-full h-12 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-extrabold text-xs flex items-center justify-center gap-2 cursor-not-allowed select-none shadow-xs">
+                          <Lock className="h-4 w-4 text-amber-500" />
+                          Discount Locked (Bill Generated)
+                        </div>
+                      ) : (
+                        <button
+                          id="save-discount-btn"
+                          disabled={isSavingDiscount}
+                          onClick={() => handleUpdateDiscount()}
+                          className="w-full h-12 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm shadow-md shadow-emerald-600/25 hover:shadow-emerald-600/40 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {isSavingDiscount ? <Loader2 className="h-4 w-4 animate-spin" /> : <Percent className="h-4 w-4" />}
+                          {isSavingDiscount ? "Applying..." : "Save Discount"}
+                        </button>
+                      )}
 
                       {/* Remove discount */}
-                      {(selectedOrder.financials?.discount ?? 0) > 0 && (
+                      {(selectedOrder.financials?.discount ?? 0) > 0 && !isDiscountLocked && (
                         <button
                           disabled={isSavingDiscount}
-                          onClick={async () => {
-                            try {
-                              setIsSavingDiscount(true);
-                              await employeeService.updateCustomer(selectedOrder._id, { discount: 0 });
-                              setDiscountAmount("");
-                              toast({ title: "Discount removed" });
-                              await fetchOrders();
-                              setBillingTab("bill");
-                            } catch (e: any) {
-                              toast({ variant: "destructive", title: "Error", description: e.message });
-                            } finally { setIsSavingDiscount(false); }
-                          }}
+                          onClick={() => handleUpdateDiscount(0)}
                           className="w-full h-10 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                         >
                           Remove Discount
@@ -850,20 +1313,21 @@ export function CashierDashboard({ user }: DashboardProps) {
                     let totalCgst = 0;
                     let totalSgst = 0;
 
-                    // Calculate from KOT items
+                    // Calculate from KOT items (excluding complimentary items)
                     selectedOrder.kots?.forEach((kot) => {
                       kot.items?.forEach((item) => {
-                        const itemTotal =
-                          Number(item.variantPrice || 0) *
-                          Number(item.quantity || 0);
+                        const isComp = Boolean(item.isComplimentary);
+                        const itemTotal = isComp
+                          ? 0
+                          : Number(item.variantPrice || 0) * Number(item.quantity || 0);
 
                         subtotal += itemTotal;
 
                         const cgstPercent = Number(item.cgstPercent || 0);
                         const sgstPercent = Number(item.sgstPercent || 0);
 
-                        totalCgst += (itemTotal * cgstPercent) / 100;
-                        totalSgst += (itemTotal * sgstPercent) / 100;
+                        totalCgst += isComp ? 0 : (itemTotal * cgstPercent) / 100;
+                        totalSgst += isComp ? 0 : (itemTotal * sgstPercent) / 100;
                       });
                     });
 
@@ -893,10 +1357,11 @@ export function CashierDashboard({ user }: DashboardProps) {
                         {/* ── KOT Item Table ── */}
                         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm bg-white dark:bg-slate-900">
                           {/* Table header */}
-                          <div className="grid grid-cols-[1fr_80px_100px] gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800">
+                          <div className="grid grid-cols-[1fr_70px_100px_85px] gap-2 px-4 py-2.5 bg-slate-100 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 items-center">
                             <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400">Item</span>
                             <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 text-center">Qty</span>
                             <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 text-right">Price</span>
+                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400 text-right">Action</span>
                           </div>
 
                           {/* KOT groups */}
@@ -908,12 +1373,26 @@ export function CashierDashboard({ user }: DashboardProps) {
                                 </span>
                               </div>
                               {kot.items.map((item, idx) => (
-                                <div key={idx} className={`grid grid-cols-[1fr_80px_100px] gap-2 px-4 py-3 items-center ${idx < kot.items.length - 1 ? 'border-b border-slate-100 dark:border-slate-800/60' : ''}`}>
+                                <div key={idx} className={`grid grid-cols-[1fr_70px_100px_85px] gap-2 px-4 py-3 items-center ${idx < kot.items.length - 1 ? 'border-b border-slate-100 dark:border-slate-800/60' : ''}`}>
                                   <div className="flex items-center gap-2.5 min-w-0">
                                     {item.menuItemId?.imageUrl && (
                                       <img src={item.menuItemId.imageUrl} alt={item.menuItemId.name} className="h-8 w-8 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0" />
                                     )}
-                                    <span className="font-semibold text-sm text-slate-900 dark:text-white truncate">{item.menuItemId?.name || 'Item'}</span>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="font-semibold text-sm text-slate-900 dark:text-white truncate">{item.menuItemId?.name || 'Item'}</span>
+                                        {item.isComplimentary && (
+                                          <span className="shrink-0 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 flex items-center gap-0.5 shadow-2xs">
+                                            <Gift className="w-2.5 h-2.5" /> FOC
+                                          </span>
+                                        )}
+                                      </div>
+                                      {item.isComplimentary && item.complimentaryReason && (
+                                        <p className="text-[10px] text-purple-600 dark:text-purple-400 truncate mt-0.5">
+                                          Reason: {item.complimentaryReason}
+                                        </p>
+                                      )}
+                                    </div>
                                     {/* Item status badge */}
                                     <span className={`shrink-0 text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${item.itemStatus === 'SERVED' ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500' :
                                       item.itemStatus === 'READY' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' :
@@ -921,17 +1400,61 @@ export function CashierDashboard({ user }: DashboardProps) {
                                           'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
                                       }`}>{item.itemStatus}</span>
                                   </div>
-                                  {/* Qty — shown as plain count (edit not implemented yet) */}
+                                  {/* Qty */}
                                   <div className="flex items-center justify-center">
                                     <span className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-extrabold text-slate-900 dark:text-white">
                                       {item.quantity}
                                     </span>
                                   </div>
+                                  {/* Price */}
                                   <div className="text-right">
-                                    <span className="font-bold text-sm text-slate-800 dark:text-slate-200">₹{((item.variantPrice || 0) * item.quantity).toFixed(2)}</span>
-                                    {item.quantity > 1 && (
-                                      <div className="text-[10px] text-slate-400 dark:text-slate-500">₹{(item.variantPrice || 0).toFixed(2)} each</div>
+                                    {item.isComplimentary ? (
+                                      <div>
+                                        <span className="font-extrabold text-sm text-purple-600 dark:text-purple-400">₹0.00</span>
+                                        <div className="text-[10px] text-slate-400 line-through">₹{((item.variantPrice || 0) * item.quantity).toFixed(2)}</div>
+                                      </div>
+                                    ) : (
+                                      <div>
+                                        <span className="font-bold text-sm text-slate-800 dark:text-slate-200">₹{((item.variantPrice || 0) * item.quantity).toFixed(2)}</span>
+                                        {item.quantity > 1 && (
+                                          <div className="text-[10px] text-slate-400 dark:text-slate-500">₹{(item.variantPrice || 0).toFixed(2)} each</div>
+                                        )}
+                                      </div>
                                     )}
+                                  </div>
+                                  {/* Complimentary Toggle Button */}
+                                  <div className="flex justify-end">
+                                    {(() => {
+                                      const isCompLocked = selectedOrder.status === "BILLED" || selectedOrder.status === "PAID";
+                                      return (
+                                        <button
+                                          type="button"
+                                          disabled={isCompLocked}
+                                          onClick={() => {
+                                            if (isCompLocked) return;
+                                            setComplimentaryItem(item);
+                                            setShowComplimentaryDialog(true);
+                                          }}
+                                          className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-all flex items-center gap-1 ${
+                                            isCompLocked
+                                              ? "opacity-50 cursor-not-allowed bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700"
+                                              : item.isComplimentary
+                                                ? "border-purple-300 dark:border-purple-800 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100"
+                                                : "border-slate-200 dark:border-slate-700 text-slate-500 hover:text-purple-600 hover:border-purple-300 dark:hover:text-purple-300"
+                                          }`}
+                                          title={
+                                            isCompLocked
+                                              ? "Complimentary status cannot be modified after bill is generated"
+                                              : item.isComplimentary
+                                                ? "Edit or Remove Complimentary"
+                                                : "Make Complimentary (FOC)"
+                                          }
+                                        >
+                                          <Gift className="w-3 h-3" />
+                                          <span>{item.isComplimentary ? "FOC" : "Comp"}</span>
+                                        </button>
+                                      );
+                                    })()}
                                   </div>
                                 </div>
                               ))}
@@ -1109,7 +1632,18 @@ export function CashierDashboard({ user }: DashboardProps) {
                       <>
                         <Button
                           variant="outline"
-                          className="border-amber-400/60 hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold h-12 px-5 rounded-xl transition-all"
+                          className="border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold h-12 px-4 rounded-xl transition-all"
+                          onClick={() => {
+                            setCompletedReceiptOrder(selectedOrder);
+                            setShowReceipt(true);
+                          }}
+                          title="View and Print Bill Receipt"
+                        >
+                          <Printer className="mr-2 h-4 w-4" /> Print Bill
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="border-amber-400/60 hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold h-12 px-4 rounded-xl transition-all"
                           disabled={isProcessing}
                           onClick={() => handleReopenOrder(selectedOrder._id)}
                           title="Re-open order to add items before payment"
@@ -1329,6 +1863,33 @@ export function CashierDashboard({ user }: DashboardProps) {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* ── Quick Create VIP / Friend Dialog ── */}
+      <CreateCustomerDialog
+        isOpen={showCreateCustomerDialog}
+        onClose={() => setShowCreateCustomerDialog(false)}
+        initialPhone={custPhone}
+        initialName={custName}
+        onCustomerCreated={(newCust) => {
+          setMatchedCustomer(newCust);
+          setCustName(newCust.name);
+          if (newCust.phone) setCustPhone(newCust.phone);
+          if (newCust.discountType && newCust.discountType !== "NONE" && newCust.discountValue) {
+            handleApplyCustomerDiscount(newCust);
+          }
+        }}
+      />
+
+      {/* ── Complimentary (FOC) Item Dialog ── */}
+      <ComplimentaryItemDialog
+        isOpen={showComplimentaryDialog}
+        onClose={() => {
+          setShowComplimentaryDialog(false);
+          setComplimentaryItem(null);
+        }}
+        item={complimentaryItem}
+        onConfirm={handleToggleComplimentary}
+      />
     </div>
   );
 }

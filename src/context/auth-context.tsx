@@ -66,14 +66,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await authService.logout();
     setUser(null);
     
-    if (role === "MASTER_ADMIN") {
-      window.location.href = "/admin-login";
-    } else if (role === "CLIENT") {
-      window.location.href = "/client-login";
-    } else if (role && ["CHEF", "WAITER", "MANAGER", "CASHIER"].includes(role)) {
+    if (role && ["CHEF", "WAITER", "MANAGER", "CASHIER", "INVENTORY_MANAGER"].includes(role)) {
       window.location.href = "/employee-login";
     } else {
-      window.location.href = "/client-login"; 
+      window.location.href = "/client-login";
     }
   };
 

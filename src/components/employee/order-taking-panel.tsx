@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, UserX, UtensilsCrossed, Clock, RotateCcw, X, ChevronRight, Receipt, Layers } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, UserX, UtensilsCrossed, Clock, RotateCcw, X, ChevronRight, Receipt, Layers, Heart, Star, Briefcase, Sparkles } from "lucide-react";
 import { employeeService } from "@/services/employee.service";
+import { customerService, Customer } from "@/services/customer.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { VariantPickerDialog } from "./variant-picker-dialog";
 import { MenuItemCard } from "./menu-item-card";
@@ -105,6 +106,31 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   const [orderType, setOrderType] = useState<"DINE_IN" | "TAKEAWAY">("DINE_IN");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [matchedCustomer, setMatchedCustomer] = useState<Customer | null>(null);
+
+  // Debounced phone search for customer tagging
+  useEffect(() => {
+    if (!customerPhone || customerPhone.trim().length < 4) {
+      setMatchedCustomer(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await customerService.searchCustomerByPhone(customerPhone.trim());
+        if (res?.data) {
+          setMatchedCustomer(res.data);
+          if (!customerName.trim()) {
+            setCustomerName(res.data.name);
+          }
+        } else {
+          setMatchedCustomer(null);
+        }
+      } catch {
+        setMatchedCustomer(null);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [customerPhone]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isQuickReceiptSubmitting, setIsQuickReceiptSubmitting] = useState(false);
@@ -578,7 +604,11 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         const orderPayload = {
           tableId: selectedTable || undefined,
           orderType,
-          customerDetails: customerName || customerPhone ? { name: customerName, phone: customerPhone } : undefined,
+          customerDetails: customerName || customerPhone ? {
+            name: customerName,
+            phone: customerPhone,
+            customerId: matchedCustomer?._id || undefined,
+          } : undefined,
         };
 
         const orderRes = await employeeService.createOrder(orderPayload);
@@ -593,6 +623,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
       if (!existingOpenOrder) {
         setCustomerName("");
         setCustomerPhone("");
+        setMatchedCustomer(null);
         setSelectedTable("");
       }
       fetchActiveOrders();
@@ -1283,12 +1314,35 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
           <div className="space-y-1.5 pt-1">
             <div className="flex justify-between items-center pl-1">
-              <Label className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-widest">Customer Details <span className="opacity-50 font-medium lowercase">(optional)</span></Label>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-widest">
+                  Customer Details <span className="opacity-50 font-medium lowercase">(optional)</span>
+                </Label>
+                {matchedCustomer && (
+                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                    matchedCustomer.tags === "FRIEND"
+                      ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
+                      : matchedCustomer.tags === "VIP"
+                      ? "bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800"
+                      : matchedCustomer.tags === "STAFF"
+                      ? "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300"
+                  }`}>
+                    {matchedCustomer.tags === "FRIEND" && <Heart className="w-2.5 h-2.5 fill-emerald-600" />}
+                    {matchedCustomer.tags === "VIP" && <Star className="w-2.5 h-2.5 fill-purple-600" />}
+                    {matchedCustomer.tags === "STAFF" && <Briefcase className="w-2.5 h-2.5" />}
+                    {matchedCustomer.tags || "CUSTOMER"}
+                    {matchedCustomer.discountType && matchedCustomer.discountType !== "NONE" && (matchedCustomer.discountValue || 0) > 0 && (
+                      <span className="opacity-75 ml-0.5">({matchedCustomer.discountType === "PERCENTAGE" ? `${matchedCustomer.discountValue}%` : `₹${matchedCustomer.discountValue}`})</span>
+                    )}
+                  </span>
+                )}
+              </div>
               {(customerName || customerPhone) && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => { setCustomerName(""); setCustomerPhone(""); }}
+                  onClick={() => { setCustomerName(""); setCustomerPhone(""); setMatchedCustomer(null); }}
                   className="h-5 text-[10px] text-slate-400 hover:text-red-500 p-0"
                 >
                   <UserX className="h-3 w-3 mr-1" /> Clear
@@ -1328,7 +1382,14 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                           <div key={item._id} className="flex justify-between items-center py-2.5 border-b border-slate-200/50 dark:border-slate-800/50 last:border-0">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-slate-800 dark:text-slate-200 text-sm bg-slate-100 dark:bg-slate-800 w-6 h-6 flex items-center justify-center rounded-md">{item.quantity}</span>
-                              <span className="font-semibold text-slate-900 dark:text-white text-sm">{item.menuItemId?.name || "Item"}</span>
+                              <div>
+                                <span className="font-semibold text-slate-900 dark:text-white text-sm">{item.menuItemId?.name || "Item"}</span>
+                                {item.isComplimentary && (
+                                  <span className="ml-1.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                    FOC
+                                  </span>
+                                )}
+                              </div>
                             </div>
                             <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
                               item.itemStatus === 'SERVED' ? 'bg-slate-200/50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400' :

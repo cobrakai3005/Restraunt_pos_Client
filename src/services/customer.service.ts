@@ -10,6 +10,10 @@ export interface Customer {
   phone?: string;
   email?: string;
   address?: string;
+  tags?: "NORMAL" | "FRIEND" | "VIP" | "STAFF";
+  discountType?: "NONE" | "PERCENTAGE" | "FIXED";
+  discountValue?: number;
+  notes?: string;
   closingBalance?: number;
   restaurantId: string;
   isActive: boolean;
@@ -17,8 +21,19 @@ export interface Customer {
 }
 
 export const customerService = {
-  async getCustomers(restaurantId?: string) {
-    const response = await apiClient.get("/customers", getHeaders(restaurantId));
+  async getCustomers(restaurantId?: string, params?: { search?: string; phone?: string; tags?: string; isActive?: boolean }) {
+    const response = await apiClient.get("/customers", {
+      ...getHeaders(restaurantId),
+      params,
+    });
+    return response.data;
+  },
+
+  async searchCustomerByPhone(phone: string, restaurantId?: string) {
+    const response = await apiClient.get("/customers/search/phone", {
+      ...getHeaders(restaurantId),
+      params: { phone },
+    });
     return response.data;
   },
 

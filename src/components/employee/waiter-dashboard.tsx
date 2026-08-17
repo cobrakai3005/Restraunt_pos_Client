@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Menu, UtensilsCrossed } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { User } from "@/services/auth.service";
 import { employeeService } from "@/services/employee.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
@@ -10,6 +11,7 @@ import { OrderTakingPanel } from "./order-taking-panel";
 
 interface DashboardProps {
   user: User;
+  onOpenDrawer?: () => void;
 }
 
 interface ReadyItem {
@@ -20,7 +22,7 @@ interface ReadyItem {
   tableLabel: string;
 }
 
-export function WaiterDashboard({ user }: DashboardProps) {
+export function WaiterDashboard({ user, onOpenDrawer }: DashboardProps) {
   const { toast } = useToast();
   const [readyItems, setReadyItems] = useState<ReadyItem[]>([]);
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
@@ -103,7 +105,42 @@ export function WaiterDashboard({ user }: DashboardProps) {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-70px)] -mx-8 -my-8 overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
+
+      {/* ── Waiter Terminal Top Header Bar ── */}
+      <div className="shrink-0 z-20 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {onOpenDrawer && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onOpenDrawer}
+              title="Open Restaurant POS Menu & Settings"
+              className="h-10 w-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400 shadow-sm shrink-0"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          )}
+          <div className="hidden sm:flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md">
+            <UtensilsCrossed className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">Waiter Terminal</h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:block">
+              Take table orders, fire KOTs to kitchen &amp; pick up ready food
+            </p>
+          </div>
+        </div>
+
+        {readyItems.length > 0 && (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700/50 shadow-sm">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
+            <span className="text-xs font-extrabold text-emerald-700 dark:text-emerald-400">
+              {readyItems.length} Food Ready for Pickup
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* ── Ready for Pickup Strip (waiter-exclusive) ── */}
       {readyItems.length > 0 && (

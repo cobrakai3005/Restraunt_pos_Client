@@ -79,13 +79,33 @@ export const employeeService = {
     return response.data;
   },
 
-  async updateCustomer(orderId: string, data: { name?: string; phone?: string; discount?: number }) {
+  async updateCustomer(
+    orderId: string,
+    data: {
+      name?: string;
+      phone?: string;
+      customerId?: string | null;
+      discount?: number;
+      discountType?: "NONE" | "PERCENTAGE" | "FIXED" | "MANUAL";
+      discountValue?: number;
+      discountReason?: string;
+    }
+  ) {
     const response = await apiClient.patch(`/orders/${orderId}/customer`, data);
     return response.data;
   },
 
   async reopenOrder(orderId: string) {
     const response = await apiClient.post(`/orders/${orderId}/reopen`);
+    return response.data;
+  },
+
+  async toggleComplimentaryItem(
+    orderId: string,
+    itemId: string,
+    data: { isComplimentary: boolean; complimentaryReason?: string }
+  ) {
+    const response = await apiClient.patch(`/orders/${orderId}/items/${itemId}/complimentary`, data);
     return response.data;
   },
 

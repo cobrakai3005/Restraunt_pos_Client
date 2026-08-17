@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Clock, CheckCircle2, Flame, Loader2, Eye, AlertCircle, ChefHat, UserCheck } from "lucide-react";
+import { Clock, CheckCircle2, Flame, Loader2, Eye, AlertCircle, ChefHat, UserCheck, Menu } from "lucide-react";
 import { User } from "@/services/auth.service";
 import { employeeService } from "@/services/employee.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 interface DashboardProps {
   user: User;
   embedded?: boolean;
+  onOpenDrawer?: () => void;
 }
 
 interface KotItem {
@@ -55,7 +56,7 @@ interface Order {
   createdAt: string;
 }
 
-export function ChefDashboard({ user, embedded }: DashboardProps) {
+export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
@@ -149,31 +150,44 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
   const readyKots = allKots.filter(k => k.items.every(i => i.itemStatus === "READY" || i.itemStatus === "SERVED") && k.items.some(i => i.itemStatus === "READY"));
 
   return (
-    <div className={`${embedded ? "h-full rounded-xl" : "h-[calc(100vh-69px)] -mx-8 -my-8"} bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-6 flex flex-col transition-colors ${embedded ? "border border-slate-200 dark:border-slate-800 overflow-hidden" : ""}`}>
-      <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
-            <Flame className="h-7 w-7 text-orange-500 animate-pulse" />
-            Kitchen Display System (KDS)
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 text-sm mt-0.5 font-medium">
-            Live Ticket Terminal • Chef {(user as any)?.contactName || user.username} {(user as any)?.station ? `(Assigned: ${(user as any).station})` : "(All Stations)"}
-          </p>
+    <div className={`h-full w-full bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 p-4 lg:p-6 flex flex-col overflow-hidden transition-colors ${embedded ? "border border-slate-200 dark:border-slate-800 rounded-xl" : ""}`}>
+      <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
+        <div className="flex items-center gap-3">
+          {onOpenDrawer && (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={onOpenDrawer}
+              title="Open Restaurant POS Menu & Settings"
+              className="h-10 w-10 rounded-xl bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-orange-50 dark:hover:bg-slate-700 hover:text-orange-600 dark:hover:text-orange-400 shadow-sm shrink-0"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          )}
+          <div>
+            <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2 tracking-tight">
+              <Flame className="h-6 w-6 md:h-7 md:w-7 text-orange-500 animate-pulse" />
+              Kitchen Display System (KDS)
+            </h1>
+            <p className="text-slate-600 dark:text-slate-400 text-xs md:text-sm mt-0.5 font-medium">
+              Live Ticket Terminal • Chef {(user as any)?.contactName || user.username} {(user as any)?.station ? `(Assigned: ${(user as any).station})` : "(All Stations)"}
+            </p>
+          </div>
         </div>
 
         {/* Top Controls: Search, Station, Filter, Density */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           {/* Station Filter */}
           <select
             value={selectedStation}
             onChange={(e) => setSelectedStation(e.target.value)}
-            className="h-10 px-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-xs rounded-xl text-amber-600 dark:text-amber-400 font-bold focus:ring-blue-500 cursor-pointer shadow-sm"
+            className="h-9 md:h-10 px-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-xs rounded-xl text-amber-600 dark:text-amber-400 font-bold focus:ring-blue-500 cursor-pointer shadow-sm"
           >
             <option value="ALL">👨‍🍳 All Kitchen Stations</option>
             <option value="MAIN_KITCHEN">🍳 Main Kitchen</option>
             <option value="TANDOOR">🔥 Tandoor</option>
             <option value="GRILL">🍖 Grill</option>
-            <option value="BAR">🍹 Bar & Beverages</option>
+            <option value="BAR">🍹 Bar &amp; Beverages</option>
             <option value="BAKERY">🍰 Bakery</option>
             <option value="COLD_KITCHEN">🥗 Cold Kitchen</option>
           </select>
@@ -184,7 +198,7 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
               placeholder="Search KOT #, Table, Dish..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-10 w-44 sm:w-56 bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-xs rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500 shadow-sm"
+              className="h-9 md:h-10 w-36 sm:w-48 bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-xs rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500 shadow-sm"
             />
           </div>
 
@@ -192,59 +206,59 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
           <div className="flex gap-1 bg-white dark:bg-slate-950 p-1 rounded-xl border border-slate-300 dark:border-slate-800 text-xs font-bold shadow-sm">
             <button
               onClick={() => setFilterUrgency("ALL")}
-              className={`px-3 py-1 rounded-lg transition-all ${filterUrgency === "ALL" ? "bg-blue-600 text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+              className={`px-2.5 py-1 rounded-lg transition-all ${filterUrgency === "ALL" ? "bg-blue-600 text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
             >
               All ({pendingKots.length})
             </button>
             <button
               onClick={() => setFilterUrgency("URGENT")}
-              className={`px-3 py-1 rounded-lg transition-all ${filterUrgency === "URGENT" ? "bg-red-600 text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+              className={`px-2.5 py-1 rounded-lg transition-all ${filterUrgency === "URGENT" ? "bg-red-600 text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
             >
               Urgent ({pendingKots.filter(k => getTimeElapsed(k.createdAt) > 15).length})
             </button>
           </div>
 
-          {/* Density Switcher for 40+ KOTs */}
+          {/* Density Switcher */}
           <div className="flex gap-1 bg-white dark:bg-slate-950 p-1 rounded-xl border border-slate-300 dark:border-slate-800 text-xs font-bold shadow-sm">
             <button
               onClick={() => setGridDensity("normal")}
-              className={`px-3 py-1 rounded-lg transition-all ${gridDensity === "normal" ? "bg-slate-200 text-slate-900 dark:bg-slate-800 dark:text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+              className={`px-2.5 py-1 rounded-lg transition-all ${gridDensity === "normal" ? "bg-slate-200 text-slate-900 dark:bg-slate-800 dark:text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
             >
-              Standard Grid
+              Standard
             </button>
             <button
               onClick={() => setGridDensity("compact")}
-              className={`px-3 py-1 rounded-lg transition-all ${gridDensity === "compact" ? "bg-emerald-600 text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
+              className={`px-2.5 py-1 rounded-lg transition-all ${gridDensity === "compact" ? "bg-emerald-600 text-white" : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"}`}
               title="Dense Grid View for 40+ KOTs"
             >
-              ⚡ Dense Grid (40+ KOTs)
+              ⚡ Dense
             </button>
           </div>
         </div>
       </div>
 
-      <div className={`flex-1 grid gap-6 min-h-0 ${
+      <div className={`flex-1 grid gap-4 lg:gap-6 min-h-0 ${
         gridDensity === "compact" ? "grid-cols-1 lg:grid-cols-4" : "grid-cols-1 lg:grid-cols-2"
       }`}>
         
         {/* PENDING TICKETS SECTION */}
-        <Card className={`flex flex-col border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-950/80 shadow-xl overflow-hidden backdrop-blur-xl ${
+        <Card className={`h-full flex flex-col border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-950/80 shadow-xl overflow-hidden backdrop-blur-xl min-h-0 ${
           gridDensity === "compact" ? "lg:col-span-3" : "lg:col-span-1"
         }`}>
-          <CardHeader className="border-b border-slate-200 dark:border-slate-800/80 pb-4 bg-slate-50/80 dark:bg-slate-900/60 flex flex-row items-center justify-between">
-            <CardTitle className="text-orange-600 dark:text-orange-400 flex items-center gap-2 text-lg font-extrabold">
+          <CardHeader className="border-b border-slate-200 dark:border-slate-800/80 pb-3.5 bg-slate-50/80 dark:bg-slate-900/60 flex flex-row items-center justify-between shrink-0">
+            <CardTitle className="text-orange-600 dark:text-orange-400 flex items-center gap-2 text-base md:text-lg font-extrabold">
               <ChefHat className="h-5 w-5 text-orange-500" /> Incoming KOT Tickets
             </CardTitle>
-            <Badge variant="outline" className="text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10 font-mono">
+            <Badge variant="outline" className="text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10 font-mono text-xs">
               {pendingKots.length} Tickets
             </Badge>
           </CardHeader>
 
-          <ScrollArea className="flex-1 p-4">
+          <ScrollArea className="flex-1 min-h-0 p-4">
             {pendingKots.length === 0 ? (
-              <div className="text-center text-slate-500 py-20 flex flex-col items-center gap-3">
-                <CheckCircle2 className="h-12 w-12 text-slate-700 opacity-50" />
-                <p className="font-semibold">All clear! No pending orders in kitchen.</p>
+              <div className="h-full min-h-[260px] flex flex-col items-center justify-center text-slate-500 py-12 gap-3">
+                <CheckCircle2 className="h-12 w-12 text-slate-400 dark:text-slate-600" />
+                <p className="font-semibold text-sm text-slate-600 dark:text-slate-400">All clear! No pending orders in kitchen.</p>
               </div>
             ) : (
               <div className={`grid ${
@@ -415,21 +429,21 @@ export function ChefDashboard({ user, embedded }: DashboardProps) {
         </Card>
 
         {/* READY TICKETS SECTION */}
-        <Card className="flex flex-col border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-950/80 shadow-xl overflow-hidden backdrop-blur-xl">
-          <CardHeader className="border-b border-slate-200 dark:border-slate-800/80 pb-4 bg-slate-50/80 dark:bg-slate-900/60 flex flex-row items-center justify-between">
-            <CardTitle className="text-emerald-600 dark:text-emerald-400 flex items-center gap-2 text-lg font-extrabold">
+        <Card className="h-full flex flex-col border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-950/80 shadow-xl overflow-hidden backdrop-blur-xl min-h-0">
+          <CardHeader className="border-b border-slate-200 dark:border-slate-800/80 pb-3.5 bg-slate-50/80 dark:bg-slate-900/60 flex flex-row items-center justify-between shrink-0">
+            <CardTitle className="text-emerald-600 dark:text-emerald-400 flex items-center gap-2 text-base md:text-lg font-extrabold">
               <CheckCircle2 className="h-5 w-5 text-emerald-500" /> Ready for Pickup
             </CardTitle>
-            <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 font-mono">
+            <Badge variant="outline" className="text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 font-mono text-xs">
               {readyKots.length} Ready
             </Badge>
           </CardHeader>
 
-          <ScrollArea className="flex-1 p-4">
+          <ScrollArea className="flex-1 min-h-0 p-4">
             {readyKots.length === 0 ? (
-              <div className="text-center text-slate-400 dark:text-slate-500 py-20 flex flex-col items-center gap-3">
+              <div className="h-full min-h-[260px] flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 py-12 gap-3">
                 <Clock className="h-12 w-12 text-slate-300 dark:text-slate-700 opacity-50" />
-                <p className="font-semibold">No items waiting for pickup.</p>
+                <p className="font-semibold text-sm text-slate-500 dark:text-slate-400">No items waiting for pickup.</p>
               </div>
             ) : (
               <div className={`grid ${

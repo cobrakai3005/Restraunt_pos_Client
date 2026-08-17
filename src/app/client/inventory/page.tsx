@@ -337,7 +337,7 @@ export default function ClientInventoryPage() {
                       <TableCell className="font-medium">{item.name}</TableCell>
                       <TableCell>
                         <span className={item.currentStock <= item.reorderLevel ? "text-red-500 font-bold" : ""}>
-                          {item.currentStock}
+                          {item.currentStock.toFixed(3)}
                         </span>
                       </TableCell>
                       <TableCell>{item.unit}</TableCell>

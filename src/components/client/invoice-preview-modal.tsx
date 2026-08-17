@@ -3,7 +3,7 @@
 import React, { useRef } from "react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { X, Printer, Download, Mail, MessageSquare } from "lucide-react";
+import { X, Printer, Download, Mail, MessageSquare, Scissors } from "lucide-react";
 import { Transaction } from "@/services/transaction.service";
 import { format } from "date-fns";
 
@@ -11,7 +11,7 @@ interface InvoicePreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   transaction: Transaction | null;
-  restaurantDetails: any | null; // Pass active restaurant details
+  restaurantDetails: any | null;
   autoAction?: 'print' | 'download' | 'whatsapp' | 'email' | null;
 }
 
@@ -24,13 +24,122 @@ export function InvoicePreviewModal({
 }: InvoicePreviewModalProps) {
   const printRef = useRef<HTMLDivElement>(null);
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   const invoiceNumber = transaction?.referenceNumber || `INV-${transaction?._id?.slice(-6).toUpperCase() || "000000"}`;
   const totalDue = transaction?.totalAmount?.toFixed(2) || '';
-  const company = restaurantDetails?.name || "Our Restaurant";
+  const company = restaurantDetails?.name || "VINIMAY CAFE";
+
+  const handlePrint = () => {
+    const printContent = document.getElementById("client-invoice-print-area");
+    if (!printContent) return;
+
+    // Create an isolated hidden iframe for printing
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) return;
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Invoice_${invoiceNumber}</title>
+          <style>
+            @page {
+              size: 80mm auto;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 4mm;
+              font-family: -apple-system, BlinkMacSystemFont, "Courier New", Courier, monospace, sans-serif;
+              font-size: 11px;
+              line-height: 1.35;
+              color: #000000;
+              background: #ffffff;
+              width: 72mm;
+              box-sizing: border-box;
+            }
+            * { box-sizing: border-box; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .text-left { text-align: left; }
+            .font-bold { font-weight: 700; }
+            .font-black { font-weight: 900; }
+            .uppercase { text-transform: uppercase; }
+            .flex { display: flex; }
+            .justify-between { justify-content: space-between; }
+            .items-center { align-items: center; }
+            .items-start { align-items: flex-start; }
+            .border-dashed { border-top: 1px dashed #000; margin: 6px 0; }
+            .border-dotted { border-top: 1px dotted #000; margin: 4px 0; }
+            .border-solid { border-top: 1px solid #000; margin: 5px 0; }
+            .space-y-1 > * + * { margin-top: 3px; }
+            .space-y-2 > * + * { margin-top: 6px; }
+            .badge {
+              display: inline-block;
+              border: 1px solid #000;
+              padding: 2px 6px;
+              font-size: 9px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              margin-top: 3px;
+            }
+            .cut-divider {
+              margin: 14px 0 10px 0;
+              text-align: center;
+              border-top: 2px dashed #000;
+              padding-top: 4px;
+              font-size: 9px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .signatures {
+              display: flex;
+              justify-content: space-between;
+              gap: 16px;
+              margin-top: 16px;
+              padding-bottom: 2px;
+            }
+            .sign-box {
+              flex: 1;
+              border-top: 1px dotted #000;
+              text-align: center;
+              padding-top: 3px;
+              font-size: 9px;
+            }
+            .w-8 { width: 24px; flex-shrink: 0; }
+            .flex-1 { flex: 1; }
+            .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(iframe);
+        } catch (e) {}
+      }, 2000);
+    }, 250);
+  };
 
   const handleWhatsApp = () => {
     const text = `Hello from ${company}!%0A%0AHere are your invoice details:%0AInvoice #: ${invoiceNumber}%0ATotal Due: Rs. ${totalDue}%0A%0AThank you for your business!`;
@@ -48,11 +157,11 @@ export function InvoicePreviewModal({
     try {
       const html2pdf = (await import('html2pdf.js')).default;
       const opt: any = {
-        margin:       0,
+        margin:       [4, 4, 4, 4],
         filename:     `Invoice_${invoiceNumber}.pdf`,
         image:        { type: 'jpeg', quality: 0.98 },
         html2canvas:  { scale: 2 },
-        jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+        jsPDF:        { unit: 'mm', format: [80, 297], orientation: 'portrait' }
       };
       html2pdf().set(opt).from(printRef.current).save();
     } catch (e) {
@@ -63,7 +172,6 @@ export function InvoicePreviewModal({
   // Auto trigger action on open if requested
   React.useEffect(() => {
     if (isOpen && autoAction && printRef.current) {
-      // Slight delay to ensure rendering is complete
       const timer = setTimeout(() => {
         if (autoAction === 'print') handlePrint();
         else if (autoAction === 'download') handleDownload();
@@ -83,173 +191,268 @@ export function InvoicePreviewModal({
   const totalAmount = transaction.totalAmount || 0;
   const customerName = transaction.customerName || transaction.companyName || "Walk-in Customer";
   const addr = restaurantDetails?.address;
+  const txDate = transaction.transactionDate ? new Date(transaction.transactionDate) : new Date();
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto bg-gray-200 p-0 flex flex-col h-full border-l-0 shadow-2xl z-[100]">
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto bg-slate-100 dark:bg-slate-900 p-0 flex flex-col h-full border-l-0 shadow-2xl z-[100]">
         {/* Header Options */}
-        <div className="flex items-center justify-between p-4 bg-white border-b print:hidden sticky top-0 z-10 shadow-sm">
+        <div className="flex items-center justify-between p-4 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10 shadow-sm">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-semibold text-gray-800">Invoice Preview</h2>
-            <span className="bg-black text-white text-xs px-3 py-1 rounded-full font-medium">receipt</span>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white">Invoice Preview</h2>
+            <span className="bg-blue-600 text-white text-xs px-2.5 py-0.5 rounded-full font-bold">2-Part Paper</span>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-slate-500" />
           </Button>
         </div>
 
         {/* Receipt Paper Canvas */}
-        <div className="flex-1 p-6   overflow-y-auto flex justify-center">
-          {/* A style block to hide everything else when printing */}
-          <style dangerouslySetInnerHTML={{__html: `
-            @media print {
-              body * {
-                visibility: hidden;
-              }
-              .receipt-print-area, .receipt-print-area * {
-                visibility: visible;
-              }
-              .receipt-print-area {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                margin: 0;
-                padding: 0;
-                box-shadow: none;
-              }
-              .no-print {
-                display: none !important;
-              }
-            }
-          `}} />
-
+        <div className="flex-1 p-4 overflow-y-auto flex justify-center bg-slate-200/70 dark:bg-slate-950/70">
           <div
             ref={printRef}
-            className="bg-[#Fdfdfd] h-fit  text-black mx-auto w-full max-w-[340px] p-6 shadow-2xl receipt-print-area break-words"
-            style={{ fontFamily: "monospace" }}
+            id="client-invoice-print-area"
+            className="w-full max-w-[360px] space-y-4"
           >
-            {/* Logo / Restaurant header */}
-            <div className="text-center mb-4">
-              <div className="text-4xl font-light tracking-widest mb-2">Ψ¶</div>
-              <h1 className="text-xl font-bold tracking-widest uppercase break-words">{restaurantDetails?.name || "VINIMAY CAFE"}</h1>
-              {(() => {
-                const lines: string[] = [];
-                if (addr?.street) lines.push(addr.street);
-                const cityLine = [addr?.city, addr?.state, addr?.zipCode].filter(Boolean).join(", ");
-                if (cityLine) lines.push(cityLine);
-                if (addr?.country && addr?.country !== "India") lines.push(addr.country);
-                return lines.map((line, i) => <p key={i} className="text-sm break-words">{line}</p>);
-              })()}
-              {restaurantDetails?.contact?.phone && <p className="text-sm break-words">PHONE: {restaurantDetails.contact.phone}</p>}
-              {restaurantDetails?.contact?.email && <p className="text-sm break-words">{restaurantDetails.contact.email}</p>}
-              {restaurantDetails?.compliance?.gstNumber && <p className="text-sm break-words">GSTIN: {restaurantDetails.compliance.gstNumber}</p>}
-            </div>
+            {/* ══════════════════════════════════════════════════
+                PART 1: CUSTOMER COPY (CARD 1)
+               ══════════════════════════════════════════════════ */}
+            <div className="customer-copy bg-white dark:bg-white text-black p-5 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-700 break-words font-mono text-xs leading-relaxed space-y-3">
+              <div className="text-center pb-1">
+                <div className="text-2xl font-black tracking-widest mb-0.5">Ψ¶</div>
+                <h1 className="text-sm font-black tracking-wider uppercase text-black">{company}</h1>
+                {(() => {
+                  const lines: string[] = [];
+                  if (addr?.street) lines.push(addr.street);
+                  const cityLine = [addr?.city, addr?.state, addr?.zipCode].filter(Boolean).join(", ");
+                  if (cityLine) lines.push(cityLine);
+                  return lines.map((line, i) => <p key={i} className="text-[10px] text-slate-700">{line}</p>);
+                })()}
+                {restaurantDetails?.contact?.phone && <p className="text-[10px] text-slate-700">TEL: {restaurantDetails.contact.phone}</p>}
+                {restaurantDetails?.compliance?.gstNumber && <p className="text-[10px] text-slate-700">GSTIN: {restaurantDetails.compliance.gstNumber}</p>}
+                <div className="inline-block border border-black px-2 py-0.5 mt-1 font-extrabold text-[9px] tracking-wider uppercase bg-white text-black">
+                  *** CUSTOMER COPY (TAX INVOICE) ***
+                </div>
+              </div>
 
-            <div className="border-t-2 border-black border-dashed my-3"></div>
+              <div className="border-t border-dashed border-black my-2" />
 
-            {/* Invoice meta */}
-            <div className="text-sm">
-              <div className="flex justify-between mb-1">
-                <span className="min-w-0 break-words">{format(new Date(transaction.transactionDate || new Date()), "dd/MM/yyyy HH:mm")}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="min-w-0 break-words">INVOICE: #{invoiceNumber}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="min-w-0 break-words">BILL TO: {customerName}</span>
-              </div>
-              {transaction.referenceNumber && (
+              {/* Invoice meta */}
+              <div className="text-[11px] space-y-0.5">
                 <div className="flex justify-between">
-                  <span className="min-w-0 break-words">REF: {transaction.referenceNumber}</span>
+                  <span>DATE: {format(txDate, "dd/MM/yyyy HH:mm")}</span>
+                  <span className="font-bold">INVOICE: #{invoiceNumber}</span>
                 </div>
-              )}
-            </div>
-
-            <div className="border-t-2 border-black border-dashed my-3"></div>
-
-            {/* Items */}
-            <div className="text-sm space-y-1">
-              {items.length === 0 ? (
-                <div className="flex justify-between items-start">
-                  <span className="uppercase min-w-0 break-words">No items</span>
+                <div className="flex justify-between">
+                  <span className="truncate pr-1">BILL TO: {customerName}</span>
                 </div>
-              ) : (
-                items.map((item: any, idx: number) => (
-                  <div key={idx} className="flex justify-between items-start gap-2">
-                    <div className="flex gap-2 flex-1 min-w-0">
-                      <span className="w-6 shrink-0">{item.quantity || 1}X</span>
-                      <span className="uppercase break-words min-w-0">{item.name}</span>
-                    </div>
-                    <span className="shrink-0 whitespace-nowrap">₹{((item.pricePerUnit || 0) * (item.quantity || 1)).toFixed(2)}</span>
+                {transaction.referenceNumber && (
+                  <div className="flex justify-between">
+                    <span>REF: {transaction.referenceNumber}</span>
+                    <span>TYPE: {transaction.type}</span>
                   </div>
-                ))
-              )}
-            </div>
-
-            <div className="border-t-2 border-black border-dashed my-3"></div>
-
-            {/* Totals */}
-            <div className="text-sm">
-              <div className="flex justify-between mb-1">
-                <span className="min-w-0 break-words pr-2">SUBTOTAL:</span>
-                <span className="shrink-0 whitespace-nowrap">₹{subtotal.toFixed(2)}</span>
+                )}
               </div>
-              <div className="flex justify-between mb-1">
-                <span className="min-w-0 break-words pr-2">TAX:</span>
-                <span className="shrink-0 whitespace-nowrap">₹{taxAmount.toFixed(2)}</span>
-              </div>
-              {discountAmount > 0 && (
-                <div className="flex justify-between mb-1">
-                  <span className="min-w-0 break-words pr-2">DISCOUNT:</span>
-                  <span className="shrink-0 whitespace-nowrap">-₹{discountAmount.toFixed(2)}</span>
+
+              <div className="border-t border-dashed border-black my-2" />
+
+              {/* Items */}
+              <div className="text-[11px]">
+                <div className="flex justify-between font-bold pb-1 border-b border-dotted border-black mb-1">
+                  <span className="w-8">QTY</span>
+                  <span className="flex-1">ITEM</span>
+                  <span className="text-right">AMT</span>
                 </div>
-              )}
-              <div className="flex justify-between font-bold text-base mt-2">
-                <span className="min-w-0 break-words pr-2">TOTAL:</span>
-                <span className="shrink-0 whitespace-nowrap">₹{totalAmount.toFixed(2)}</span>
+                <div className="space-y-1">
+                  {items.length === 0 ? (
+                    <div className="flex justify-between items-start">
+                      <span className="uppercase font-medium">Standard Billing Item</span>
+                      <span className="font-medium">₹{totalAmount.toFixed(2)}</span>
+                    </div>
+                  ) : (
+                    items.map((item: any, idx: number) => {
+                      const isComp = item.name?.includes("(COMPLIMENTARY)") || item.pricePerUnit === 0;
+                      const itemAmt = isComp ? 0 : ((item.pricePerUnit || 0) * (item.quantity || 1));
+                      return (
+                        <div key={idx} className="flex justify-between items-start gap-1">
+                          <span className="w-8 font-bold shrink-0">{item.quantity || 1}X</span>
+                          <div className="flex-1 min-w-0">
+                            <span className="uppercase break-words font-medium">{item.name}</span>
+                            {isComp && (
+                              <span className="text-[9px] font-black text-purple-700 block uppercase">
+                                *** COMPLIMENTARY (FOC) ***
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-right shrink-0 font-medium">
+                            {isComp ? "₹0.00" : `₹${itemAmt.toFixed(2)}`}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div className="border-t-2 border-black border-dashed my-3"></div>
+              <div className="border-t border-dashed border-black my-2" />
 
-            {transaction.paymentMethod && (
-              <div className="text-sm">
+              {/* Totals */}
+              <div className="text-[11px] space-y-0.5">
                 <div className="flex justify-between">
-                  <span className="min-w-0 break-words pr-2">PAYMENT:</span>
-                  <span className="shrink-0 whitespace-nowrap">{transaction.paymentMethod.toUpperCase()}</span>
+                  <span>SUBTOTAL:</span>
+                  <span>₹{subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="min-w-0 break-words pr-2">STATUS:</span>
-                  <span className="shrink-0 whitespace-nowrap">{transaction.status === "PAID" ? "APPROVED" : transaction.status}</span>
+                  <span>TAX / GST (5%):</span>
+                  <span>₹{taxAmount.toFixed(2)}</span>
+                </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-emerald-800 font-bold">
+                    <span>DISCOUNT:</span>
+                    <span>- ₹{discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="border-t-2 border-solid border-black my-1" />
+                <div className="flex justify-between font-black text-xs pt-0.5">
+                  <span>GRAND TOTAL:</span>
+                  <span>₹{totalAmount.toFixed(2)}</span>
                 </div>
               </div>
-            )}
 
-            <div className="text-center mt-6 mb-2">
-              <p className="text-sm font-bold">TIP IS NOT INCLUDED.</p>
-              <p className="text-sm font-bold">PLEASE COME AGAIN!</p>
+              <div className="border-t border-dashed border-black my-2" />
+
+              {/* Payment Details */}
+              <div className="text-[11px]">
+                <div className="flex justify-between font-bold">
+                  <span>PAYMENT STATUS:</span>
+                  <span>{transaction.status === "PAID" ? "SETTLED / PAID" : transaction.status || "COMPLETED"}</span>
+                </div>
+                {transaction.paymentMethod && (
+                  <div className="flex justify-between text-[10px] pl-2 text-slate-700">
+                    <span>↳ METHOD:</span>
+                    <span>{transaction.paymentMethod.toUpperCase()}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="text-center pt-2 pb-1 space-y-0.5 text-[10px] text-slate-700">
+                <p className="font-bold">TIP IS NOT INCLUDED</p>
+                <p>THANK YOU! PLEASE VISIT AGAIN</p>
+              </div>
             </div>
+
+            {/* ══════════════════════════════════════════════════
+                PERFORATION / TEAR-OFF CUT LINE (DIVIDER)
+               ══════════════════════════════════════════════════ */}
+            <div className="my-2 py-1 flex items-center justify-center gap-2 select-none text-slate-500 font-bold text-[10px] uppercase tracking-wider">
+              <div className="flex-1 border-t-2 border-dashed border-slate-400" />
+              <span className="flex items-center gap-1.5 px-2 py-0.5 bg-slate-300/60 dark:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300 text-[9px] font-extrabold">
+                <Scissors className="w-3 h-3" /> Tear Along Perforation <Scissors className="w-3 h-3 scale-x-[-1]" />
+              </span>
+              <div className="flex-1 border-t-2 border-dashed border-slate-400" />
+            </div>
+
+            {/* ══════════════════════════════════════════════════
+                PART 2: STORE / MERCHANT / KITCHEN COPY (CARD 2)
+               ══════════════════════════════════════════════════ */}
+            <div className="store-copy bg-white dark:bg-white text-black p-5 rounded-2xl shadow-xl border border-slate-300 dark:border-slate-700 break-words font-mono text-xs leading-relaxed space-y-3">
+              <div className="text-center pb-0.5">
+                <h2 className="text-xs font-black uppercase tracking-wider text-black">{company}</h2>
+                <div className="inline-block border border-black px-2 py-0.5 mt-1 font-extrabold text-[9px] tracking-wider uppercase bg-slate-100 text-black">
+                  *** STORE / MERCHANT COPY ***
+                </div>
+              </div>
+
+              <div className="border-t border-dashed border-black my-2" />
+
+              {/* Compact Audit Metadata */}
+              <div className="text-[11px] space-y-0.5">
+                <div className="flex justify-between font-bold">
+                  <span>INVOICE: #{invoiceNumber}</span>
+                  <span>{transaction.type || "SALES"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>DATE: {format(txDate, "dd/MM/yyyy HH:mm")}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="truncate pr-1">PARTY: {customerName}</span>
+                </div>
+              </div>
+
+              <div className="border-t border-dashed border-black my-2" />
+
+              {/* Items Summary */}
+              <div className="text-[11px] space-y-0.5">
+                <div className="font-bold text-[9px] uppercase text-slate-700 mb-0.5">Ordered Items Summary:</div>
+                {items.length === 0 ? (
+                  <div className="flex justify-between">
+                    <span>1x Standard Billing Item</span>
+                    <span>₹{totalAmount.toFixed(2)}</span>
+                  </div>
+                ) : (
+                  items.map((item: any, idx: number) => {
+                    const isComp = item.name?.includes("(COMPLIMENTARY)") || item.pricePerUnit === 0;
+                    const itemAmt = isComp ? 0 : ((item.pricePerUnit || 0) * (item.quantity || 1));
+                    return (
+                      <div key={idx} className="flex justify-between">
+                        <span className="truncate pr-2">{item.quantity || 1}x {item.name}</span>
+                        <span className="shrink-0 font-mono">{isComp ? "₹0.00" : `₹${itemAmt.toFixed(2)}`}</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              <div className="border-t border-dashed border-black my-2" />
+
+              {/* Settlement Summary */}
+              <div className="text-[11px] space-y-0.5">
+                <div className="flex justify-between font-black text-xs">
+                  <span>AMOUNT SETTLED:</span>
+                  <span>₹{totalAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-[10px]">
+                  <span>PAYMENT METHOD:</span>
+                  <span className="font-bold">{transaction.paymentMethod?.toUpperCase() || "CASH"}</span>
+                </div>
+              </div>
+
+              {/* Cashier / Customer Signatures */}
+              <div className="pt-3 pb-1 text-[10px] space-y-2">
+                <div className="flex justify-between items-end gap-4">
+                  <div className="flex-1 border-t border-dotted border-black pt-1 text-center font-bold">
+                    Cashier Signature
+                  </div>
+                  <div className="flex-1 border-t border-dotted border-black pt-1 text-center font-bold">
+                    Customer Signature
+                  </div>
+                </div>
+                <p className="text-[8px] text-center text-slate-500 font-bold uppercase mt-1">
+                  * Store Accounting &amp; Audit Slip *
+                </p>
+              </div>
+            </div>
+
           </div>
         </div>
 
         {/* Action Buttons Footer */}
-        <div className="p-4 bg-white border-t flex items-center justify-between print:hidden shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
-          <Button variant="outline" onClick={onClose} className="px-6 rounded-full font-medium">
+        <div className="p-4 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+          <Button variant="outline" onClick={onClose} className="px-5 rounded-xl font-bold text-xs">
             Close
           </Button>
           <div className="flex gap-2 flex-wrap justify-end">
-            <Button variant="default" onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#20b558] text-white flex items-center gap-2 rounded-full font-medium">
-              <MessageSquare className="w-4 h-4" /> WhatsApp
+            <Button variant="default" onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#20b558] text-white flex items-center gap-1.5 rounded-xl font-bold text-xs h-9 px-3.5 shadow-sm">
+              <MessageSquare className="w-3.5 h-3.5" /> WhatsApp
             </Button>
-            <Button variant="default" onClick={handleEmail} className="bg-[#f26522] hover:bg-[#db5b1f] text-white flex items-center gap-2 rounded-full font-medium">
-              <Mail className="w-4 h-4" /> Email
+            <Button variant="default" onClick={handleEmail} className="bg-[#f26522] hover:bg-[#db5b1f] text-white flex items-center gap-1.5 rounded-xl font-bold text-xs h-9 px-3.5 shadow-sm">
+              <Mail className="w-3.5 h-3.5" /> Email
             </Button>
-            <Button variant="outline" onClick={handleDownload} className="border-amber-500 text-amber-600 hover:bg-amber-50 flex items-center gap-2 rounded-full font-medium">
-              <Download className="w-4 h-4" /> PDF
+            <Button variant="outline" onClick={handleDownload} className="border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 flex items-center gap-1.5 rounded-xl font-bold text-xs h-9 px-3.5">
+              <Download className="w-3.5 h-3.5" /> PDF
             </Button>
-            <Button variant="default" onClick={handlePrint} className="bg-[#00a651] hover:bg-[#009247] text-white flex items-center gap-2 rounded-full font-medium">
-              <Printer className="w-4 h-4" /> Print
+            <Button variant="default" onClick={handlePrint} className="bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5 rounded-xl font-bold text-xs h-9 px-4 shadow-sm">
+              <Printer className="w-3.5 h-3.5" /> Print 2-Part
             </Button>
           </div>
         </div>

@@ -153,7 +153,7 @@ export function CashierPickupPanel({ user, embedded }: DashboardProps) {
   );
 
   return (
-    <div className={`${embedded ? "h-full rounded-xl" : "h-[calc(100vh-120px)] -mx-8 -my-8"} bg-slate-50 dark:bg-slate-950 p-6 flex flex-col transition-colors ${embedded ? "border border-slate-200 dark:border-slate-800 overflow-hidden" : ""}`}>
+    <div className={`h-full w-full bg-slate-50 dark:bg-slate-950 p-6 flex flex-col transition-colors ${embedded ? "border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden" : ""}`}>
       {/* Header */}
       <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div>
