@@ -32,7 +32,7 @@ export default function HomePage() {
     case "MANAGER":
     case "CASHIER":
     case "INVENTORY_MANAGER":
-      redirect("/employees");
+      redirect("/employee");
       break;
     default:
       redirect("/client-login");

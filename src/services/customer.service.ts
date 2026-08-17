@@ -15,6 +15,8 @@ export interface Customer {
   discountValue?: number;
   notes?: string;
   closingBalance?: number;
+  outstandingDue?: number;
+  dueOrdersCount?: number;
   restaurantId: string;
   isActive: boolean;
   createdAt: string;

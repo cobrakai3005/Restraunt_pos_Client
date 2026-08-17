@@ -98,15 +98,34 @@ export function TablesTab({ restaurantId }: { restaurantId: string }) {
     }
   };
 
+  const [searchQuery, setSearchQuery] = useState("");
+
   if (isLoading) return <div className="p-8 text-center text-slate-500">Loading tables...</div>;
+
+  const filteredTables = tables.filter((t) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      (t.tableNumber && t.tableNumber.toLowerCase().includes(q)) ||
+      (t.section && t.section.toLowerCase().includes(q)) ||
+      (t.status && t.status.toLowerCase().includes(q)) ||
+      String(t.capacity).includes(q)
+    );
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h3 className="text-lg font-semibold text-foreground">Restaurant Tables</h3>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <Input
+            placeholder="Search table..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full sm:w-[180px] h-9 text-xs rounded-xl"
+          />
           <Select value={statusFilter} onValueChange={handleFilterChange}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="w-[140px] h-9 text-xs rounded-xl">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -115,14 +134,14 @@ export function TablesTab({ restaurantId }: { restaurantId: string }) {
               <SelectItem value="false">Inactive Only</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="mr-2 h-4 w-4" /> Add Table
+          <Button onClick={() => setIsAddOpen(true)} className="h-9 text-xs rounded-xl bg-blue-600 hover:bg-blue-700 shrink-0">
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Table
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        {tables.map(table => (
+        {filteredTables.map(table => (
           <div key={table._id} className={`relative group flex flex-col items-center p-4 bg-card text-card-foreground border border-border rounded-2xl shadow-sm hover:border-blue-300 hover:shadow-md transition-all ${!table.isActive ? 'opacity-60 grayscale' : ''}`}>
             <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <Button variant="ghost" size="icon" onClick={() => { setSelectedTable(table); setIsEditOpen(true); }} className="h-6 w-6 text-slate-400 hover:text-blue-500">

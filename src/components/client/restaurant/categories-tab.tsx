@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, Tag, Trash2, Edit, Pencil } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Plus, Tag, Trash2, Edit, Pencil, Search, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { restaurantService } from "@/services/restaurant.service";
 import { useToast } from "@/components/ui/use-toast";
@@ -21,7 +21,8 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Filter + Pagination State
+  // Search & Filter + Pagination State
+  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | true | false
   const [page, setPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -39,7 +40,11 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
   const fetchCategories = async (currentPage = page, filter = statusFilter) => {
     try {
       setIsLoading(true);
-      const res = await restaurantService.getCategories(restaurantId, { page: currentPage, limit: PAGE_SIZE, isActive: filter });
+      const res = await restaurantService.getCategories(restaurantId, {
+        page: currentPage,
+        limit: PAGE_SIZE,
+        isActive: filter,
+      });
       if (res.success) {
         setCategories(res.data.categories || []);
         const meta = res.meta;
@@ -78,7 +83,11 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
       setIsAddOpen(false);
       fetchCategories(page, statusFilter);
     } catch (err: any) {
-      toast({ title: "Error", description: err.response?.data?.message || "Failed to create", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err.response?.data?.message || "Failed to create",
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -90,19 +99,57 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
       toast({ title: "Success", description: "Category deleted" });
       fetchCategories(page, statusFilter);
     } catch (err: any) {
-      toast({ title: "Error", description: err.response?.data?.message || "Failed to delete", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: err.response?.data?.message || "Failed to delete",
+        variant: "destructive",
+      });
     }
   };
 
-  if (isLoading) return <div className="p-8 text-center text-slate-500">Loading categories...</div>;
+  const filteredCategories = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return categories;
+    return categories.filter(
+      (cat) =>
+        (cat.name && cat.name.toLowerCase().includes(q)) ||
+        (cat.description && cat.description.toLowerCase().includes(q))
+    );
+  }, [categories, searchQuery]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="text-lg font-semibold text-foreground">Menu Categories</h3>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">Menu Categories</h3>
+          <p className="text-xs text-slate-500">
+            Organize dishes into catalog sections.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          {/* Search Box */}
+          <div className="relative w-full sm:w-[220px]">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Search category..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-9 text-xs rounded-xl"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
           <Select value={statusFilter} onValueChange={handleFilterChange}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="w-[140px] h-9 text-xs rounded-xl">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -111,43 +158,104 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
               <SelectItem value="false">Inactive Only</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={() => setIsAddOpen(true)} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="mr-2 h-4 w-4" /> Add Category
+
+          <Button
+            onClick={() => setIsAddOpen(true)}
+            className="h-9 text-xs rounded-xl bg-blue-600 hover:bg-blue-700 shrink-0"
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Category
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {categories.map(cat => (
-          <div key={cat._id} className={`flex items-center justify-between p-4 bg-card text-card-foreground border border-border rounded-xl shadow-sm ${!cat.isActive ? 'opacity-60' : ''}`}>
-            <div className="flex items-center gap-3">
-              <div className={`h-10 w-10 flex items-center justify-center rounded-lg ${cat.isActive ? 'bg-orange-50 text-orange-500 dark:bg-orange-900/20' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>
-                <Tag className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  {cat.name}
-                  {!cat.isActive && <span className="text-[10px] bg-muted text-slate-500 px-2 py-0.5 rounded-full font-medium">Inactive</span>}
+      {isLoading ? (
+        /* Loading Skeleton Grid */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="p-4 bg-card text-card-foreground border border-border rounded-xl shadow-sm animate-pulse flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-slate-200 dark:bg-slate-800" />
+                <div className="space-y-1.5">
+                  <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-28" />
+                  <div className="h-3 bg-slate-100 dark:bg-slate-850 rounded w-36" />
                 </div>
-                {cat.description && <div className="text-xs text-slate-500 truncate max-w-[150px]">{cat.description}</div>}
+              </div>
+              <div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredCategories.map((cat) => (
+            <div
+              key={cat._id}
+              className={`flex items-center justify-between p-4 bg-card text-card-foreground border border-border rounded-xl shadow-sm transition-all hover:border-slate-300 dark:hover:border-slate-700 ${
+                !cat.isActive ? "opacity-60" : ""
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={`h-10 w-10 flex items-center justify-center rounded-lg shrink-0 ${
+                    cat.isActive
+                      ? "bg-orange-50 text-orange-500 dark:bg-orange-900/20"
+                      : "bg-slate-100 text-slate-500 dark:bg-slate-800"
+                  }`}
+                >
+                  <Tag className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2 truncate">
+                    <span className="truncate">{cat.name}</span>
+                    {!cat.isActive && (
+                      <span className="text-[10px] bg-muted text-slate-500 px-2 py-0.5 rounded-full font-medium shrink-0">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
+                  {cat.description && (
+                    <div className="text-xs text-slate-500 truncate max-w-[200px]">
+                      {cat.description}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:bg-blue-900/20"
+                  onClick={() => {
+                    setSelectedCategory(cat);
+                    setIsEditOpen(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-rose-400 hover:text-rose-600 hover:bg-rose-50"
+                  onClick={() => handleDelete(cat._id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </div>
-            <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:bg-blue-900/20" onClick={() => { setSelectedCategory(cat); setIsEditOpen(true); }}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="text-rose-400 hover:text-rose-600 hover:bg-rose-50" onClick={() => handleDelete(cat._id)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+          ))}
+
+          {filteredCategories.length === 0 && (
+            <div className="col-span-full py-10 text-center text-slate-500 border border-dashed rounded-xl border-border">
+              {searchQuery
+                ? `No categories matching "${searchQuery}".`
+                : 'No categories yet. Click "Add Category" to get started.'}
             </div>
-          </div>
-        ))}
-        {categories.length === 0 && (
-          <div className="col-span-full py-10 text-center text-slate-500 border border-dashed rounded-xl border-border">
-            No categories yet. Click "Add Category" to get started.
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       <Pagination
         page={page}
@@ -159,48 +267,58 @@ export function CategoriesTab({ restaurantId }: { restaurantId: string }) {
 
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Category</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Add Category</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 pt-4">
             <div>
-              <Label className="mb-2 block">Category Name <span className="text-rose-500">*</span></Label>
-              <Input 
-                placeholder="e.g. Starters" 
-                value={formData.name} 
-                onChange={e => setFormData({...formData, name: e.target.value})} 
+              <Label className="mb-2 block">
+                Category Name <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                placeholder="e.g. Starters, Beverages"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
             </div>
             <div>
               <Label className="mb-2 block">Description</Label>
-              <Textarea 
-                placeholder="Optional description" 
-                value={formData.description} 
-                onChange={e => setFormData({...formData, description: e.target.value})} 
+              <Textarea
+                placeholder="Optional description..."
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
             </div>
-            <div className="flex items-center justify-between py-2">
+            <div className="flex items-center justify-between border-t pt-4">
               <Label>Active Status</Label>
-              <Switch 
+              <Switch
                 checked={formData.isActive}
-                onCheckedChange={c => setFormData({...formData, isActive: c})}
+                onCheckedChange={(c) => setFormData({ ...formData, isActive: c })}
               />
             </div>
-            <div className="pt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
-              <Button onClick={handleAdd} disabled={isSubmitting || !formData.name.trim()}>
-                {isSubmitting ? "Saving..." : "Save Category"}
-              </Button>
-            </div>
+            <Button
+              className="w-full mt-4 bg-blue-600 hover:bg-blue-700"
+              onClick={handleAdd}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Creating..." : "Save Category"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <EditCategoryDialog 
-        open={isEditOpen} 
-        onOpenChange={setIsEditOpen} 
-        restaurantId={restaurantId} 
-        category={selectedCategory} 
-        onSuccess={fetchCategories} 
-      />
+      {selectedCategory && (
+        <EditCategoryDialog
+          isOpen={isEditOpen}
+          onClose={() => {
+            setIsEditOpen(false);
+            setSelectedCategory(null);
+          }}
+          restaurantId={restaurantId}
+          category={selectedCategory}
+          onSuccess={() => fetchCategories(page, statusFilter)}
+        />
+      )}
     </div>
   );
 }

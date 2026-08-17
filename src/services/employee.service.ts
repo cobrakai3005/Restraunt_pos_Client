@@ -110,6 +110,24 @@ export const employeeService = {
   },
 
 
+  async addDuePayment(
+    orderId: string,
+    data: {
+      amount?: number;
+      method?: "CASH" | "UPI" | "CARD" | "OTHER";
+      payments?: Array<{ amount: number; method: "CASH" | "UPI" | "CARD" | "OTHER" }>;
+      notes?: string;
+    }
+  ) {
+    const response = await apiClient.post(`/orders/${orderId}/due-payments`, data);
+    return response.data;
+  },
+
+  async getCustomerDueSummary(customerId: string) {
+    const response = await apiClient.get(`/orders/customer-dues/${customerId}`);
+    return response.data;
+  },
+
   async getEmployees() {
     try {
       const response = await apiClient.get("/client/employees");
