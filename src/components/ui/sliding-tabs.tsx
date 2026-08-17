@@ -59,7 +59,7 @@ export function SlidingTabs({
       
       {tabs.length > 0 && (
         <div
-          className="absolute bottom-0 h-[2.5px] bg-[#8b77ff] transition-all duration-300 ease-in-out"
+          className="absolute bottom-0 h-[2.5px] bg-[#8b77ff] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
           style={{
             width: `${sliderStyle.width}px`,
             transform: `translateX(${sliderStyle.left}px) scaleX(0.8)`,

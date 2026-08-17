@@ -347,10 +347,15 @@ export function CashierDashboard({ user, onOpenDrawer }: DashboardProps) {
       if (!selectedOrder) return;
       setIsProcessing(true);
       const grandTotal = getOrderGrandTotal(selectedOrder);
+      const isZeroComplimentary = grandTotal === 0;
+      const effectiveMethod = isZeroComplimentary ? "COMPLIMENTARY" : paymentMethod;
       const result = await employeeService.checkoutOrder(orderId, {
-        payments: [{ method: paymentMethod, amount: grandTotal }],
+        payments: [{ method: effectiveMethod, amount: grandTotal }],
       });
-      toast({ title: "Payment Successful 🎉", description: "Order settled and table released." });
+      toast({
+        title: isZeroComplimentary ? "Order Settled as Complimentary 🎁" : "Payment Successful 🎉",
+        description: isZeroComplimentary ? "₹0.00 order closed and table released." : "Order settled and table released."
+      });
       setCompletedReceiptOrder(result.data?.order || selectedOrder);
       setShowReceipt(true);
       setSelectedOrder(null);
@@ -1495,93 +1500,111 @@ export function CashierDashboard({ user, onOpenDrawer }: DashboardProps) {
                         {/* ── Payment Method (only for BILLED orders) ── */}
                         {selectedOrder.status === 'BILLED' && (
                           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
-                            <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                              <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400">Payment Method</span>
-                              {paymentMethod === "PART" && (
-                                <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">Split / Part Mode</span>
-                              )}
-                            </div>
-                            <div className="p-4">
-                              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                                {[
-                                  { id: 'CASH', label: 'Cash', icon: Banknote, enabled: true },
-                                  { id: 'UPI', label: 'UPI', icon: Smartphone, enabled: true },
-                                  { id: 'CARD', label: 'Card', icon: CreditCard, enabled: true },
-                                  { id: 'PART', label: 'Part / Split', icon: Split, enabled: true },
-                                  { id: 'DUE', label: 'Due', icon: null, enabled: false },
-                                ].map(method => {
-                                  const Icon = method.icon;
-                                  const isActive = paymentMethod === method.id;
-                                  return (
-                                    <button
-                                      key={method.id}
-                                      disabled={!method.enabled}
-                                      onClick={() => {
-                                        if (method.id === "PART") {
-                                          setPaymentMethod("PART");
-                                          const g = selectedOrder.financials?.grandTotal || 0;
-                                          setSplitCash(g.toFixed(0));
-                                          setSplitUpi("0");
-                                          setSplitCard("0");
-                                          setShowSplitDialog(true);
-                                        } else if (method.enabled) {
-                                          setPaymentMethod(method.id);
-                                        }
-                                      }}
-                                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-center relative ${!method.enabled
-                                        ? 'opacity-40 cursor-not-allowed border-dashed border-slate-200 dark:border-slate-700'
-                                        : isActive
-                                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md shadow-blue-500/10'
-                                          : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50 dark:bg-slate-800/50'
-                                        }`}
-                                    >
-                                      {/* Radio indicator */}
-                                      <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isActive ? 'border-blue-500' : 'border-slate-300 dark:border-slate-600'
-                                        }`}>
-                                        {isActive && <span className="w-2 h-2 rounded-full bg-blue-500" />}
-                                      </span>
-                                      {Icon ? <Icon className={`h-4 w-4 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`} /> : (
-                                        <span className={`text-base ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>○</span>
-                                      )}
-                                      <span className={`text-[11px] font-bold ${isActive ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'}`}>{method.label}</span>
-                                      {!method.enabled && (
-                                        <span className="absolute top-1 right-1 text-[8px] font-black uppercase text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 rounded">Soon</span>
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* ── Feature Chips ── */}
-                            <div className="px-4 pb-4 flex flex-wrap items-center gap-2">
-                              {/* Active Split Bill Button */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPaymentMethod("PART");
-                                  const g = selectedOrder.financials?.grandTotal || 0;
-                                  setSplitCash(g.toFixed(0));
-                                  setSplitUpi("0");
-                                  setSplitCard("0");
-                                  setShowSplitDialog(true);
-                                }}
-                                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-blue-500/40 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 text-[11px] font-extrabold text-blue-600 dark:text-blue-400 hover:from-blue-500/20 hover:to-indigo-500/20 transition-all active:scale-95 shadow-xs"
-                              >
-                                <Split className="h-3.5 w-3.5" /> Split / Part Payment
-                              </button>
-
-                              {[
-                                { label: '🎁 BOGO Offer', coming: true },
-                                { label: '⭐ Loyalty Points', coming: true },
-                                { label: '📲 Send Receipt SMS', coming: true },
-                              ].map(f => (
-                                <div key={f.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-[11px] font-semibold text-slate-400 dark:text-slate-500 cursor-not-allowed select-none">
-                                  {f.label}
-                                  <span className="text-[8px] font-black uppercase bg-slate-200 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded-full">Soon</span>
+                            {grandTotal === 0 ? (
+                              <div className="p-5 bg-gradient-to-r from-purple-50 via-indigo-50/50 to-purple-50 dark:from-purple-950/40 dark:via-indigo-950/30 dark:to-purple-950/40 flex items-center gap-3.5">
+                                <div className="p-3 rounded-2xl bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 shrink-0">
+                                  <Gift className="w-6 h-6" />
                                 </div>
-                              ))}
-                            </div>
+                                <div>
+                                  <h4 className="text-sm font-black text-purple-950 dark:text-purple-200 uppercase tracking-wide flex items-center gap-2">
+                                    100% Complimentary Bill (₹0.00 Due)
+                                  </h4>
+                                  <p className="text-xs text-purple-700 dark:text-purple-300 mt-0.5 leading-relaxed">
+                                    All items have been marked Free of Charge. No payment is required. Click <strong>"Settle Complimentary"</strong> below to close the order and release the table.
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500 dark:text-slate-400">Payment Method</span>
+                                  {paymentMethod === "PART" && (
+                                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">Split / Part Mode</span>
+                                  )}
+                                </div>
+                                <div className="p-4">
+                                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                                    {[
+                                      { id: 'CASH', label: 'Cash', icon: Banknote, enabled: true },
+                                      { id: 'UPI', label: 'UPI', icon: Smartphone, enabled: true },
+                                      { id: 'CARD', label: 'Card', icon: CreditCard, enabled: true },
+                                      { id: 'PART', label: 'Part / Split', icon: Split, enabled: true },
+                                      { id: 'DUE', label: 'Due', icon: null, enabled: false },
+                                    ].map(method => {
+                                      const Icon = method.icon;
+                                      const isActive = paymentMethod === method.id;
+                                      return (
+                                        <button
+                                          key={method.id}
+                                          disabled={!method.enabled}
+                                          onClick={() => {
+                                            if (method.id === "PART") {
+                                              setPaymentMethod("PART");
+                                              const g = selectedOrder.financials?.grandTotal || 0;
+                                              setSplitCash(g.toFixed(0));
+                                              setSplitUpi("0");
+                                              setSplitCard("0");
+                                              setShowSplitDialog(true);
+                                            } else if (method.enabled) {
+                                              setPaymentMethod(method.id);
+                                            }
+                                          }}
+                                          className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all text-center relative ${!method.enabled
+                                            ? 'opacity-40 cursor-not-allowed border-dashed border-slate-200 dark:border-slate-700'
+                                            : isActive
+                                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md shadow-blue-500/10'
+                                              : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50 dark:bg-slate-800/50'
+                                            }`}
+                                        >
+                                          {/* Radio indicator */}
+                                          <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isActive ? 'border-blue-500' : 'border-slate-300 dark:border-slate-600'
+                                            }`}>
+                                            {isActive && <span className="w-2 h-2 rounded-full bg-blue-500" />}
+                                          </span>
+                                          {Icon ? <Icon className={`h-4 w-4 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`} /> : (
+                                            <span className={`text-base ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>○</span>
+                                          )}
+                                          <span className={`text-[11px] font-bold ${isActive ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-400'}`}>{method.label}</span>
+                                          {!method.enabled && (
+                                            <span className="absolute top-1 right-1 text-[8px] font-black uppercase text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 rounded">Soon</span>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+
+                                {/* ── Feature Chips ── */}
+                                <div className="px-4 pb-4 flex flex-wrap items-center gap-2">
+                                  {/* Active Split Bill Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPaymentMethod("PART");
+                                      const g = selectedOrder.financials?.grandTotal || 0;
+                                      setSplitCash(g.toFixed(0));
+                                      setSplitUpi("0");
+                                      setSplitCard("0");
+                                      setShowSplitDialog(true);
+                                    }}
+                                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-blue-500/40 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 text-[11px] font-extrabold text-blue-600 dark:text-blue-400 hover:from-blue-500/20 hover:to-indigo-500/20 transition-all active:scale-95 shadow-xs"
+                                  >
+                                    <Split className="h-3.5 w-3.5" /> Split / Part Payment
+                                  </button>
+
+                                  {[
+                                    { label: '🎁 BOGO Offer', coming: true },
+                                    { label: '⭐ Loyalty Points', coming: true },
+                                    { label: '📲 Send Receipt SMS', coming: true },
+                                  ].map(f => (
+                                    <div key={f.label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-[11px] font-semibold text-slate-400 dark:text-slate-500 cursor-not-allowed select-none">
+                                      {f.label}
+                                      <span className="text-[8px] font-black uppercase bg-slate-200 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded-full">Soon</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            )}
                           </div>
                         )}
 
@@ -1600,7 +1623,7 @@ export function CashierDashboard({ user, onOpenDrawer }: DashboardProps) {
                   {/* Left: Quick Order Summary */}
                   <div className="hidden sm:flex flex-col">
                     <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Total Due</span>
-                    <span className="text-xl font-black text-slate-900 dark:text-white">
+                    <span className={`text-xl font-black ${getOrderGrandTotal(selectedOrder) === 0 ? "text-purple-600 dark:text-purple-400" : "text-slate-900 dark:text-white"}`}>
                       ₹{getOrderGrandTotal(selectedOrder).toFixed(2)}
                     </span>
                   </div>
@@ -1650,7 +1673,17 @@ export function CashierDashboard({ user, onOpenDrawer }: DashboardProps) {
                         >
                           <RotateCcw className="mr-2 h-4 w-4" /> Re-Open Order
                         </Button>
-                        {paymentMethod === "PART" ? (
+                        {getOrderGrandTotal(selectedOrder) === 0 ? (
+                          <Button
+                            size="lg"
+                            className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold h-12 px-8 text-sm rounded-xl shadow-md shadow-purple-600/30 hover:shadow-purple-600/45 hover:scale-[1.01] active:scale-[0.99] transition-all min-w-[220px]"
+                            disabled={isProcessing}
+                            onClick={() => handleCheckout(selectedOrder._id)}
+                          >
+                            {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Gift className="mr-2 h-4 w-4" />}
+                            {isProcessing ? 'Settling...' : 'Settle Complimentary (₹0.00)'}
+                          </Button>
+                        ) : paymentMethod === "PART" ? (
                           <Button
                             size="lg"
                             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold h-12 px-8 text-sm rounded-xl shadow-md shadow-blue-600/30 hover:shadow-blue-600/45 hover:scale-[1.01] active:scale-[0.99] transition-all min-w-[200px]"
