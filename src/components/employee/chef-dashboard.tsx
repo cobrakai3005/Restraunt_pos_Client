@@ -29,6 +29,11 @@ interface KotItem {
   };
   variantName?: string;
   quantity: number;
+  selectedModifiers?: {
+    name: string;
+    price: number;
+    groupName?: string;
+  }[];
   notes?: string;
   station?: string;
   itemStatus: "PENDING" | "PREPARING" | "READY" | "SERVED";
@@ -193,6 +198,7 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
           >
             <option value="ALL">👨‍🍳 All Kitchen Stations</option>
             <option value="MAIN_KITCHEN">🍳 Main Kitchen</option>
+            <option value="OVEN">🍕 Oven / Pizza</option>
             <option value="TANDOOR">🔥 Tandoor</option>
             <option value="GRILL">🍖 Grill</option>
             <option value="BAR">🍹 Bar &amp; Beverages</option>
@@ -363,6 +369,21 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
                                       👨‍🍳 {item.station || item.menuItemId?.station || "MAIN_KITCHEN"}
                                     </span>
                                   </div>
+
+                                  {/* Dynamic Modifier / Add-on Badges for Kitchen */}
+                                  {item.selectedModifiers && item.selectedModifiers.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-1.5">
+                                      {item.selectedModifiers.map((m, mIdx) => (
+                                        <span
+                                          key={mIdx}
+                                          className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800/60 shadow-xs flex items-center gap-1"
+                                        >
+                                          ✨ {m.name}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+
                                   {item.notes && (
                                     <div className="text-xs text-red-700 dark:text-red-300 font-semibold bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 p-2 rounded-xl mt-1.5 break-words whitespace-normal">
                                       ⚠️ {item.notes}

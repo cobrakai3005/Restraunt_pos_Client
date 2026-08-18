@@ -11,9 +11,10 @@ import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, UserX, Utensi
 import { employeeService } from "@/services/employee.service";
 import { customerService, Customer } from "@/services/customer.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
-import { VariantPickerDialog } from "./variant-picker-dialog";
+import { VariantPickerDialog, SelectedModifier } from "./variant-picker-dialog";
 import { MenuItemCard } from "./menu-item-card";
 import { ReceiptModal } from "./ReceiptModal";
+import { ModifierGroup } from "@/services/menu.service";
 
 const PRESET_COOKING_NOTES = ["Less Spicy", "No Onion/Garlic", "Extra Spicy", "Jain", "Less Oil", "Takeaway Pack"];
 
@@ -30,6 +31,7 @@ interface Menu {
     price: number;
     sku?: string;
   }[];
+  modifierGroups?: ModifierGroup[];
   station: string;
   isAvailable: boolean;
   imageUrl?: string | null;
@@ -53,6 +55,7 @@ interface CartItem extends Menu {
     name: string;
     price: number;
   };
+  selectedModifiers?: SelectedModifier[];
 }
 
 interface Order {
@@ -245,20 +248,44 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     };
   }, [toast, fetchActiveOrders]);
 
-  const addToCart = (menu: Menu, chosenVariant?: { name: string; price: number }, addedQty: number = 1) => {
+  const addToCart = (
+    menu: Menu,
+    chosenVariant?: { name: string; price: number },
+    selectedModifiers: SelectedModifier[] = [],
+    itemNotes: string = "",
+    addedQty: number = 1
+  ) => {
     if (!menu.isAvailable) {
       toast({ variant: "destructive", title: "Item Unavailable", description: "This item is currently marked as unavailable." });
       return;
     }
 
     const selectedVariant = chosenVariant || menu.variants?.[0] || { name: "Standard", price: 0 };
+    const modifiersKey = (selectedModifiers || []).map(m => `${m.name}:${m.price}`).sort().join("|");
 
     setCart(prev => {
-      const existing = prev.find(item => item._id === menu._id && !item.notes && item.selectedVariant.name === selectedVariant.name);
+      const existing = prev.find(
+        item => item._id === menu._id &&
+        (item.notes || "") === itemNotes &&
+        item.selectedVariant.name === selectedVariant.name &&
+        (item.selectedModifiers || []).map(m => `${m.name}:${m.price}`).sort().join("|") === modifiersKey
+      );
       if (existing) {
-        return prev.map(item => item._id === menu._id && !item.notes && item.selectedVariant.name === selectedVariant.name ? { ...item, quantity: item.quantity + addedQty } : item);
+        return prev.map(item =>
+          item.cartId === existing.cartId ? { ...item, quantity: item.quantity + addedQty } : item
+        );
       }
-      return [...prev, { ...menu, cartId: Math.random().toString(), quantity: addedQty, notes: "", selectedVariant }];
+      return [
+        ...prev,
+        {
+          ...menu,
+          cartId: Math.random().toString(),
+          quantity: addedQty,
+          notes: itemNotes,
+          selectedVariant,
+          selectedModifiers,
+        },
+      ];
     });
 
     // UX: pulse the FAB to confirm the item was added
@@ -329,7 +356,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
       if (variantIdx !== null && targetMenu.variants && targetMenu.variants[variantIdx]) {
         const chosenVariant = targetMenu.variants[variantIdx];
-        addToCart(targetMenu, chosenVariant, qty);
+        addToCart(targetMenu, chosenVariant, [], "", qty);
         toast({
           title: `⚡ Punched ${qty}x ${targetMenu.name} (${chosenVariant.name})`,
           description: `Code: ${codeDisplay}.${variantIdx + 1}`,
@@ -423,7 +450,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
       if (variantIdx !== null && targetMenu.variants && targetMenu.variants[variantIdx]) {
         const chosenVariant = targetMenu.variants[variantIdx];
-        addToCart(targetMenu, chosenVariant, qty);
+        addToCart(targetMenu, chosenVariant, [], "", qty);
         toast({
           title: `⚡ Punched ${qty}x ${targetMenu.name} (${chosenVariant.name})`,
           description: `Code: ${codeDisplay}.${variantIdx + 1}`,
@@ -448,10 +475,11 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
       toast({ variant: "destructive", title: "Item Unavailable", description: "This item is currently marked as unavailable." });
       return;
     }
-    if (menu.variants && menu.variants.length > 1) {
+    const hasModifiers = menu.modifierGroups && menu.modifierGroups.length > 0;
+    if ((menu.variants && menu.variants.length > 1) || hasModifiers) {
       setPickerMenu(menu);
     } else {
-      addToCart(menu, undefined, qty);
+      addToCart(menu, undefined, [], "", qty);
     }
   };
 
@@ -530,10 +558,15 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     if (cid) categoryCountMap.set(cid, (categoryCountMap.get(cid) || 0) + 1);
   });
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.selectedVariant.price * item.quantity), 0);
+  const getItemUnitPrice = (item: CartItem) => {
+    const modPrice = (item.selectedModifiers || []).reduce((sum, m) => sum + (Number(m.price) || 0), 0);
+    return (item.selectedVariant?.price || 0) + modPrice;
+  };
+
+  const subtotal = cart.reduce((sum, item) => sum + (getItemUnitPrice(item) * item.quantity), 0);
   // Use real per-item taxPercentage from menu data (same logic as backend generateBill)
   const taxes = cart.reduce((sum, item) => {
-    const itemTotal = item.selectedVariant.price * item.quantity;
+    const itemTotal = getItemUnitPrice(item) * item.quantity;
     const taxPct = (item as any).taxPercentage ?? 0;
     return sum + (itemTotal * taxPct) / 100;
   }, 0);
@@ -560,6 +593,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           menuItemId: c._id,
           variantName: c.selectedVariant.name,
           quantity: c.quantity,
+          selectedModifiers: c.selectedModifiers || [],
           notes: c.notes || undefined,
         })),
       }));
@@ -657,6 +691,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           menuItemId: c._id,
           variantName: c.selectedVariant.name,
           quantity: c.quantity,
+          selectedModifiers: c.selectedModifiers || [],
           notes: c.notes || undefined,
         })),
       }));
@@ -1474,10 +1509,21 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                           </div>
                           <div className="flex-1">
                             <div className="flex items-start justify-between gap-2">
-                              <div className="font-bold text-sm leading-tight pr-2 text-slate-900 dark:text-white">
-                                {item.name} <span className="text-[11px] text-slate-500 font-semibold ml-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">({item.selectedVariant.name})</span>
+                              <div>
+                                <div className="font-bold text-sm leading-tight pr-2 text-slate-900 dark:text-white">
+                                  {item.name} <span className="text-[11px] text-slate-500 font-semibold ml-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">({item.selectedVariant.name})</span>
+                                </div>
+                                {item.selectedModifiers && item.selectedModifiers.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {item.selectedModifiers.map((m, mIdx) => (
+                                      <span key={mIdx} className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                        +{m.name} {m.price > 0 ? `(+₹${m.price})` : ''}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                              <div className="font-extrabold text-sm text-blue-600 dark:text-blue-400">₹{(item.selectedVariant.price * item.quantity).toFixed(2)}</div>
+                              <div className="font-extrabold text-sm text-blue-600 dark:text-blue-400 shrink-0">₹{(getItemUnitPrice(item) * item.quantity).toFixed(2)}</div>
                             </div>
                           </div>
                         </div>
@@ -1586,7 +1632,12 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         itemName={pickerMenu?.name || ""}
         itemImage={pickerMenu?.imageUrl || undefined}
         variants={pickerMenu?.variants || []}
-        onSelect={(variant) => pickerMenu && addToCart(pickerMenu, variant)}
+        modifierGroups={pickerMenu?.modifierGroups || []}
+        onSelect={(variant, selectedModifiers, notes) => {
+          if (pickerMenu) {
+            addToCart(pickerMenu, variant, selectedModifiers || [], notes || "", 1);
+          }
+        }}
       />
     </div>
   );

@@ -13,6 +13,21 @@ export interface Category {
   createdAt: string;
 }
 
+export interface ModifierOption {
+  _id?: string;
+  name: string;
+  price: number;
+  isDefault?: boolean;
+}
+
+export interface ModifierGroup {
+  _id?: string;
+  name: string;
+  minSelection: number;
+  maxSelection: number;
+  options: ModifierOption[];
+}
+
 export interface Variant {
   name: string;
   price: number;
@@ -27,7 +42,8 @@ export interface MenuItem {
   categoryId: string | Category;
   restaurantId: string;
   variants: Variant[];
-  station: "BAR" | "TANDOOR" | "GRILL" | "MAIN_KITCHEN" | "BAKERY" | "COLD_KITCHEN";
+  modifierGroups?: ModifierGroup[];
+  station: "BAR" | "TANDOOR" | "GRILL" | "MAIN_KITCHEN" | "BAKERY" | "COLD_KITCHEN" | "OVEN";
   taxPercentage: number;
   isVeg: boolean;
   isAvailable: boolean;
@@ -80,6 +96,25 @@ export const menuService = {
 
   async deleteMenuItem(id: string, restaurantId?: string) {
     const response = await apiClient.delete(`/restaurant/menu-items/${id}`, getHeaders(restaurantId));
+    return response.data;
+  },
+
+  async uploadMenuItemImage(id: string, file: File, restaurantId?: string) {
+    const formData = new FormData();
+    formData.append("image", file);
+    const response = await apiClient.post(
+      `/restaurant/menu-items/${id}/image`,
+      formData,
+      getHeaders(restaurantId)
+    );
+    return response.data;
+  },
+
+  async removeMenuItemImage(id: string, restaurantId?: string) {
+    const response = await apiClient.delete(
+      `/restaurant/menu-items/${id}/image`,
+      getHeaders(restaurantId)
+    );
     return response.data;
   },
 

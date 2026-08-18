@@ -31,12 +31,18 @@ export function PrintableInvoice({ invoice, restaurantName, templateId, type = '
       invoice.kots.forEach((kot: any) => {
         if (kot.items) {
           kot.items.forEach((item: any) => {
+            const modPrice = (item.selectedModifiers || []).reduce((sum: number, m: any) => sum + (Number(m.price) || 0), 0);
+            const unitPrice = (Number(item.variantPrice || 0)) + modPrice;
+            const baseName = item.menuItemId?.name || item.name || 'Item';
+            const variant = item.variantName && item.variantName !== 'Standard' ? ` (${item.variantName})` : '';
+            const modStr = (item.selectedModifiers || []).map((m: any) => m.name).join(', ');
+            const fullName = `${baseName}${variant}${modStr ? ` [${modStr}]` : ''}`;
             normalizedData.items.push({
-              name: item.variantName || 'Item',
+              name: fullName,
               quantity: item.quantity || 1,
               unit: 'pcs',
-              unitPrice: item.variantPrice || 0,
-              totalPrice: (item.variantPrice || 0) * (item.quantity || 1)
+              unitPrice,
+              totalPrice: unitPrice * (item.quantity || 1)
             });
           });
         }

@@ -15,8 +15,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Store, UserCircle, KeyRound } from "lucide-react";
+import { Store, UserCircle, KeyRound, ArrowRight, ShieldCheck } from "lucide-react";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import Link from "next/link";
 
 import { authService, User } from "@/services/auth.service";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -245,9 +246,18 @@ function EmployeeLoginForm() {
               </TabsContent>
             </Tabs>
             
-            <p className="text-center text-sm text-slate-500 mt-6">
-              Need help? Contact your restaurant manager.
-            </p>
+            {/* Client / Admin Switch Link */}
+            <div className="pt-5 mt-6 border-t border-slate-200 dark:border-slate-800 text-center space-y-2">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Are you a Restaurant Owner or Franchise Admin?
+              </p>
+              <Link
+                href="/client-login"
+                className="inline-flex items-center justify-center gap-1.5 text-xs font-extrabold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:underline transition-colors"
+              >
+                <ShieldCheck className="w-4 h-4" /> Go to Client &amp; Admin Portal <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
         </div>
       </div>

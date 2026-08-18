@@ -38,6 +38,11 @@ interface KotItem {
   };
   variantName?: string;
   quantity: number;
+  selectedModifiers?: {
+    name: string;
+    price: number;
+    groupName?: string;
+  }[];
   notes?: string;
   isComplimentary?: boolean;
   itemStatus: "PENDING" | "PREPARING" | "READY" | "SERVED";
@@ -525,6 +530,20 @@ export function CashierPickupPanel({ user, embedded }: DashboardProps) {
                                   </span>
                                 )}
                               </p>
+
+                              {/* Modifier / Add-on Badges */}
+                              {item.selectedModifiers && item.selectedModifiers.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {item.selectedModifiers.map((m: any, mIdx: number) => (
+                                    <span
+                                      key={mIdx}
+                                      className="text-[9px] font-extrabold px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-950/80 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-xs"
+                                    >
+                                      +{m.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
 
                               {/* Cooking Notes */}
                               {item.notes && (

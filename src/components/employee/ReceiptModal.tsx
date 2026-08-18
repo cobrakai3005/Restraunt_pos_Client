@@ -171,13 +171,27 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
                     const itemName = item.menuItemId?.name || item.name || "Item";
                     const variant = item.variantName || item.selectedVariant?.name;
                     const isComp = Boolean(item.isComplimentary);
-                    const itemTotal = isComp ? 0 : ((item.variantPrice || item.price || 0) * (item.quantity || 1));
+                    const modPrice = (item.selectedModifiers || []).reduce((sum: number, m: any) => sum + (Number(m.price) || 0), 0);
+                    const unitPrice = Number(item.variantPrice || item.price || 0) + modPrice;
+                    const itemTotal = isComp ? 0 : (unitPrice * (item.quantity || 1));
+                    const modifiers = item.selectedModifiers || [];
                     return (
                       <div key={idx} className="flex justify-between items-start gap-1">
                         <span className="w-8 font-bold shrink-0">{item.quantity}X</span>
                         <div className="flex-1 min-w-0">
                           <span className="uppercase break-words font-medium">{itemName}</span>
-                          {isComp ? <span className="text-[9px] font-black text-purple-700 block uppercase">*** COMPLIMENTARY (FOC) ***</span> : (variant && variant !== "Standard" && <span className="text-[10px] text-slate-600 block">({variant})</span>)}
+                          {isComp ? (
+                            <span className="text-[9px] font-black text-purple-700 block uppercase">*** COMPLIMENTARY (FOC) ***</span>
+                          ) : (
+                            variant && variant !== "Standard" && <span className="text-[10px] text-slate-600 block">({variant})</span>
+                          )}
+                          {modifiers.length > 0 && (
+                            <div className="text-[9px] text-slate-600 italic block pl-0.5">
+                              {modifiers.map((m: any, mI: number) => (
+                                <span key={mI}>+{m.name}{m.price > 0 ? ` (₹${m.price})` : ''}{mI < modifiers.length - 1 ? ', ' : ''}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                         <span className="text-right shrink-0 font-medium">{isComp ? "₹0.00" : `₹${itemTotal.toFixed(2)}`}</span>
                       </div>
@@ -219,11 +233,15 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
                 <div className="font-bold text-[9px] uppercase text-slate-700 mb-0.5">Ordered Items Summary:</div>
                 {allItems.map((item: any, idx: number) => {
                   const isComp = Boolean(item.isComplimentary);
-                  const itemTotal = isComp ? 0 : ((item.variantPrice || item.price || 0) * (item.quantity || 1));
+                  const modPrice = (item.selectedModifiers || []).reduce((sum: number, m: any) => sum + (Number(m.price) || 0), 0);
+                  const unitPrice = Number(item.variantPrice || item.price || 0) + modPrice;
+                  const itemTotal = isComp ? 0 : (unitPrice * (item.quantity || 1));
+                  const modStr = (item.selectedModifiers || []).map((m: any) => m.name).join(", ");
                   return (
                     <div key={idx} className="flex justify-between">
                       <span className="truncate pr-2">
                         {item.quantity}x {item.menuItemId?.name || item.name}
+                        {modStr && ` (${modStr})`}
                         {isComp && " (COMPLIMENTARY)"}
                       </span>
                       <span className="shrink-0 font-mono">

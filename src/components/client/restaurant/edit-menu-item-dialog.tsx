@@ -176,8 +176,15 @@ export function EditMenuItemDialog({ open, onOpenChange, restaurantId, item, cat
               </Select>
             </div>
             <div>
-              <Label className="mb-2 block">Tax %</Label>
-              <Input type="number" min="0" max="100" value={formData.taxPercentage} onChange={e => setFormData({...formData, taxPercentage: e.target.value})} />
+              <Label className="text-foreground">Tax (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                value={formData.taxPercentage}
+                onChange={e => setFormData({...formData, taxPercentage: e.target.value})}
+                onFocus={e => e.target.select()}
+              />
             </div>
           </div>
 
@@ -228,7 +235,8 @@ export function EditMenuItemDialog({ open, onOpenChange, restaurantId, item, cat
                     type="number" 
                     placeholder="Price" 
                     value={variant.price} 
-                    onChange={e => handleUpdateVariant(index, 'price', e.target.value)} 
+                    onChange={e => handleUpdateVariant(index, 'price', e.target.value)}
+                    onFocus={e => e.target.select()}
                     className="w-24 bg-card text-card-foreground"
                   />
                   <Input 
