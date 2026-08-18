@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { analyticsService, AnalyticsData } from "@/services/analytics.service";
 import { clientService } from "@/services/client.service";
+import { useDebounce } from "@/hooks/use-debounce";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -158,11 +159,17 @@ export function AnalyticsDashboard({ initialRestaurantId, hideRestaurantSelector
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [menuSearchQuery, setMenuSearchQuery] = useState("");
+  const debouncedMenuSearchQuery = useDebounce(menuSearchQuery, 300);
   const [selectedMenuQuadrant, setSelectedMenuQuadrant] = useState<string>("ALL");
 
   // Pagination states for tables
   const [menuPage, setMenuPage] = useState(1);
   const [menuPageSize, setMenuPageSize] = useState(10);
+
+  // Reset menu page when search or quadrant filter changes
+  useEffect(() => {
+    setMenuPage(1);
+  }, [debouncedMenuSearchQuery, selectedMenuQuadrant]);
 
   const [staffPage, setStaffPage] = useState(1);
   const [staffPageSize, setStaffPageSize] = useState(10);
@@ -270,15 +277,16 @@ export function AnalyticsDashboard({ initialRestaurantId, hideRestaurantSelector
     return (
       data?.menuEngineering.items.filter((item) => {
         const matchesSearch =
-          item.itemName.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
-          item.categoryName.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
-          (item.shortCode && item.shortCode.toLowerCase().includes(menuSearchQuery.toLowerCase())) ||
-          (item.numericCode && item.numericCode.includes(menuSearchQuery));
+          !debouncedMenuSearchQuery.trim() ||
+          item.itemName.toLowerCase().includes(debouncedMenuSearchQuery.toLowerCase()) ||
+          item.categoryName.toLowerCase().includes(debouncedMenuSearchQuery.toLowerCase()) ||
+          (item.shortCode && item.shortCode.toLowerCase().includes(debouncedMenuSearchQuery.toLowerCase())) ||
+          (item.numericCode && item.numericCode.includes(debouncedMenuSearchQuery));
         const matchesQuadrant = selectedMenuQuadrant === "ALL" || item.classification === selectedMenuQuadrant;
         return matchesSearch && matchesQuadrant;
       }) || []
     );
-  }, [data, menuSearchQuery, selectedMenuQuadrant]);
+  }, [data, debouncedMenuSearchQuery, selectedMenuQuadrant]);
 
   const paginatedMenuItems = useMemo(() => {
     const start = (menuPage - 1) * menuPageSize;

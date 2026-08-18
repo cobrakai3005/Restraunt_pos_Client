@@ -16,6 +16,7 @@ import {
 import { clientService } from "@/services/client.service";
 import { adminService } from "@/services/admin.service";
 import { useAuth } from "@/context/auth-context";
+import { useDebounce } from "@/hooks/use-debounce";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -141,8 +142,16 @@ export function PosReportsHub({
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  // Search Filter in Tables
+  // Search Filter in Tables with Debouncing
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  // Reset pagination when debounced search query changes
+  useEffect(() => {
+    setItemPage(1);
+    setVariationPage(1);
+    setOrderPage(1);
+  }, [debouncedSearchQuery]);
 
   // Report Data States
   const [executiveData, setExecutiveData] = useState<ExecutiveSummaryData | null>(null);
@@ -252,7 +261,7 @@ export function PosReportsHub({
           limit: orderPageSize,
           status: orderStatusFilter !== "ALL" ? orderStatusFilter : undefined,
           orderType: orderTypeFilter !== "ALL" ? orderTypeFilter : undefined,
-          search: searchQuery.trim() || undefined,
+          search: debouncedSearchQuery.trim() || undefined,
         });
         setOrderData(res.data);
       } else if (activeTab === "group") {
@@ -283,7 +292,7 @@ export function PosReportsHub({
     orderPageSize,
     orderStatusFilter,
     orderTypeFilter,
-    searchQuery,
+    debouncedSearchQuery,
     toast,
   ]);
 
@@ -320,19 +329,19 @@ export function PosReportsHub({
     }
   };
 
-  // Filtered views for search query
+  // Filtered views for search query with debouncing
   const filteredCategoryRows = useMemo(() => {
     if (!categoryData?.rows) return [];
-    if (!searchQuery.trim()) return categoryData.rows;
+    if (!debouncedSearchQuery.trim()) return categoryData.rows;
     return categoryData.rows.filter((r) =>
-      r.categoryName.toLowerCase().includes(searchQuery.toLowerCase())
+      r.categoryName.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
     );
-  }, [categoryData, searchQuery]);
+  }, [categoryData, debouncedSearchQuery]);
 
   const filteredItemRows = useMemo(() => {
     if (!itemData?.rows) return [];
-    if (!searchQuery.trim()) return itemData.rows;
-    const q = searchQuery.toLowerCase();
+    if (!debouncedSearchQuery.trim()) return itemData.rows;
+    const q = debouncedSearchQuery.toLowerCase();
     return itemData.rows.filter(
       (r) =>
         r.itemName.toLowerCase().includes(q) ||
@@ -341,19 +350,19 @@ export function PosReportsHub({
         (r.shortCode && r.shortCode.toLowerCase().includes(q)) ||
         (r.numericCode && r.numericCode.includes(q))
     );
-  }, [itemData, searchQuery]);
+  }, [itemData, debouncedSearchQuery]);
 
   const filteredVariationRows = useMemo(() => {
     if (!variationData?.rows) return [];
-    if (!searchQuery.trim()) return variationData.rows;
-    const q = searchQuery.toLowerCase();
+    if (!debouncedSearchQuery.trim()) return variationData.rows;
+    const q = debouncedSearchQuery.toLowerCase();
     return variationData.rows.filter(
       (r) =>
         r.itemName.toLowerCase().includes(q) ||
         r.variantName.toLowerCase().includes(q) ||
         r.categoryName.toLowerCase().includes(q)
     );
-  }, [variationData, searchQuery]);
+  }, [variationData, debouncedSearchQuery]);
 
   const paginatedItemRows = useMemo(() => {
     const start = (itemPage - 1) * itemPageSize;
