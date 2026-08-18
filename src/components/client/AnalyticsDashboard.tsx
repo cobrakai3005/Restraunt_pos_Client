@@ -53,8 +53,10 @@ import {
   ShieldAlert,
   ChevronLeft,
   ChevronRight,
+  FileSpreadsheet,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { PosReportsHub } from "@/components/client/reports/pos-reports-hub";
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ec4899", "#8b5cf6", "#06b6d4", "#64748b"];
 
@@ -376,10 +378,13 @@ export function AnalyticsDashboard({ initialRestaurantId, hideRestaurantSelector
       )}
 
       {data && (
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="bg-muted/60 p-1 rounded-xl h-auto flex-wrap gap-1">
+        <Tabs defaultValue="overview" className="space-y-6 max-w-full overflow-hidden">
+          <TabsList className="bg-muted/60 p-1 rounded-xl h-auto flex flex-wrap gap-1 w-full max-w-full">
             <TabsTrigger value="overview" className="gap-2 rounded-lg py-2">
               <Activity className="h-4 w-4" /> Overview &amp; Peaks
+            </TabsTrigger>
+            <TabsTrigger value="pos-reports" className="gap-2 rounded-lg py-2">
+              <FileSpreadsheet className="h-4 w-4" /> POS Reports Hub
             </TabsTrigger>
             <TabsTrigger value="menu" className="gap-2 rounded-lg py-2">
               <Utensils className="h-4 w-4" /> Menu Matrix &amp; Stars
@@ -939,6 +944,17 @@ export function AnalyticsDashboard({ initialRestaurantId, hideRestaurantSelector
                 />
               </Card>
             </div>
+          </TabsContent>
+
+          {/* ========================================================================= */}
+          {/* TAB 5: COMPREHENSIVE POS REPORTS HUB */}
+          {/* ========================================================================= */}
+          <TabsContent value="pos-reports" className="space-y-6">
+            <PosReportsHub
+              initialRestaurantId={selectedRestaurantId}
+              hideRestaurantSelector={hideRestaurantSelector}
+              defaultTab="executive"
+            />
           </TabsContent>
         </Tabs>
       )}

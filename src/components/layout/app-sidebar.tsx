@@ -38,7 +38,8 @@ import {
   Sparkles,
   LayoutGrid,
   UserCog,
-  SlidersHorizontal
+  SlidersHorizontal,
+  FileSpreadsheet,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -46,6 +47,7 @@ const adminNavItems = [
   { icon: ArrowLeftRight, label: "Transactions", href: "/transactions" },
   { icon: Building2, label: "Client Management", href: "/admin/clients" },
   { icon: Store, label: "Restaurants", href: "/admin/restaurants" },
+  { icon: FileSpreadsheet, label: "POS Reports", href: "/admin/reports" },
   { icon: FileText, label: "Documents", href: "#" },
   { icon: Settings, label: "Settings", href: "#" },
 ];
@@ -54,6 +56,7 @@ const clientDirectNavItems = [
   { icon: Store, label: "Restaurants", href: "/client/restaurants" },
   { icon: ArrowLeftRight, label: "Transactions", href: "/transactions" },
   { icon: BookOpen, label: "Ledger", href: "/client/ledgers" },
+  { icon: FileSpreadsheet, label: "POS Reports", href: "/client/reports" },
 ];
 
 const managementSubItems = [

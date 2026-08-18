@@ -98,6 +98,20 @@ export function CashierBillingOrdersList({
           )}
         </div>
       </ScrollArea>
+
+      {/* ── Bottom Pending Summary Strip ── */}
+      <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80 flex items-center justify-between text-xs font-bold shrink-0">
+        <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+          <Receipt className="w-3.5 h-3.5 text-emerald-500" />
+          Pending to Collect ({filteredOrders.length})
+        </span>
+        <span className="text-emerald-600 dark:text-emerald-400 font-black text-sm">
+          ₹
+          {filteredOrders
+            .reduce((sum, ord) => sum + calculateOrderFinancials(ord).grandTotal, 0)
+            .toFixed(0)}
+        </span>
+      </div>
     </div>
   );
 }

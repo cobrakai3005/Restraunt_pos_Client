@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, UserX, UtensilsCrossed, Clock, RotateCcw, X, ChevronRight, Receipt, Layers, Heart, Star, Briefcase, Sparkles } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, UserX, UtensilsCrossed, Clock, RotateCcw, X, ChevronRight, Receipt, Layers, Heart, Star, Briefcase, Sparkles, Users } from "lucide-react";
 import { employeeService } from "@/services/employee.service";
 import { customerService, Customer } from "@/services/customer.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
@@ -61,6 +61,7 @@ interface CartItem extends Menu {
 interface Order {
   _id: string;
   orderNumber?: number;
+  guestCount?: number;
   tableId?: {
     _id: string;
     tableNumber: string;
@@ -106,6 +107,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedTable, setSelectedTable] = useState("");
+  const [guestCount, setGuestCount] = useState<number>(2);
   const [orderType, setOrderType] = useState<"DINE_IN" | "TAKEAWAY">("DINE_IN");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -638,6 +640,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         const orderPayload = {
           tableId: selectedTable || undefined,
           orderType,
+          guestCount: orderType === "DINE_IN" ? Math.max(1, guestCount) : 1,
           customerDetails: customerName || customerPhone ? {
             name: customerName,
             phone: customerPhone,
@@ -910,10 +913,16 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                   onClick={() => {
                     setSelectedTable(t._id);
                     setOrderType("DINE_IN");
-                    if (order && order.customerDetails) {
-                      setCustomerName(order.customerDetails.name || "");
-                      setCustomerPhone(order.customerDetails.phone || "");
-                    } else if (!order) {
+                    if (order) {
+                      if ((order as any).guestCount) {
+                        setGuestCount((order as any).guestCount);
+                      }
+                      if (order.customerDetails) {
+                        setCustomerName(order.customerDetails.name || "");
+                        setCustomerPhone(order.customerDetails.phone || "");
+                      }
+                    } else {
+                      setGuestCount(t.capacity || 2);
                       setCustomerName("");
                       setCustomerPhone("");
                     }
@@ -1112,17 +1121,40 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
                   </button>
                 </div>
               ) : selectedTable ? (
-                <div className="flex items-center gap-2 px-3.5 h-11 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 text-xs font-extrabold shadow-sm">
-                  <span>
-                    🍽️ Table {tables.find((t) => t._id === selectedTable)?.tableNumber || selectedTable}
-                  </span>
-                  <button
-                    onClick={() => setSelectedTable("")}
-                    className="p-1 hover:bg-blue-500/20 rounded-md text-blue-600 dark:text-blue-400 transition-colors"
-                    title="Unselect table"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 px-3.5 h-11 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 text-xs font-extrabold shadow-sm">
+                    <span>
+                      🍽️ Table {tables.find((t) => t._id === selectedTable)?.tableNumber || selectedTable}
+                    </span>
+                    <button
+                      onClick={() => setSelectedTable("")}
+                      className="p-1 hover:bg-blue-500/20 rounded-md text-blue-600 dark:text-blue-400 transition-colors"
+                      title="Unselect table"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-3 h-11 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-sm text-xs font-bold text-slate-700 dark:text-slate-200">
+                    <Users className="h-4 w-4 text-blue-500 shrink-0" />
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hidden sm:inline">Covers:</span>
+                    <button
+                      type="button"
+                      onClick={() => setGuestCount((g) => Math.max(1, g - 1))}
+                      className="h-6 w-6 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 active:scale-95 transition-all text-xs font-bold border border-slate-300 dark:border-slate-700"
+                      title="Decrease guest count"
+                    >
+                      -
+                    </button>
+                    <span className="w-5 text-center font-extrabold text-blue-600 dark:text-blue-400">{guestCount}</span>
+                    <button
+                      type="button"
+                      onClick={() => setGuestCount((g) => g + 1)}
+                      className="h-6 w-6 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 active:scale-95 transition-all text-xs font-bold border border-slate-300 dark:border-slate-700"
+                      title="Increase guest count"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 px-3 h-11 rounded-2xl bg-slate-200/50 dark:bg-slate-800/50 border border-slate-300/40 dark:border-slate-700/40 text-slate-500 dark:text-slate-400 text-xs font-medium">
@@ -1330,54 +1362,92 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           </div>
 
           {orderType === "DINE_IN" && (
-            <div className="space-y-1">
-              <Label className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-widest pl-1">Select Table</Label>
-              <Select value={selectedTable} onValueChange={(val) => {
-                setSelectedTable(val);
-                const order = activeOrders.find(o => o.tableId?._id === val && o.status === "OPEN");
-                if (order && order.customerDetails) {
-                  setCustomerName(order.customerDetails.name || "");
-                  setCustomerPhone(order.customerDetails.phone || "");
-                } else {
-                  setCustomerName("");
-                  setCustomerPhone("");
-                }
-              }}>
-                <SelectTrigger className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm text-slate-900 dark:text-white h-12 rounded-xl focus:ring-blue-500/50">
-                  <SelectValue placeholder="Choose table" />
-                </SelectTrigger>
-                <SelectContent className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl shadow-xl">
-                  {tables.map(t => {
-                    // Bug Fix: disable tables that are BILLED (pending payment) — can still add KOT to OPEN tables
-                    const isBilled = activeOrders.some(o => {
-                      if (!o || o.status !== "BILLED") return false;
-                      const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
-                      return tId && String(tId) === String(t._id);
-                    });
-                    return (
-                      <SelectItem
-                        key={t._id}
-                        value={t._id}
-                        disabled={isBilled}
-                        className="focus:bg-slate-100 dark:focus:bg-slate-800 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {t.tableNumber}
-                        {isBilled ? (
-                          <span className="text-red-400 dark:text-red-500 text-xs ml-1 font-medium">(Bill Pending)</span>
-                        ) : t.status === "OCCUPIED" ? (
-                          <span className="text-amber-500 dark:text-amber-400 text-xs ml-1 font-medium">(Active Order)</span>
-                        ) : (
-                          <span className="text-emerald-500 dark:text-emerald-400 text-xs ml-1 font-medium">(Free)</span>
-                        )}
-                      </SelectItem>
-                    );
-                  })}
-                  {tables.length === 0 && <SelectItem value="none" disabled>No tables available</SelectItem>}
-                </SelectContent>
-              </Select>
-              {activeOrders.some(o => o.tableId?._id === selectedTable && o.status === "OPEN") && (
-                <div className="text-xs text-amber-700 dark:text-amber-400 font-medium bg-amber-100/50 dark:bg-amber-900/20 p-2.5 rounded-lg border border-amber-200/50 dark:border-amber-800/50 shadow-inner mt-2">
-                  This table currently has an active order. New items will be appended as a new KOT.
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-widest pl-1">Select Table</Label>
+                <Select value={selectedTable} onValueChange={(val) => {
+                  setSelectedTable(val);
+                  const order = activeOrders.find(o => o.tableId?._id === val && o.status === "OPEN");
+                  const tab = tables.find(t => t._id === val);
+                  if (order) {
+                    if ((order as any).guestCount) setGuestCount((order as any).guestCount);
+                    if (order.customerDetails) {
+                      setCustomerName(order.customerDetails.name || "");
+                      setCustomerPhone(order.customerDetails.phone || "");
+                    }
+                  } else {
+                    if (tab?.capacity) setGuestCount(tab.capacity);
+                    setCustomerName("");
+                    setCustomerPhone("");
+                  }
+                }}>
+                  <SelectTrigger className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm text-slate-900 dark:text-white h-12 rounded-xl focus:ring-blue-500/50">
+                    <SelectValue placeholder="Choose table" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl shadow-xl">
+                    {tables.map(t => {
+                      // Bug Fix: disable tables that are BILLED (pending payment) — can still add KOT to OPEN tables
+                      const isBilled = activeOrders.some(o => {
+                        if (!o || o.status !== "BILLED") return false;
+                        const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
+                        return tId && String(tId) === String(t._id);
+                      });
+                      return (
+                        <SelectItem
+                          key={t._id}
+                          value={t._id}
+                          disabled={isBilled}
+                          className="focus:bg-slate-100 dark:focus:bg-slate-800 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {t.tableNumber}
+                          {isBilled ? (
+                            <span className="text-red-400 dark:text-red-500 text-xs ml-1 font-medium">(Bill Pending)</span>
+                          ) : t.status === "OCCUPIED" ? (
+                            <span className="text-amber-500 dark:text-amber-400 text-xs ml-1 font-medium">(Active Order)</span>
+                          ) : (
+                            <span className="text-emerald-500 dark:text-emerald-400 text-xs ml-1 font-medium">(Free)</span>
+                          )}
+                        </SelectItem>
+                      );
+                    })}
+                    {tables.length === 0 && <SelectItem value="none" disabled>No tables available</SelectItem>}
+                  </SelectContent>
+                </Select>
+                {activeOrders.some(o => o.tableId?._id === selectedTable && o.status === "OPEN") && (
+                  <div className="text-xs text-amber-700 dark:text-amber-400 font-medium bg-amber-100/50 dark:bg-amber-900/20 p-2.5 rounded-lg border border-amber-200/50 dark:border-amber-800/50 shadow-inner mt-2">
+                    This table currently has an active order. New items will be appended as a new KOT.
+                  </div>
+                )}
+              </div>
+
+              {selectedTable && (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-blue-500 shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white">Guest Count (Covers)</p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">People seated at table</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setGuestCount((g) => Math.max(1, g - 1))}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 active:scale-95 transition-all text-sm font-bold border border-slate-300 dark:border-slate-700 shadow-xs"
+                      title="Decrease guest count"
+                    >
+                      -
+                    </button>
+                    <span className="w-6 text-center font-extrabold text-sm text-blue-600 dark:text-blue-400">{guestCount}</span>
+                    <button
+                      type="button"
+                      onClick={() => setGuestCount((g) => g + 1)}
+                      className="h-7 w-7 rounded-lg flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 active:scale-95 transition-all text-sm font-bold border border-slate-300 dark:border-slate-700 shadow-xs"
+                      title="Increase guest count"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

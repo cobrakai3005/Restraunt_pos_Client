@@ -1,20 +1,17 @@
-import { ReportView } from "@/components/client/reports/report-view";
+"use client";
 
-export const metadata = {
-  title: "Executive Summary Report | Vinimay",
-  description: "Revenue, profit, food cost and category share at a glance.",
-};
+import { PosReportsHub } from "@/components/client/reports/pos-reports-hub";
 
-export default function ExecutiveSummaryReportPage() {
+export default function ExecutiveSummaryPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-hidden">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Executive Summary Report</h1>
-        <p className="text-muted-foreground mt-1">
-          Revenue, profit, orders and category share at a glance. Export as CSV anytime.
+        <h1 className="text-2xl font-bold tracking-tight">Executive Sales Summary</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          High-level executive overview of sales, taxes, discounts, refunds, payment splits, and dine-in vs takeaway share.
         </p>
       </div>
-      <ReportView reportType="summary" />
+      <PosReportsHub defaultTab="executive" />
     </div>
   );
 }

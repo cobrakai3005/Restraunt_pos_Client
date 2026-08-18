@@ -7,6 +7,7 @@ import { ComplimentaryItemDialog } from "./complimentary-item-dialog";
 import { CreateCustomerDialog } from "./create-customer-dialog";
 import { ReceiptModal } from "./ReceiptModal";
 import { CashierReceivablesPanel } from "./cashier-receivables-panel";
+import { PosReportsHub } from "@/components/client/reports/pos-reports-hub";
 import {
   DashboardProps,
   KotItem,
@@ -23,7 +24,7 @@ import {
 
 export type { DashboardProps, KotItem, Order, Mode };
 
-export function CashierDashboard({ user, onOpenDrawer }: DashboardProps) {
+export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange }: DashboardProps) {
   const {
     orders,
     filteredOrders,
@@ -41,8 +42,8 @@ export function CashierDashboard({ user, onOpenDrawer }: DashboardProps) {
     isProcessing,
     showReceipt,
     setShowReceipt,
-    mode,
-    setMode,
+    mode: internalMode,
+    setMode: internalSetMode,
     readyItemCount,
     pendingCount,
     // Split payment
@@ -117,6 +118,12 @@ export function CashierDashboard({ user, onOpenDrawer }: DashboardProps) {
     handleUpdateDiscount,
   } = useCashierDashboard();
 
+  const mode = currentMode !== undefined ? currentMode : internalMode;
+  const setMode = (newMode: Mode) => {
+    internalSetMode(newMode);
+    if (onModeChange) onModeChange(newMode);
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
@@ -153,6 +160,14 @@ export function CashierDashboard({ user, onOpenDrawer }: DashboardProps) {
           <CashierReceivablesPanel
             onCollectPayment={handleOpenReceiveCredit}
             onViewHistory={(ord) => setSelectedOrderForHistory(ord)}
+          />
+        </div>
+      ) : mode === "reports" ? (
+        <div className="flex-1 min-h-0 p-4 overflow-y-auto bg-slate-100/50 dark:bg-slate-900/50">
+          <PosReportsHub
+            initialRestaurantId={typeof user.restaurantId === 'object' ? (user.restaurantId as any)?._id : user.restaurantId}
+            hideRestaurantSelector={true}
+            defaultTab="executive"
           />
         </div>
       ) : (

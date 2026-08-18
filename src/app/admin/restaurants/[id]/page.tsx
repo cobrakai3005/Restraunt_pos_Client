@@ -10,6 +10,7 @@ import { MenuItemsTab } from "@/components/client/restaurant/menu-items-tab";
 import { TablesTab } from "@/components/client/restaurant/tables-tab";
 import { RecipesTab } from "@/components/client/restaurant/recipes-tab";
 import { OrdersTab } from "@/components/client/restaurant/orders-tab";
+import { PosReportsHub } from "@/components/client/reports/pos-reports-hub";
 import { adminService } from "@/services/admin.service";
 
 export default function AdminRestaurantDashboard() {
@@ -55,9 +56,12 @@ export default function AdminRestaurantDashboard() {
 
       <div className="rounded-2xl border border-border bg-card text-card-foreground shadow-sm p-4 md:p-6">
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="mb-6 w-full sm:w-auto">
+          <TabsList className="mb-6 w-full sm:w-auto flex-wrap">
             <TabsTrigger value="overview">
               Overview
+            </TabsTrigger>
+            <TabsTrigger value="reports">
+              POS Reports
             </TabsTrigger>
             <TabsTrigger value="categories">
               Categories
@@ -75,6 +79,10 @@ export default function AdminRestaurantDashboard() {
 
           <TabsContent value="overview" className="focus-visible:outline-none">
             <OrdersTab restaurantId={restaurantId} />
+          </TabsContent>
+
+          <TabsContent value="reports" className="focus-visible:outline-none">
+            <PosReportsHub initialRestaurantId={restaurantId} hideRestaurantSelector={true} />
           </TabsContent>
 
           <TabsContent value="categories" className="focus-visible:outline-none">

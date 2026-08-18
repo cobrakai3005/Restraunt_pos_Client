@@ -3,6 +3,7 @@ import { apiClient } from "@/lib/api";
 export interface CreateOrderPayload {
   tableId?: string;
   orderType: "DINE_IN" | "TAKEAWAY" | "DELIVERY";
+  guestCount?: number;
   customerDetails?: {
     name?: string;
     phone?: string;

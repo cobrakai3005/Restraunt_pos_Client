@@ -269,8 +269,8 @@ export function ManagerFloorView() {
                         <span className="font-bold text-slate-900 dark:text-white">₹{grandTotal}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 dark:text-slate-400">Time / Items:</span>
-                        <span className="font-mono text-slate-700 dark:text-slate-300 font-semibold">{elapsedMins}m • {itemsCount} items</span>
+                        <span className="text-slate-500 dark:text-slate-400">Covers / Time:</span>
+                        <span className="font-mono text-slate-700 dark:text-slate-300 font-semibold">{activeOrder.guestCount || 1} pax • {elapsedMins}m</span>
                       </div>
                       <div className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold pt-1 border-t border-slate-200 dark:border-slate-800 truncate">
                         👤 {activeOrder.waiterId?.contactName || "Counter Waiter"}

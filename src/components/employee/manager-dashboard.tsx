@@ -8,6 +8,7 @@ import {
   UserCheck,
   BarChart3,
   Menu,
+  FileSpreadsheet,
 } from "lucide-react";
 import { User } from "@/services/auth.service";
 import { Button } from "@/components/ui/button";
@@ -18,14 +19,22 @@ import { ManagerFloorView } from "./manager-floor-view";
 import { ManagerAuditTab } from "./manager-audit-tab";
 import { ManagerStaffTab } from "./manager-staff-tab";
 import { AnalyticsDashboard } from "@/components/client/AnalyticsDashboard";
+import { PosReportsHub } from "@/components/client/reports/pos-reports-hub";
 
 interface DashboardProps {
   user: User;
   onOpenDrawer?: () => void;
+  currentTab?: string;
+  onTabChange?: (tab: string) => void;
 }
 
-export function ManagerDashboard({ user, onOpenDrawer }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState("overview");
+export function ManagerDashboard({ user, onOpenDrawer, currentTab, onTabChange }: DashboardProps) {
+  const [internalTab, setInternalTab] = useState("overview");
+  const activeTab = currentTab !== undefined ? currentTab : internalTab;
+  const setActiveTab = (tab: string) => {
+    setInternalTab(tab);
+    if (onTabChange) onTabChange(tab);
+  };
   const restaurantId = typeof user.restaurantId === 'object' ? (user.restaurantId as any)?._id : user.restaurantId;
 
   return (
@@ -52,11 +61,18 @@ export function ManagerDashboard({ user, onOpenDrawer }: DashboardProps) {
             Shift Overview
           </TabsTrigger>
           <TabsTrigger 
-            value="analytics"
+            value="pos-reports"
             className="rounded-xl px-4 py-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all gap-2"
           >
+            <FileSpreadsheet className="w-4 h-4" />
+            POS Reports
+          </TabsTrigger>
+          <TabsTrigger 
+            value="analytics"
+            className="rounded-xl px-4 py-2 text-xs font-bold data-[state=active]:bg-indigo-600 data-[state=active]:text-white transition-all gap-2"
+          >
             <BarChart3 className="w-4 h-4" />
-            Reports &amp; Analytics
+            Analytics &amp; Graphs
           </TabsTrigger>
           <TabsTrigger 
             value="floor"
@@ -94,6 +110,10 @@ export function ManagerDashboard({ user, onOpenDrawer }: DashboardProps) {
             onNavigateToFloor={() => setActiveTab("floor")} 
             onNavigateToAudit={() => setActiveTab("audit")} 
           />
+        </TabsContent>
+
+        <TabsContent value="pos-reports" className="mt-6 focus-visible:outline-none focus-visible:ring-0">
+          <PosReportsHub initialRestaurantId={restaurantId} hideRestaurantSelector={true} defaultTab="executive" />
         </TabsContent>
 
         <TabsContent value="analytics" className="mt-6 focus-visible:outline-none focus-visible:ring-0">

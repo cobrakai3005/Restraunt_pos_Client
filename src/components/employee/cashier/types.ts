@@ -1,9 +1,11 @@
 import { User as AuthUser } from "@/services/auth.service";
-import { UtensilsCrossed, Flame, Calculator, FileText } from "lucide-react";
+import { UtensilsCrossed, Flame, Calculator, FileText, BarChart3 } from "lucide-react";
 
 export interface DashboardProps {
   user: AuthUser;
   onOpenDrawer?: () => void;
+  currentMode?: Mode;
+  onModeChange?: (mode: Mode) => void;
 }
 
 export interface KotItem {
@@ -70,7 +72,7 @@ export interface Order {
   updatedAt?: string;
 }
 
-export type Mode = "orders" | "kitchen" | "billing" | "receivables";
+export type Mode = "orders" | "kitchen" | "billing" | "receivables" | "reports";
 
 export const TABS: { id: Mode; label: string; description: string; icon: React.ElementType; activeClass: string; dotClass: string }[] = [
   {
@@ -104,6 +106,14 @@ export const TABS: { id: Mode; label: string; description: string; icon: React.E
     icon: FileText,
     activeClass: "bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30",
     dotClass: "bg-amber-500",
+  },
+  {
+    id: "reports",
+    label: "POS Reports",
+    description: "View executive sales, category, item and cover reports",
+    icon: BarChart3,
+    activeClass: "bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/30",
+    dotClass: "bg-indigo-500",
   },
 ];
 
