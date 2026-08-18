@@ -27,6 +27,7 @@ import {
   Flame,
   FileText,
   Radio,
+  BarChart3,
 } from "lucide-react";
 import {
   Sheet,
@@ -57,6 +58,8 @@ export default function EmployeeDashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [shiftSummary, setShiftSummary] = useState<ExecutiveSummaryData | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [cashierMode, setCashierMode] = useState<"orders" | "kitchen" | "billing" | "receivables" | "reports">("billing");
+  const [managerTab, setManagerTab] = useState<string>("floor");
 
   useEffect(() => {
     const updateTime = () => {
@@ -96,9 +99,6 @@ export default function EmployeeDashboard() {
         router.push("/employee-login");
       });
   }, [router]);
-
-  const [cashierMode, setCashierMode] = useState<"orders" | "kitchen" | "billing" | "receivables" | "reports">("billing");
-  const [managerTab, setManagerTab] = useState<string>("overview");
 
   // Fetch shift summary when drawer opens for cashier or manager
   useEffect(() => {
@@ -197,7 +197,7 @@ export default function EmployeeDashboard() {
     }
   };
 
-  // Build role-aware quick links with active navigation actions
+  // Build role-aware quick links strictly as requested
   const isManager = user.role === "MANAGER" || user.role === "INVENTORY_MANAGER";
   const isCashier = user.role === "CASHIER";
   const isChef = user.role === "CHEF";
@@ -212,111 +212,140 @@ export default function EmployeeDashboard() {
     onSelect: () => void;
   }> = [];
 
-  if (isWaiter || isCashier || isManager) {
+  if (isCashier) {
+    // 1. Take Orders & Cart
     navLinks.push({
       label: "Take Orders & Cart",
       desc: "Interactive POS menu & table orders",
       icon: UtensilsCrossed,
       badge: "POS Core",
       badgeColor: "bg-blue-500/10 text-blue-600",
-      onSelect: () => {
-        if (isCashier) setCashierMode("orders");
-        else if (isManager) setManagerTab("overview");
-      },
+      onSelect: () => setCashierMode("orders"),
     });
-  }
-
-  if (isChef || isCashier || isManager || isWaiter) {
+    // 2. Kitchen KOT Queue
     navLinks.push({
       label: "Kitchen KOT Queue",
       desc: "Live order prep & station tickets",
       icon: Flame,
       badge: "Live Queue",
       badgeColor: "bg-orange-500/10 text-orange-600",
-      onSelect: () => {
-        if (isCashier) setCashierMode("kitchen");
-        else if (isManager) setManagerTab("overview");
-      },
+      onSelect: () => setCashierMode("kitchen"),
     });
-  }
-
-  if (isCashier || isManager) {
+    // 3. Billing & Settlements
     navLinks.push({
       label: "Billing & Settlements",
       desc: "Tax invoices & split payments",
       icon: Calculator,
       badge: "Billing",
       badgeColor: "bg-emerald-500/10 text-emerald-600",
-      onSelect: () => {
-        if (isCashier) setCashierMode("billing");
-      },
+      onSelect: () => setCashierMode("billing"),
     });
+    // 4. Credit / Khata Dues
     navLinks.push({
       label: "Credit / Khata Dues",
       desc: "Customer credit records & payments",
       icon: FileText,
       badge: "Khata",
       badgeColor: "bg-amber-500/10 text-amber-600",
-      onSelect: () => {
-        if (isCashier) setCashierMode("receivables");
-      },
+      onSelect: () => setCashierMode("receivables"),
     });
+    // 5. POS Reports Hub (8 Reports)
     navLinks.push({
       label: "POS Reports Hub (8 Reports)",
       desc: "Executive sales, covers, items & exports",
       icon: FileSpreadsheet,
-      badge: "New",
+      badge: "Reports",
       badgeColor: "bg-indigo-500/10 text-indigo-600 font-extrabold",
-      onSelect: () => {
-        if (isCashier) setCashierMode("reports");
-        else if (isManager) setManagerTab("pos-reports");
-      },
+      onSelect: () => setCashierMode("reports"),
     });
-  }
-
-  if (isManager || isWaiter) {
+  } else if (isManager) {
+    // 1. Floor & Table Maps
     navLinks.push({
-      label: "Floor & Table Map",
+      label: "Floor & Table Maps",
       desc: "Table occupancy, active pax & timers",
       icon: Users,
       badge: "Floor",
       badgeColor: "bg-blue-500/10 text-blue-600",
-      onSelect: () => {
-        if (isManager) setManagerTab("floor");
-      },
+      onSelect: () => setManagerTab("floor"),
     });
-  }
-
-  if (isManager) {
+    // 2. Stock & Inventory
     navLinks.push({
       label: "Stock & Inventory",
       desc: "Ingredient balances & low stock alerts",
       icon: Package,
       badge: "Stock",
       badgeColor: "bg-teal-500/10 text-teal-600",
-      onSelect: () => {
-        setManagerTab("inventory");
-      },
+      onSelect: () => setManagerTab("inventory"),
     });
+    // 3. Voids & Security Alerts
     navLinks.push({
-      label: "Voids & Security Audit",
+      label: "Voids & Security Alerts",
       desc: "Cancelled items & manager logs",
       icon: ShieldCheck,
       badge: "Security",
       badgeColor: "bg-purple-500/10 text-purple-600",
-      onSelect: () => {
-        setManagerTab("audit");
-      },
+      onSelect: () => setManagerTab("audit"),
     });
+    // 4. Staff Roster
     navLinks.push({
       label: "Staff Roster",
       desc: "Shift schedule & employee roster",
       icon: UserCheck,
       badge: "Staff",
       badgeColor: "bg-slate-500/10 text-slate-600",
-      onSelect: () => {
-        setManagerTab("staff");
-      },
+      onSelect: () => setManagerTab("staff"),
+    });
+    // 5. Analytics & Graphs
+    navLinks.push({
+      label: "Analytics & Graphs",
+      desc: "Revenue trends & operational matrix",
+      icon: BarChart3,
+      badge: "Analytics",
+      badgeColor: "bg-indigo-500/10 text-indigo-600 font-extrabold",
+      onSelect: () => setManagerTab("analytics"),
+    });
+    // 6. POS Reports Hub (8 Reports)
+    navLinks.push({
+      label: "POS Reports Hub (8 Reports)",
+      desc: "Executive sales, covers, items & exports",
+      icon: FileSpreadsheet,
+      badge: "Reports",
+      badgeColor: "bg-blue-500/10 text-blue-600 font-extrabold",
+      onSelect: () => setManagerTab("pos-reports"),
+    });
+  } else if (isWaiter) {
+    navLinks.push({
+      label: "Take Orders & Cart",
+      desc: "Interactive POS menu & table orders",
+      icon: UtensilsCrossed,
+      badge: "POS Core",
+      badgeColor: "bg-blue-500/10 text-blue-600",
+      onSelect: () => {},
+    });
+    navLinks.push({
+      label: "Kitchen KOT Queue",
+      desc: "Live order prep & station tickets",
+      icon: Flame,
+      badge: "Live Queue",
+      badgeColor: "bg-orange-500/10 text-orange-600",
+      onSelect: () => {},
+    });
+    navLinks.push({
+      label: "Floor & Table Map",
+      desc: "Table occupancy, active pax & timers",
+      icon: Users,
+      badge: "Floor",
+      badgeColor: "bg-blue-500/10 text-blue-600",
+      onSelect: () => {},
+    });
+  } else if (isChef) {
+    navLinks.push({
+      label: "Kitchen KOT Queue",
+      desc: "Live order prep & station tickets",
+      icon: Flame,
+      badge: "Live Queue",
+      badgeColor: "bg-orange-500/10 text-orange-600",
+      onSelect: () => {},
     });
   }
 
