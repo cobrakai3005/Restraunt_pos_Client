@@ -1,7 +1,7 @@
 import React, { useRef } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Printer, Scissors, X } from "lucide-react";
+import { Printer, Scissors, X, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 
 export interface ReceiptModalProps {
@@ -17,29 +17,50 @@ export interface ReceiptModalProps {
 }
 
 export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModalProps) {
-  if (!order) return null;
+  if (!isOpen) return null;
 
-  const discount = Number(order.financials?.discount || 0);
-  let subtotal = Number(order.financials?.subtotal || 0);
-  let totalTax = Number(order.financials?.totalTax || 0);
-  let grandTotal = Number(order.financials?.grandTotal || 0);
+  if (!order) {
+    return (
+      <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="max-w-[420px] bg-slate-900 border-slate-800 p-6 flex flex-col items-center justify-center space-y-3 text-white z-[100]">
+          <DialogTitle className="sr-only">Loading Receipt</DialogTitle>
+          <DialogDescription className="sr-only">Please wait while the receipt is being generated</DialogDescription>
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+          <p className="text-sm font-semibold text-slate-300">Generating receipt...</p>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
-  if (order.status === "OPEN" || subtotal === 0) {
-    subtotal = order.kots?.flatMap((k: any) => k.items).reduce((sum: number, item: any) => {
-      return sum + (item.isComplimentary ? 0 : ((item.variantPrice || 0) * (item.quantity || 1)));
-    }, 0) || 0;
+  const discount = Number(order?.financials?.discount || 0);
+  let subtotal = Number(order?.financials?.subtotal || 0);
+  let totalTax = Number(order?.financials?.totalTax || 0);
+  let grandTotal = Number(order?.financials?.grandTotal || 0);
+
+  if (order?.status === "OPEN" || subtotal === 0) {
+    subtotal = (order?.kots || []).flatMap((k: any) => k?.items || []).reduce((sum: number, item: any) => {
+      return sum + (item?.isComplimentary ? 0 : (Number(item?.variantPrice || item?.price || 0) * Number(item?.quantity || 1)));
+    }, 0);
     totalTax = subtotal * 0.05;
     grandTotal = Math.max(0, subtotal + totalTax - discount);
   }
 
-  const allItems = order.kots?.flatMap((k: any) => k.items) || [];
-  const restaurantName = restaurant?.name || (order as any)?.restaurant?.name || (typeof order.restaurantId === 'object' ? (order.restaurantId as any)?.name : null) || "VINIMAY CAFE";
-  const orderDate = order.createdAt ? new Date(order.createdAt) : new Date();
-  const receiptNumber = order._id ? order._id.slice(-4).toUpperCase() : (order.orderNumber ? String(order.orderNumber) : "N/A");
-  const tableLabel = order.orderType === "DINE_IN" ? `Table ${typeof order.tableId === 'object' ? order.tableId?.tableNumber : order.tableId || "N/A"}` : (order.orderType || "Takeaway");
-  const serverName = order.waiterId?.contactName?.split(" ")[0]?.toUpperCase() || (typeof order.waiterId === 'string' ? "STAFF" : "CASHIER");
-  const customerName = order.customerDetails?.name?.toUpperCase() || "WALK-IN GUEST";
-  const customerPhone = order.customerDetails?.phone || "";
+  const allItems = (order?.kots || []).flatMap((k: any) => k?.items || []);
+  const restaurantName = restaurant?.name || (order as any)?.restaurant?.name || (typeof order?.restaurantId === 'object' ? (order?.restaurantId as any)?.name : null) || "VINIMAY CAFE";
+  
+  let formattedDate = "";
+  try {
+    const rawDate = order?.createdAt ? new Date(order.createdAt) : new Date();
+    formattedDate = !isNaN(rawDate.getTime()) ? format(rawDate, "dd/MM/yyyy HH:mm") : format(new Date(), "dd/MM/yyyy HH:mm");
+  } catch {
+    formattedDate = new Date().toLocaleString();
+  }
+
+  const receiptNumber = order?._id ? String(order._id).slice(-4).toUpperCase() : (order?.orderNumber ? String(order.orderNumber) : "N/A");
+  const tableLabel = order?.orderType === "DINE_IN" ? `Table ${typeof order?.tableId === 'object' ? order?.tableId?.tableNumber : order?.tableId || "N/A"}` : (order?.orderType || "Takeaway");
+  const serverName = order?.waiterId?.contactName?.split(" ")[0]?.toUpperCase() || (typeof order?.waiterId === 'string' ? "STAFF" : "CASHIER");
+  const customerName = order?.customerDetails?.name?.toUpperCase() || "WALK-IN GUEST";
+  const customerPhone = order?.customerDetails?.phone || "";
 
   const handlePrint = () => {
     const printContent = document.getElementById("receipt-print-area-content");
@@ -100,11 +121,13 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg p-0 border-0 bg-transparent shadow-none [&>button]:hidden">
-        <div className="bg-slate-200/80 dark:bg-slate-900/90 text-black mx-auto w-full max-w-[390px] shadow-2xl relative break-words p-4 my-3 rounded-2xl border border-slate-300 dark:border-slate-700 font-mono text-xs leading-relaxed max-h-[90vh] overflow-y-auto">
+      <DialogContent hideCloseButton className="max-w-md p-3 bg-slate-950/95 border border-slate-800 shadow-2xl z-[100] rounded-2xl">
+        <DialogTitle className="sr-only">Order Receipt #{receiptNumber}</DialogTitle>
+        <DialogDescription className="sr-only">Printable invoice receipt for Order #{receiptNumber}</DialogDescription>
+        <div className="bg-slate-200/95 dark:bg-slate-900/95 text-black mx-auto w-full shadow-2xl relative break-words p-4 rounded-xl border border-slate-300 dark:border-slate-700 font-mono text-xs leading-relaxed max-h-[85vh] overflow-y-auto">
           <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-300 dark:border-slate-700">
             <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">Receipt • #{receiptNumber}</span>
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7 rounded-full text-slate-500"><X className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7 rounded-full text-slate-500 hover:text-slate-900 dark:hover:text-white"><X className="h-4 w-4" /></Button>
           </div>
 
           <div id="receipt-print-area-content" className="space-y-4">
@@ -118,15 +141,25 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
               </div>
               <div className="border-t border-dashed border-black my-2" />
               <div className="text-[11px] space-y-0.5">
-                <div className="flex justify-between"><span>DATE: {format(orderDate, "dd/MM/yyyy HH:mm")}</span><span className="font-bold">RCPT: #{receiptNumber}</span></div>
+                <div className="flex justify-between"><span>DATE: {formattedDate}</span><span className="font-bold">RCPT: #{receiptNumber}</span></div>
                 <div className="flex justify-between"><span>AREA: {tableLabel}</span><span>STAFF: {serverName}</span></div>
-                {order.customerDetails?.name && (
+                <div className="flex justify-between">
+                  <span>CUSTOMER:</span>
+                  <span className="font-bold uppercase">
+                    {order.customerDetails?.name?.trim() ? (
+                      <>
+                        {order.customerDetails.name}
+                        {order.customerDetails?.customerId?.tags ? ` (${order.customerDetails.customerId.tags})` : ""}
+                      </>
+                    ) : (
+                      "WALK-IN GUEST"
+                    )}
+                  </span>
+                </div>
+                {order.customerDetails?.phone && (
                   <div className="flex justify-between">
-                    <span>CUSTOMER:</span>
-                    <span className="font-bold uppercase">
-                      {order.customerDetails.name}
-                      {order.customerDetails?.customerId?.tags ? ` (${order.customerDetails.customerId.tags})` : ""}
-                    </span>
+                    <span>PHONE:</span>
+                    <span className="font-medium">{order.customerDetails.phone}</span>
                   </div>
                 )}
               </div>
@@ -170,6 +203,17 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
 
             <div className="store-copy bg-white p-5 rounded-2xl shadow-xl border border-slate-300 break-words font-mono text-xs leading-relaxed space-y-3">
               <div className="text-center pb-0.5"><h2 className="text-xs font-black uppercase tracking-wider text-black">{restaurantName}</h2><div className="inline-block border border-black px-2 py-0.5 mt-1 font-extrabold text-[9px] uppercase bg-slate-100 text-black">*** STORE / MERCHANT COPY ***</div></div>
+              <div className="border-t border-dashed border-black my-2" />
+              <div className="text-[11px] space-y-0.5">
+                <div className="flex justify-between"><span>DATE: {formattedDate}</span><span className="font-bold">RCPT: #{receiptNumber}</span></div>
+                <div className="flex justify-between"><span>AREA: {tableLabel}</span><span>STAFF: {serverName}</span></div>
+                <div className="flex justify-between">
+                  <span>CUSTOMER:</span>
+                  <span className="font-bold uppercase">
+                    {order.customerDetails?.name?.trim() ? order.customerDetails.name : "WALK-IN GUEST"}
+                  </span>
+                </div>
+              </div>
               <div className="border-t border-dashed border-black my-2" />
               <div className="text-[11px] space-y-0.5">
                 <div className="font-bold text-[9px] uppercase text-slate-700 mb-0.5">Ordered Items Summary:</div>

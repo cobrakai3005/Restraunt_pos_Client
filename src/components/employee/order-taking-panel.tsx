@@ -635,14 +635,11 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     }
   };
 
-  // ── Quick Receipt for Takeaway ──
-  // Automatically creates a takeaway order, fires KOT to kitchen, generates bill & opens the printable receipt
+  // ── Quick Receipt ──
+  // Automatically creates an order, fires KOT to kitchen, generates bill & opens the printable receipt
   const handleQuickReceipt = async () => {
     if (cart.length === 0) {
       return toast({ variant: "destructive", title: "Cart is empty", description: "Please select menu items to print a quick receipt." });
-    }
-    if (selectedTable) {
-      return toast({ variant: "destructive", title: "Table is selected", description: "Quick Receipt is for takeaway orders only. Please unselect the table first." });
     }
 
     setIsQuickReceiptSubmitting(true);
@@ -664,47 +661,86 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         })),
       }));
 
-      // 2. Automatically create order as TAKEAWAY (no table needed)
-      const orderPayload = {
-        orderType: "TAKEAWAY" as const,
-        customerDetails: customerName || customerPhone ? { name: customerName, phone: customerPhone } : { name: "Takeaway Customer" },
+      // 2. Automatically create order (DINE_IN if table selected, else TAKEAWAY)
+      const orderPayload: {
+        tableId?: string;
+        orderType: "DINE_IN" | "TAKEAWAY" | "DELIVERY";
+        customerDetails?: { name?: string; phone?: string; customerId?: string };
+      } = {
+        tableId: selectedTable || undefined,
+        orderType: selectedTable ? "DINE_IN" : "TAKEAWAY",
+        customerDetails: customerName || customerPhone ? {
+          name: customerName || (selectedTable ? "Dine-In Guest" : "Takeaway Customer"),
+          phone: customerPhone || undefined,
+          customerId: matchedCustomer?._id || undefined,
+        } : undefined,
       };
 
       const orderRes = await employeeService.createOrder(orderPayload);
-      const targetOrderId = orderRes.data._id;
+      const targetOrderId = orderRes.data?._id || orderRes.data?.order?._id || orderRes._id;
+
+      if (!targetOrderId) {
+        throw new Error("Failed to create takeaway order.");
+      }
 
       // 3. Fire per-station KOTs
-      await Promise.all(kotPayloads.map(kp => employeeService.addKot(targetOrderId, kp)));
+      for (const kp of kotPayloads) {
+        await employeeService.addKot(targetOrderId, kp);
+      }
 
-      // 4. Generate bill snapshot
-      let billedOrder: any = null;
+      // 4. Generate bill (order status becomes BILLED)
+      let grandTotal = total;
+      let billedOrderData: any = null;
       try {
         const billRes = await employeeService.generateBill(targetOrderId);
-        billedOrder = billRes.data;
-      } catch {
-        const fetched = await employeeService.getOrderById(targetOrderId);
-        billedOrder = fetched.data;
+        billedOrderData = billRes?.data?.order || billRes?.data || billRes;
+        if (billedOrderData?.financials?.grandTotal) {
+          grandTotal = Number(billedOrderData.financials.grandTotal);
+        }
+      } catch (billErr: any) {
+        console.warn("Bill generation fallback:", billErr?.message);
       }
 
-      // 5. Automatically checkout and settle as PAID (CASH by default)
-      const grandTotal = Number(billedOrder?.financials?.grandTotal || total);
-      let paidOrder = billedOrder;
+      // 5. Fetch fully populated billed order to pass to ReceiptModal
+      let finalOrderData: any = billedOrderData;
       try {
-        const checkoutRes = await employeeService.checkoutOrder(targetOrderId, {
-          payments: [{ method: "CASH", amount: grandTotal }],
-        });
-        paidOrder = checkoutRes.data?.order || checkoutRes.data || billedOrder;
-      } catch (checkoutErr: any) {
-        console.warn("Auto checkout fallback:", checkoutErr.message);
+        const fetchRes = await employeeService.getOrderById(targetOrderId);
+        finalOrderData = fetchRes?.data?.order || fetchRes?.data || fetchRes;
+      } catch {
+        if (!finalOrderData) {
+          finalOrderData = {
+            _id: targetOrderId,
+            orderNumber: targetOrderId.slice(-4),
+            status: "BILLED",
+            orderType: selectedTable ? "DINE_IN" : "TAKEAWAY",
+            tableId: selectedTable || undefined,
+            createdAt: new Date().toISOString(),
+            customerDetails: { name: customerName || (selectedTable ? "Dine-In Guest" : "Takeaway Customer"), phone: customerPhone || "" },
+            financials: { subtotal, totalTax: taxes, grandTotal },
+            kots: kotPayloads.map((kp, idx) => ({
+              kotNumber: idx + 1,
+              createdAt: new Date().toISOString(),
+              items: kp.items.map(i => {
+                const matchedCartItem = cart.find(c => c._id === i.menuItemId);
+                return {
+                  menuItemId: { name: matchedCartItem?.name || "Item" },
+                  variantName: i.variantName,
+                  variantPrice: matchedCartItem?.selectedVariant?.price || 0,
+                  quantity: i.quantity,
+                  notes: i.notes,
+                };
+              }),
+            })),
+          };
+        }
       }
 
-      // 6. Open printable receipt modal for the finalized PAID order
-      setReceiptOrder(paidOrder);
+      setReceiptOrder(finalOrderData);
       setShowReceiptModal(true);
 
       toast({
-        title: "⚡ Takeaway Paid & Settle Complete! 🧾",
-        description: `Order #${paidOrder?.orderNumber || targetOrderId.slice(-4)} (₹${grandTotal}) paid & receipt ready.`,
+        title: "⚡ Order Billed & Receipt Ready! 🧾",
+        description: `Order #${finalOrderData?.orderNumber || targetOrderId.slice(-4)} (₹${grandTotal}) billed & receipt ready.`,
       });
 
       // 7. Reset state
@@ -1134,13 +1170,13 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           </button>
         )}
 
-        {/* Quick Receipt FAB (Takeaway & Print) */}
+        {/* Quick Receipt FAB */}
         <button
           onClick={handleQuickReceipt}
-          disabled={cart.length === 0 || !!selectedTable || isSubmitting || isQuickReceiptSubmitting}
-          title={selectedTable ? "Quick Receipt is for Takeaway only (unselect table to use)" : "Create Takeaway Order & Print Receipt Instantly"}
+          disabled={cart.length === 0 || isSubmitting || isQuickReceiptSubmitting}
+          title="Create Order & Print Receipt Instantly"
           className={`flex items-center gap-2 px-4 h-14 rounded-2xl shadow-2xl font-extrabold text-white transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
-            cart.length > 0 && !selectedTable && !isSubmitting && !isQuickReceiptSubmitting
+            cart.length > 0 && !isSubmitting && !isQuickReceiptSubmitting
               ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/40 ring-2 ring-emerald-400/50'
               : 'bg-slate-600/70 shadow-slate-900/20'
           }`}
@@ -1517,7 +1553,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           <div className="flex gap-2">
             <Button
               className="flex-1 h-14 text-sm font-extrabold tracking-wide shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl active:scale-[0.98] transition-all duration-200"
-              disabled={cart.length === 0 || selectedTable !== "" || isSubmitting || isQuickReceiptSubmitting}
+              disabled={cart.length === 0 || isSubmitting || isQuickReceiptSubmitting}
               onClick={async () => {
                 await handleQuickReceipt();
                 setCartOpen(false);

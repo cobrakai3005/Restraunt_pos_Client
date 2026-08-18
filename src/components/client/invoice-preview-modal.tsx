@@ -189,7 +189,7 @@ export function InvoicePreviewModal({
   const taxAmount = transaction.taxAmount || 0;
   const discountAmount = transaction.discountAmount || 0;
   const totalAmount = transaction.totalAmount || 0;
-  const customerName = transaction.customerName || transaction.companyName || "Walk-in Customer";
+  const customerName = transaction.customerName?.trim() || transaction.companyName?.trim() || "Walk-in Guest";
   const addr = restaurantDetails?.address;
   const txDate = transaction.transactionDate ? new Date(transaction.transactionDate) : new Date();
 

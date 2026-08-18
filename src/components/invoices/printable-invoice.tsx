@@ -16,7 +16,7 @@ export function PrintableInvoice({ invoice, restaurantName, templateId, type = '
   const normalizedData = {
     invoiceNumber: type === 'purchase' ? invoice.invoiceNumber : invoice._id?.slice(-6).toUpperCase() || 'N/A',
     invoiceDate: type === 'purchase' ? invoice.invoiceDate : invoice.createdAt,
-    partyName: type === 'purchase' ? invoice.vendorName : (invoice.customerDetails?.name || 'Walk-in Customer'),
+    partyName: type === 'purchase' ? invoice.vendorName : (invoice.customerDetails?.name || invoice.customerName || invoice.companyName || 'Walk-in Guest'),
     totalAmount: type === 'purchase' ? invoice.totalAmount : (invoice.financials?.grandTotal || 0),
     title: type === 'purchase' ? 'Purchase Invoice' : 'Sales Invoice',
     partyTitle: type === 'purchase' ? 'Vendor Details' : 'Bill To',

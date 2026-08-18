@@ -70,8 +70,12 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
 
   const fetchActiveOrders = async () => {
     try {
-      const res = await employeeService.getOrders({ status: "OPEN" });
-      setOrders(res.data || []);
+      const res = await employeeService.getOrders({ status: "OPEN,BILLED", kitchen: "true" });
+      setOrders(
+        (res.data || []).filter(
+          (o: any) => o.status === "OPEN" || o.status === "BILLED"
+        )
+      );
     } catch (error: any) {
       toast({ variant: "destructive", title: "Failed to fetch orders", description: error.message });
     } finally {
@@ -85,11 +89,15 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
     if (socket) {
       socket.on("new_kot", fetchActiveOrders);
       socket.on("item_status_update", fetchActiveOrders);
+      socket.on("order_billed", fetchActiveOrders);
+      socket.on("order_settled", fetchActiveOrders);
     }
     return () => {
       if (socket) {
         socket.off("new_kot", fetchActiveOrders);
         socket.off("item_status_update", fetchActiveOrders);
+        socket.off("order_billed", fetchActiveOrders);
+        socket.off("order_settled", fetchActiveOrders);
       }
       disconnectSocket();
     };
@@ -238,7 +246,7 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
       </div>
 
       <div className={`flex-1 grid gap-4 lg:gap-6 min-h-0 ${
-        gridDensity === "compact" ? "grid-cols-1 lg:grid-cols-4" : "grid-cols-1 lg:grid-cols-2"
+        gridDensity === "compact" ? "grid-cols-1 lg:grid-cols-4" : "grid-cols-1 lg:grid-cols-[1fr_350px]"
       }`}>
         
         {/* PENDING TICKETS SECTION */}

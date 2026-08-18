@@ -40,6 +40,7 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
 
   const { toast } = useToast();
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasLoadedOnce = useRef(false);
 
   const getOrderGrandTotal = (order: Order | null) => {
     return calculateOrderFinancials(order).grandTotal;
@@ -47,7 +48,9 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
 
   const fetchOrders = async () => {
     try {
-      setIsLoading(true);
+      if (!hasLoadedOnce.current) {
+        setIsLoading(true);
+      }
       const [resActive, resBilled] = await Promise.all([
         employeeService.getOrders({ status: "OPEN" }),
         employeeService.getOrders({ status: "BILLED" }),
@@ -80,6 +83,7 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
     } catch (error: any) {
       toast({ variant: "destructive", title: "Failed to fetch orders", description: error.message });
     } finally {
+      hasLoadedOnce.current = true;
       setIsLoading(false);
     }
   };
