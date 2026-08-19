@@ -35,7 +35,7 @@ export default function HomePage() {
       redirect("/employee");
       break;
     default:
-      redirect("/client-login");
+      redirect("/login");
       break;
   }
 }
