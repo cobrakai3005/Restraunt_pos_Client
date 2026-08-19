@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (role && ["CHEF", "WAITER", "MANAGER", "CASHIER", "INVENTORY_MANAGER"].includes(role)) {
       window.location.href = "/employee-login";
     } else {
-      window.location.href = "/client-login";
+      window.location.href = "/login";
     }
   };
 
