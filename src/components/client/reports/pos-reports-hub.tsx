@@ -12,7 +12,9 @@ import {
   GroupSummaryData,
   VariationSummaryData,
   CoverSizeSummaryData,
+  CashDrawerSession,
 } from "@/services/posReports.service";
+import { ZReportDialog } from "@/components/employee/cashier/z-report-dialog";
 import { clientService } from "@/services/client.service";
 import { adminService } from "@/services/admin.service";
 import { useAuth } from "@/context/auth-context";
@@ -80,6 +82,11 @@ import {
   Clock,
   ArrowUpDown,
   Filter,
+  Calculator,
+  Coins,
+  Lock,
+  Unlock,
+  Printer,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -201,6 +208,8 @@ export function PosReportsHub({
   const [groupData, setGroupData] = useState<GroupSummaryData | null>(null);
   const [variationData, setVariationData] = useState<VariationSummaryData | null>(null);
   const [coverSizeData, setCoverSizeData] = useState<CoverSizeSummaryData | null>(null);
+  const [zReportsList, setZReportsList] = useState<CashDrawerSession[]>([]);
+  const [isZReportDialogOpen, setIsZReportDialogOpen] = useState(false);
 
   // Pagination for Order Summary
   const [orderPage, setOrderPage] = useState(1);
@@ -312,6 +321,9 @@ export function PosReportsHub({
       } else if (activeTab === "cover-size") {
         const res = await posReportsService.getCoverSizeSummary(selectedRestaurantId, startDate, endDate);
         setCoverSizeData(res.data);
+      } else if (activeTab === "z-report") {
+        const res = await posReportsService.getZReports(selectedRestaurantId, startDate, endDate);
+        setZReportsList(res.data || []);
       }
     } catch (err: any) {
       toast({
@@ -541,7 +553,7 @@ export function PosReportsHub({
       {/* ── Tabs Navigation for 8 Reports ── */}
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as PosReportType)} className="space-y-6 w-full max-w-full">
         <div className="w-full max-w-full">
-          <TabsList className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-1.5 w-full h-auto p-1.5 rounded-2xl bg-muted/60 border border-border/50 shadow-sm">
+          <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-1.5 w-full h-auto p-1.5 rounded-2xl bg-muted/60 border border-border/50 shadow-sm">
             <TabsTrigger value="executive" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <Sparkles className="h-4 w-4 shrink-0" /> <span className="truncate">1. Executive</span>
             </TabsTrigger>
@@ -551,20 +563,23 @@ export function PosReportsHub({
             <TabsTrigger value="category" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <Layers className="h-4 w-4 shrink-0" /> <span className="truncate">3. Category</span>
             </TabsTrigger>
-            <TabsTrigger value="item" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
+            <TabsTrigger value="items" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <Utensils className="h-4 w-4 shrink-0" /> <span className="truncate">4. Item BOM</span>
             </TabsTrigger>
-            <TabsTrigger value="order" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
+            <TabsTrigger value="orders" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <Receipt className="h-4 w-4 shrink-0" /> <span className="truncate">5. Orders</span>
             </TabsTrigger>
-            <TabsTrigger value="group" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
+            <TabsTrigger value="groups" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <Filter className="h-4 w-4 shrink-0" /> <span className="truncate">6. Groups</span>
             </TabsTrigger>
-            <TabsTrigger value="variation" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
+            <TabsTrigger value="variations" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <ArrowUpDown className="h-4 w-4 shrink-0" /> <span className="truncate">7. Variations</span>
             </TabsTrigger>
-            <TabsTrigger value="cover-size" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
+            <TabsTrigger value="covers" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <Users className="h-4 w-4 shrink-0" /> <span className="truncate">8. Cover Size</span>
+            </TabsTrigger>
+            <TabsTrigger value="z-report" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
+              <Calculator className="h-4 w-4 shrink-0" /> <span className="truncate">9. Z-Report</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -1504,7 +1519,233 @@ export function PosReportsHub({
             </Card>
           </TabsContent>
         )}
+
+        {/* ========================================================================= */}
+        {/* REPORT 9: DAY-END / Z-REPORT (CASH DRAWER RECONCILIATION & SHIFT CLOSES) */}
+        {/* ========================================================================= */}
+        {activeTab === "z-report" && (
+          <TabsContent value="z-report" className="space-y-6 mt-0">
+            {/* Header & Quick Action Button */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 text-white shadow-md">
+              <div className="space-y-1">
+                <h3 className="text-base font-black flex items-center gap-2">
+                  <Calculator className="h-5 w-5 text-amber-400" />
+                  Day-End / Z-Report Cash Reconciliation Archive
+                </h3>
+                <p className="text-xs text-slate-300">
+                  Audit physical cash count vs system expected sales, petty cash deductions &amp; register variances.
+                </p>
+              </div>
+
+              <Button
+                onClick={() => setIsZReportDialogOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl h-10 px-5 shadow-md flex items-center gap-2 shrink-0"
+              >
+                <Calculator className="h-4 w-4 text-amber-300" />
+                Open / Close Register Now
+              </Button>
+            </div>
+
+            {/* Reconciliation KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card className="bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                    Total Shifts Closed
+                    <Lock className="h-4 w-4 text-slate-500" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-black text-slate-900 dark:text-slate-100">
+                    {zReportsList.length}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 font-medium">In selected date range</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-blue-50/50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900/40 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center justify-between">
+                    Total Expected Cash
+                    <DollarSign className="h-4 w-4 text-blue-500" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-black text-blue-700 dark:text-blue-300">
+                    {formatCurrency(zReportsList.reduce((s, r) => s + (r.expectedCash || 0), 0))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 font-medium">Float + Sales - Payouts</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/40 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center justify-between">
+                    Total Counted Physical Cash
+                    <Coins className="h-4 w-4 text-emerald-500" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
+                    {formatCurrency(zReportsList.reduce((s, r) => s + (r.actualCashCounted || 0), 0))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 font-medium">Physical cash in drawer</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-amber-50/50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/40 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center justify-between">
+                    Net Cash Variance
+                    <ArrowUpDown className="h-4 w-4 text-amber-500" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const totalDiff = zReportsList.reduce((s, r) => s + (r.difference || 0), 0);
+                    return (
+                      <>
+                        <div
+                          className={`text-2xl font-black ${
+                            totalDiff === 0
+                              ? "text-emerald-600"
+                              : totalDiff < 0
+                              ? "text-rose-600"
+                              : "text-amber-600"
+                          }`}
+                        >
+                          {totalDiff >= 0 ? "+" : ""}
+                          {formatCurrency(totalDiff)}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 font-medium">
+                          {totalDiff === 0 ? "Perfect Match (No discrepancy)" : totalDiff < 0 ? "Net Cash Shortage" : "Net Cash Excess"}
+                        </p>
+                      </>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Historical Z-Reports Table */}
+            <Card className="border-border/60 shadow-sm overflow-hidden">
+              <CardHeader className="bg-muted/30 border-b border-border/40 pb-4">
+                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-blue-500" /> Closed Register Sessions &amp; Z-Reports
+                </CardTitle>
+                <CardDescription>
+                  Chronological record of every completed day close with cashier sign-off and variance tracking.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-muted/50">
+                      <TableRow>
+                        <TableHead className="font-extrabold text-xs">Report #</TableHead>
+                        <TableHead className="font-extrabold text-xs">Date &amp; Shift</TableHead>
+                        <TableHead className="font-extrabold text-xs text-right">Opening Float</TableHead>
+                        <TableHead className="font-extrabold text-xs text-right">Cash In (Sales)</TableHead>
+                        <TableHead className="font-extrabold text-xs text-right">Petty Payouts</TableHead>
+                        <TableHead className="font-extrabold text-xs text-right">Expected Cash</TableHead>
+                        <TableHead className="font-extrabold text-xs text-right">Counted Cash</TableHead>
+                        <TableHead className="font-extrabold text-xs text-center">Variance (Diff)</TableHead>
+                        <TableHead className="font-extrabold text-xs">Closed By</TableHead>
+                        <TableHead className="font-extrabold text-xs text-center">Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+
+                    <TableBody>
+                      {loading ? (
+                        <TableSkeleton rows={5} cols={10} />
+                      ) : zReportsList.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={10} className="text-center py-10 text-muted-foreground text-sm font-medium">
+                            No closed Z-Reports found for the selected period.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        zReportsList.map((rep) => (
+                          <TableRow key={rep._id || rep.reportNumber} className="hover:bg-muted/30">
+                            <TableCell className="font-black text-xs font-mono text-blue-600 dark:text-blue-400">
+                              {rep.reportNumber || "Z-0001"}
+                            </TableCell>
+                            <TableCell className="text-xs font-medium">
+                              <div>
+                                <span className="font-bold text-foreground block">
+                                  {rep.shiftDate ? new Date(rep.shiftDate).toLocaleDateString("en-IN") : "Today"}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground uppercase">
+                                  {rep.shiftName} • {rep.closedAt ? new Date(rep.closedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : ""}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-xs">
+                              {formatCurrency(rep.openingCash)}
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-xs text-emerald-600 dark:text-emerald-400">
+                              +{formatCurrency(rep.cashSales)}
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-xs text-rose-500">
+                              {rep.cashPayouts > 0 ? `-${formatCurrency(rep.cashPayouts)}` : "₹0"}
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-xs text-foreground">
+                              {formatCurrency(rep.expectedCash)}
+                            </TableCell>
+                            <TableCell className="text-right font-black text-xs text-blue-600 dark:text-blue-400">
+                              {formatCurrency(rep.actualCashCounted)}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge
+                                variant="outline"
+                                className={`text-[10px] font-extrabold ${
+                                  rep.difference === 0
+                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                                    : rep.difference < 0
+                                    ? "bg-rose-500/10 text-rose-600 border-rose-500/30"
+                                    : "bg-amber-500/10 text-amber-600 border-amber-500/30"
+                                }`}
+                              >
+                                {rep.difference === 0
+                                  ? "Balanced (₹0)"
+                                  : `${rep.difference >= 0 ? "+" : ""}${formatCurrency(rep.difference)}`}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground font-medium">
+                              {rep.closedBy?.contactName || rep.closedBy?.username || "Cashier"}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setIsZReportDialogOpen(true)}
+                                className="h-7 px-2.5 text-[10px] font-bold rounded-lg gap-1"
+                              >
+                                <Printer className="h-3 w-3" /> View / Print
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
       </Tabs>
+
+      {/* ── Z-Report Register Dialog ── */}
+      <ZReportDialog
+        open={isZReportDialogOpen}
+        onOpenChange={setIsZReportDialogOpen}
+        restaurantId={selectedRestaurantId}
+        userRole={user?.role}
+        userName={user?.contactName || user?.username || "Manager"}
+        restaurantName={restaurants.find((r) => r._id === selectedRestaurantId)?.name || "Vinimay Cafe"}
+      />
     </div>
   );
 }

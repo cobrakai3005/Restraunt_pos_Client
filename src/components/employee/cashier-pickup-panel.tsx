@@ -105,22 +105,41 @@ export function CashierPickupPanel({ user, embedded }: DashboardProps) {
   useEffect(() => {
     fetchOrders();
     const socket = connectSocket();
-    if (socket) {
-      socket.on("new_kot", fetchOrders);
-      socket.on("item_status_update", fetchOrders);
-      socket.on("order_billed", fetchOrders);
-      socket.on("order_settled", fetchOrders);
-    }
-    return () => {
-      if (socket) {
-        socket.off("new_kot", fetchOrders);
-        socket.off("item_status_update", fetchOrders);
-        socket.off("order_billed", fetchOrders);
-        socket.off("order_settled", fetchOrders);
-      }
-      disconnectSocket();
+    if (!socket) return;
+
+    const handleItemStatusUpdate = (data: { orderId: string; kotItemId: string; itemStatus: string }) => {
+      if (!data?.orderId || !data?.kotItemId) return;
+      setOrders((prev) =>
+        prev.map((o) => {
+          if (o._id === data.orderId) {
+            return {
+              ...o,
+              kots: (o.kots || []).map((kot) => ({
+                ...kot,
+                items: (kot.items || []).map((item) =>
+                  item._id === data.kotItemId ? { ...item, itemStatus: data.itemStatus as any } : item
+                ),
+              })),
+            };
+          }
+          return o;
+        })
+      );
+      fetchOrders();
     };
-  }, [toast]);
+
+    socket.on("new_kot", fetchOrders);
+    socket.on("item_status_update", handleItemStatusUpdate);
+    socket.on("order_billed", fetchOrders);
+    socket.on("order_settled", fetchOrders);
+
+    return () => {
+      socket.off("new_kot", fetchOrders);
+      socket.off("item_status_update", handleItemStatusUpdate);
+      socket.off("order_billed", fetchOrders);
+      socket.off("order_settled", fetchOrders);
+    };
+  }, []);
 
   const markServed = async (orderId: string, itemId: string) => {
     const key = `${orderId}_${itemId}`;

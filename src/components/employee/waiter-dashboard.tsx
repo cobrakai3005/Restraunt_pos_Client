@@ -82,7 +82,6 @@ export function WaiterDashboard({ user, onOpenDrawer }: DashboardProps) {
         socket.off("table_status_change", fetchReadyItems);
         socket.off("order_billed", fetchReadyItems);
       }
-      disconnectSocket();
     };
   }, [fetchReadyItems]);
 

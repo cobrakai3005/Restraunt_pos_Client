@@ -9,3 +9,4 @@ export * from "./cashier-discount-tab";
 export * from "./cashier-split-payment-dialog";
 export * from "./cashier-receive-credit-dialog";
 export * from "./cashier-due-history-dialog";
+export * from "./z-report-dialog";

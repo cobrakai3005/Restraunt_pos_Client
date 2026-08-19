@@ -12,6 +12,13 @@ import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface DashboardProps {
   user: User;
@@ -104,7 +111,6 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
         socket.off("order_billed", fetchActiveOrders);
         socket.off("order_settled", fetchActiveOrders);
       }
-      disconnectSocket();
     };
   }, [toast]);
 
@@ -191,20 +197,37 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
         {/* Top Controls: Search, Station, Filter, Density */}
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Station Filter */}
-          <select
-            value={selectedStation}
-            onChange={(e) => setSelectedStation(e.target.value)}
-            className="h-9 md:h-10 px-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 text-xs rounded-xl text-amber-600 dark:text-amber-400 font-bold focus:ring-blue-500 cursor-pointer shadow-sm"
-          >
-            <option value="ALL">👨‍🍳 All Kitchen Stations</option>
-            <option value="MAIN_KITCHEN">🍳 Main Kitchen</option>
-            <option value="OVEN">🍕 Oven / Pizza</option>
-            <option value="TANDOOR">🔥 Tandoor</option>
-            <option value="GRILL">🍖 Grill</option>
-            <option value="BAR">🍹 Bar &amp; Beverages</option>
-            <option value="BAKERY">🍰 Bakery</option>
-            <option value="COLD_KITCHEN">🥗 Cold Kitchen</option>
-          </select>
+          <Select value={selectedStation} onValueChange={(val) => setSelectedStation(val)}>
+            <SelectTrigger className="h-9 md:h-10 w-[190px] md:w-[215px] bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-800 text-xs rounded-xl text-amber-600 dark:text-amber-400 font-bold focus:ring-blue-500 shadow-sm">
+              <SelectValue placeholder="Select Station" />
+            </SelectTrigger>
+            <SelectContent className="bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl shadow-xl">
+              <SelectItem value="ALL" className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                👨‍🍳 All Kitchen Stations
+              </SelectItem>
+              <SelectItem value="MAIN_KITCHEN" className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                🍳 Main Kitchen
+              </SelectItem>
+              <SelectItem value="OVEN" className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                🍕 Oven / Pizza
+              </SelectItem>
+              <SelectItem value="TANDOOR" className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                🔥 Tandoor
+              </SelectItem>
+              <SelectItem value="GRILL" className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                🍖 Grill
+              </SelectItem>
+              <SelectItem value="BAR" className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                🍹 Bar &amp; Beverages
+              </SelectItem>
+              <SelectItem value="BAKERY" className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                🍰 Bakery
+              </SelectItem>
+              <SelectItem value="COLD_KITCHEN" className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                🥗 Cold Kitchen
+              </SelectItem>
+            </SelectContent>
+          </Select>
 
           {/* Search Bar */}
           <div className="relative">

@@ -206,7 +206,6 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         socket.off("order_billed", fetchActiveOrders);
         socket.off("new_kot", fetchActiveOrders);
       }
-      disconnectSocket();
     };
   }, [toast, fetchActiveOrders, refreshFloorAndOrders]);
 

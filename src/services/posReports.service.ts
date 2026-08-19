@@ -225,15 +225,117 @@ export interface CoverSizeSummaryData {
   };
 }
 
+// 9. Cash Drawer & Z-Report Interfaces
+export interface CashPayoutItem {
+  _id?: string;
+  amount: number;
+  reason: string;
+  createdAt?: string;
+  createdBy?: {
+    _id?: string;
+    contactName?: string;
+    username?: string;
+  };
+}
+
+export interface DenominationCounts {
+  d500?: number;
+  d200?: number;
+  d100?: number;
+  d50?: number;
+  d20?: number;
+  d10?: number;
+  coins?: number;
+}
+
+export interface CashDrawerSession {
+  _id?: string;
+  restaurantId: string;
+  reportNumber?: string;
+  shiftDate: string;
+  shiftName: "MORNING" | "EVENING" | "NIGHT" | "FULL_DAY";
+  openingCash: number;
+  cashSales: number;
+  cashPayouts: number;
+  payouts: CashPayoutItem[];
+  expectedCash: number;
+  actualCashCounted: number;
+  difference: number;
+  denominations?: DenominationCounts;
+  status: "OPEN" | "CLOSED";
+  notes?: string;
+  openedBy?: {
+    _id?: string;
+    contactName?: string;
+    username?: string;
+  };
+  closedBy?: {
+    _id?: string;
+    contactName?: string;
+    username?: string;
+  };
+  openedAt: string;
+  closedAt?: string;
+  zReportData?: ZReportData;
+}
+
+export interface CurrentDrawerResponse {
+  drawer: CashDrawerSession;
+  liveMetrics: {
+    openingCash: number;
+    cashSales: number;
+    cashPayouts: number;
+    expectedCash: number;
+    openOrdersCount: number;
+    openOrdersTotal: number;
+  };
+}
+
+export interface ZReportData {
+  reportNumber: string;
+  restaurant: {
+    name: string;
+    address?: string;
+    phone?: string;
+    gstin?: string;
+  };
+  shift: {
+    name: string;
+    openedAt: string;
+    closedAt: string;
+    shiftDate: string;
+  };
+  cashReconciliation: {
+    openingCash: number;
+    cashSales: number;
+    cashPayouts: number;
+    payoutsList: CashPayoutItem[];
+    expectedCash: number;
+    actualCashCounted: number;
+    difference: number;
+    denominations: DenominationCounts;
+  };
+  salesSummary: ExecutiveSummaryData["summary"];
+  paymentBreakdown: ExecutiveSummaryData["paymentBreakdown"];
+  orderTypeBreakdown: ExecutiveSummaryData["orderTypeBreakdown"];
+  notes?: string;
+}
+
 export type PosReportType =
   | "executive"
   | "sales"
   | "category"
   | "item"
+  | "items"
   | "order"
+  | "orders"
   | "group"
+  | "groups"
   | "variation"
-  | "cover-size";
+  | "variations"
+  | "cover-size"
+  | "covers"
+  | "z-report";
 
 export const posReportsService = {
   getExecutiveSummary: async (restaurantId: string, startDate?: string, endDate?: string) => {
@@ -300,6 +402,48 @@ export const posReportsService = {
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     const res = await apiClient.get(`/pos-reports/cover-size-summary?${params.toString()}`);
+    return res.data;
+  },
+
+  // ── Cash Drawer & Z-Report APIs ──
+  getCurrentCashDrawer: async (restaurantId: string): Promise<{ data: CurrentDrawerResponse }> => {
+    const res = await apiClient.get(`/pos-reports/cash-drawer/current?restaurantId=${restaurantId}`);
+    return res.data;
+  },
+
+  openCashDrawer: async (
+    restaurantId: string,
+    payload: { openingCash: number; shiftName?: string; notes?: string }
+  ): Promise<{ data: CashDrawerSession }> => {
+    const res = await apiClient.post(`/pos-reports/cash-drawer/open?restaurantId=${restaurantId}`, payload);
+    return res.data;
+  },
+
+  addCashPayout: async (
+    restaurantId: string,
+    payload: { amount: number; reason: string }
+  ): Promise<{ data: CashDrawerSession }> => {
+    const res = await apiClient.post(`/pos-reports/cash-drawer/payout?restaurantId=${restaurantId}`, payload);
+    return res.data;
+  },
+
+  closeCashDrawer: async (
+    restaurantId: string,
+    payload: { actualCashCounted: number; denominations?: DenominationCounts; notes?: string; shiftName?: string }
+  ): Promise<{ data: CashDrawerSession }> => {
+    const res = await apiClient.post(`/pos-reports/cash-drawer/close?restaurantId=${restaurantId}`, payload);
+    return res.data;
+  },
+
+  getZReports: async (
+    restaurantId: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<{ data: CashDrawerSession[] }> => {
+    const params = new URLSearchParams({ restaurantId });
+    if (startDate) params.append("startDate", startDate);
+    if (endDate) params.append("endDate", endDate);
+    const res = await apiClient.get(`/pos-reports/z-reports?${params.toString()}`);
     return res.data;
   },
 

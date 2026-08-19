@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { OrderTakingPanel } from "./order-taking-panel";
 import { CashierPickupPanel } from "./cashier-pickup-panel";
@@ -21,6 +21,7 @@ import {
   CashierSplitPaymentDialog,
   CashierReceiveCreditDialog,
   CashierDueHistoryDialog,
+  ZReportDialog,
 } from "./cashier";
 
 export type { DashboardProps, KotItem, Order, Mode };
@@ -120,6 +121,8 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
     handleUpdateDiscount,
   } = useCashierDashboard();
 
+  const [showZReportDialog, setShowZReportDialog] = useState(false);
+
   const mode = currentMode !== undefined ? currentMode : internalMode;
   const setMode = (newMode: Mode) => {
     internalSetMode(newMode);
@@ -141,6 +144,11 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
     );
   }
 
+  const restaurantId =
+    typeof user.restaurantId === "object"
+      ? (user.restaurantId as any)?._id
+      : user.restaurantId || "";
+
   return (
     <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden transition-colors">
       {/* Top Header */}
@@ -150,6 +158,7 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
         readyItemCount={readyItemCount}
         pendingCount={pendingCount}
         onOpenDrawer={onOpenDrawer}
+        onOpenZReport={() => setShowZReportDialog(true)}
       />
 
       {/* Mode Content */}
@@ -327,6 +336,21 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
         }}
         item={complimentaryItem}
         onConfirm={handleToggleComplimentary}
+      />
+
+      {/* ── Day-End / Z-Report Reconciliation Dialog ── */}
+      <ZReportDialog
+        open={showZReportDialog}
+        onOpenChange={setShowZReportDialog}
+        restaurantId={restaurantId}
+        userRole={user.role}
+        userName={user.contactName || user.username || "Cashier"}
+        restaurantName={
+          (typeof user.restaurantId === "object" ? (user.restaurantId as any)?.name : null) ||
+          (orders[0] as any)?.restaurant?.name ||
+          (orders[0] as any)?.restaurantId?.name ||
+          ""
+        }
       />
     </div>
   );

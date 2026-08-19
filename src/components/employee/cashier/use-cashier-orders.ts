@@ -53,8 +53,8 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
         setIsLoading(true);
       }
       const [resActive, resBilled, resTables] = await Promise.all([
-        employeeService.getOrders({ status: "OPEN" }),
-        employeeService.getOrders({ status: "BILLED" }),
+        employeeService.getOrders({ status: "OPEN", limit: 100 }),
+        employeeService.getOrders({ status: "BILLED", limit: 100 }),
         employeeService.getTables(),
       ]);
 
@@ -80,21 +80,21 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
           o.status !== "CANCELLED" &&
           o.status !== "MERGED" &&
           Array.isArray(o.kots) &&
-          o.kots.some((k: any) => Array.isArray(k.items) && k.items.length > 0)
+          o.kots.some((k: any) => Array.isArray(k?.items) && k.items.length > 0)
       );
 
       setOrders(allActiveOrders);
 
       setSelectedOrder((prev) => {
         if (!prev) return null;
-        const updated = allActiveOrders.find((o) => o._id === prev._id);
+        const updated = allActiveOrders.find((o) => String(o._id) === String(prev._id));
         return updated || null;
       });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Failed to fetch orders", description: error.message });
     } finally {
-      hasLoadedOnce.current = true;
       setIsLoading(false);
+      hasLoadedOnce.current = true;
     }
   }, [toast]);
 
@@ -102,38 +102,122 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
     if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
     fetchTimeoutRef.current = setTimeout(() => {
       fetchOrders();
-    }, 250);
-  }, []);
+    }, 150);
+  }, [fetchOrders]);
 
-  // Real-time sockets with debounced updates
+  // Real-time sockets with instantaneous local state updates + background sync
   useEffect(() => {
     fetchOrders();
     const socket = connectSocket();
-    if (socket) {
-      socket.on("table_status_change", debouncedFetchOrders);
-      socket.on("tables_merged", debouncedFetchOrders);
-      socket.on("tables_unmerged", debouncedFetchOrders);
-      socket.on("order_billed", debouncedFetchOrders);
-      socket.on("order_settled", debouncedFetchOrders);
-      socket.on("item_status_update", debouncedFetchOrders);
-      socket.on("item_complimentary_updated", debouncedFetchOrders);
-      socket.on("order_due_updated", debouncedFetchOrders);
-    }
+    if (!socket) return;
+
+    const handleItemStatusUpdate = (data: { orderId: string; kotItemId: string; itemStatus: string }) => {
+      if (!data?.orderId || !data?.kotItemId) return;
+      const targetOrderId = String(data.orderId);
+      const targetKotItemId = String(data.kotItemId);
+
+      setOrders((prev) =>
+        prev.map((o) => {
+          if (String(o._id) === targetOrderId) {
+            return {
+              ...o,
+              kots: (o.kots || []).map((kot) => ({
+                ...kot,
+                items: (kot.items || []).map((item) =>
+                  String(item._id) === targetKotItemId
+                    ? { ...item, itemStatus: data.itemStatus as any }
+                    : item
+                ),
+              })),
+            };
+          }
+          return o;
+        })
+      );
+      setSelectedOrder((prev) => {
+        if (!prev || String(prev._id) !== targetOrderId) return prev;
+        return {
+          ...prev,
+          kots: (prev.kots || []).map((kot) => ({
+            ...kot,
+            items: (kot.items || []).map((item) =>
+              String(item._id) === targetKotItemId
+                ? { ...item, itemStatus: data.itemStatus as any }
+                : item
+            ),
+          })),
+        };
+      });
+      debouncedFetchOrders();
+    };
+
+    const handleNewKot = (data: { orderId: string; kot: any }) => {
+      if (!data?.orderId || !data?.kot) return;
+      const targetOrderId = String(data.orderId);
+      setOrders((prev) => {
+        const found = prev.find((o) => String(o._id) === targetOrderId);
+        if (found) {
+          return prev.map((o) =>
+            String(o._id) === targetOrderId
+              ? {
+                  ...o,
+                  kots: [
+                    ...(o.kots || []).filter((k: any) => String(k._id) !== String(data.kot._id)),
+                    data.kot,
+                  ],
+                }
+              : o
+          );
+        }
+        return prev;
+      });
+      debouncedFetchOrders();
+    };
+
+    const handleOrderBilled = (data: { orderId: string; order?: any }) => {
+      const orderId = String(data?.orderId || data?.order?._id || "");
+      if (orderId) {
+        setOrders((prev) =>
+          prev.map((o) => (String(o._id) === orderId ? { ...o, status: "BILLED" } : o))
+        );
+        setSelectedOrder((prev) => (prev && String(prev._id) === orderId ? { ...prev, status: "BILLED" } : prev));
+      }
+      debouncedFetchOrders();
+    };
+
+    const handleOrderSettled = (data: { orderId: string }) => {
+      const orderId = String(data?.orderId || "");
+      if (orderId) {
+        setOrders((prev) => prev.filter((o) => String(o._id) !== orderId));
+        setSelectedOrder((prev) => (prev && String(prev._id) === orderId ? null : prev));
+      }
+      debouncedFetchOrders();
+    };
+
+    socket.on("table_status_change", debouncedFetchOrders);
+    socket.on("tables_merged", debouncedFetchOrders);
+    socket.on("tables_unmerged", debouncedFetchOrders);
+    socket.on("new_kot", handleNewKot);
+    socket.on("order_billed", handleOrderBilled);
+    socket.on("order_settled", handleOrderSettled);
+    socket.on("item_status_update", handleItemStatusUpdate);
+    socket.on("item_complimentary_updated", debouncedFetchOrders);
+    socket.on("order_due_updated", debouncedFetchOrders);
 
     return () => {
-      if (socket) {
-        socket.off("table_status_change", debouncedFetchOrders);
-        socket.off("tables_merged", debouncedFetchOrders);
-        socket.off("tables_unmerged", debouncedFetchOrders);
-        socket.off("order_billed", debouncedFetchOrders);
-        socket.off("order_settled", debouncedFetchOrders);
-        socket.off("item_status_update", debouncedFetchOrders);
-        socket.off("item_complimentary_updated", debouncedFetchOrders);
-        socket.off("order_due_updated", debouncedFetchOrders);
-      }
+      socket.off("table_status_change", debouncedFetchOrders);
+      socket.off("tables_merged", debouncedFetchOrders);
+      socket.off("tables_unmerged", debouncedFetchOrders);
+      socket.off("new_kot", handleNewKot);
+      socket.off("order_billed", handleOrderBilled);
+      socket.off("order_settled", handleOrderSettled);
+      socket.off("item_status_update", handleItemStatusUpdate);
+      socket.off("item_complimentary_updated", debouncedFetchOrders);
+      socket.off("order_due_updated", debouncedFetchOrders);
+
       if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
     };
-  }, [debouncedFetchOrders]);
+  }, [fetchOrders, debouncedFetchOrders]);
 
   // Global Keydown Listeners for Pos Terminal Shortcuts
   useEffect(() => {
@@ -414,10 +498,16 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
     );
   }, [orders, searchQuery]);
 
-  const readyItemCount = orders.reduce(
-    (sum, o) => sum + o.kots.flatMap((k) => k.items).filter((i) => i.itemStatus === "READY").length,
-    0
-  );
+  const readyItemCount = useMemo(() => {
+    return orders.reduce((sum, o) => {
+      const kotList = Array.isArray(o.kots) ? o.kots : [];
+      const readyInOrder = kotList.reduce((kSum, k) => {
+        const items = Array.isArray(k?.items) ? k.items : [];
+        return kSum + items.filter((i) => i?.itemStatus === "READY").length;
+      }, 0);
+      return sum + readyInOrder;
+    }, 0);
+  }, [orders]);
   const pendingCount = orders.filter((o) => o.status === "BILLED").length;
 
   return {
