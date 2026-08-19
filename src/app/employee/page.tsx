@@ -58,7 +58,7 @@ export default function EmployeeDashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [shiftSummary, setShiftSummary] = useState<ExecutiveSummaryData | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
-  const [cashierMode, setCashierMode] = useState<"orders" | "kitchen" | "billing" | "receivables" | "reports">("billing");
+  const [cashierMode, setCashierMode] = useState<"orders" | "kitchen" | "billing" | "receivables" | "reports">("orders");
   const [managerTab, setManagerTab] = useState<string>("floor");
 
   useEffect(() => {

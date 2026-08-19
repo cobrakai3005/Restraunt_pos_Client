@@ -82,6 +82,7 @@ import {
   Filter,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const COLORS = [
   "#3b82f6",
@@ -93,6 +94,44 @@ const COLORS = [
   "#f97316",
   "#64748b",
 ];
+
+const TableSkeleton = ({ rows = 6, cols = 8 }: { rows?: number; cols?: number }) => (
+  <>
+    {Array.from({ length: rows }).map((_, r) => (
+      <TableRow key={r} className="hover:bg-transparent">
+        {Array.from({ length: cols }).map((_, c) => (
+          <TableCell key={c} className="py-3">
+            <Skeleton className="h-4 w-full rounded-md" />
+          </TableCell>
+        ))}
+      </TableRow>
+    ))}
+  </>
+);
+
+const ExecutiveCardsSkeleton = () => (
+  <div className="space-y-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Card key={i} className="p-4 space-y-3 border-border/60">
+          <Skeleton className="h-3.5 w-28" />
+          <Skeleton className="h-8 w-36" />
+          <Skeleton className="h-3 w-24" />
+        </Card>
+      ))}
+    </div>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <Card className="p-5 space-y-4 border-border/60">
+        <Skeleton className="h-5 w-44" />
+        <Skeleton className="h-28 w-full" />
+      </Card>
+      <Card className="p-5 space-y-4 border-border/60">
+        <Skeleton className="h-5 w-44" />
+        <Skeleton className="h-28 w-full" />
+      </Card>
+    </div>
+  </div>
+);
 
 const downloadBlob = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
@@ -530,187 +569,216 @@ export function PosReportsHub({
           </TabsList>
         </div>
 
-        {loading && (
-          <div className="flex flex-col items-center justify-center p-20 gap-3 text-muted-foreground bg-card/50 rounded-2xl border border-border/40">
-            <Loader2 className="h-9 w-9 animate-spin text-blue-600" />
-            <p className="font-semibold text-sm">Aggregating real-time POS reports...</p>
-          </div>
-        )}
-
         {/* ========================================================================= */}
         {/* REPORT 1: EXECUTIVE SALES SUMMARY */}
         {/* ========================================================================= */}
-        {!loading && activeTab === "executive" && executiveData && (
+        {activeTab === "executive" && (
           <TabsContent value="executive" className="space-y-6 mt-0">
-            {/* Primary KPI Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className="bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-blue-500/30 shadow-sm relative overflow-hidden">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                    Total Revenue (Grand Total)
-                    <DollarSign className="h-4 w-4 text-blue-500" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-black text-blue-600 dark:text-blue-400">
-                    {formatCurrency(executiveData.summary.totalSales)}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1 font-medium">
-                    Gross: <span className="font-bold text-foreground">{formatCurrency(executiveData.summary.grossSales)}</span>
-                  </p>
-                </CardContent>
-              </Card>
+            {loading && !executiveData ? (
+              <ExecutiveCardsSkeleton />
+            ) : executiveData ? (
+              <>
+                {/* Primary KPI Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Card className="bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border-blue-500/30 shadow-sm relative overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                        Total Revenue (Grand Total)
+                        <DollarSign className="h-4 w-4 text-blue-500" />
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                        {formatCurrency(executiveData.summary.totalSales)}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 font-medium">
+                        Gross: <span className="font-bold text-foreground">{formatCurrency(executiveData.summary.grossSales)}</span>
+                      </p>
+                    </CardContent>
+                  </Card>
 
-              <Card className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/30 shadow-sm relative overflow-hidden">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                    Net Sales
-                    <TrendingUp className="h-4 w-4 text-emerald-500" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-                    {formatCurrency(executiveData.summary.netSales)}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1 font-medium">
-                    Discounts: <span className="font-bold text-rose-500">-{formatCurrency(executiveData.summary.totalDiscounts)}</span>
-                  </p>
-                </CardContent>
-              </Card>
+                  <Card className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/30 shadow-sm relative overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                        Net Sales
+                        <TrendingUp className="h-4 w-4 text-emerald-500" />
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(executiveData.summary.netSales)}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 font-medium">
+                        Discounts: <span className="font-bold text-rose-500">-{formatCurrency(executiveData.summary.totalDiscounts)}</span>
+                      </p>
+                    </CardContent>
+                  </Card>
 
-              <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/30 shadow-sm relative overflow-hidden">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                    Total Covers (Guests)
-                    <Users className="h-4 w-4 text-amber-500" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-black text-amber-600 dark:text-amber-400">
-                    {executiveData.summary.totalCovers} Covers
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1 font-medium">
-                    Completed Orders: <span className="font-bold text-foreground">{executiveData.summary.completedOrders}</span>
-                  </p>
-                </CardContent>
-              </Card>
+                  <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/30 shadow-sm relative overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                        Total Covers (Guests)
+                        <Users className="h-4 w-4 text-amber-500" />
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-black text-amber-600 dark:text-amber-400">
+                        {executiveData.summary.totalCovers} Covers
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 font-medium">
+                        Completed Orders: <span className="font-bold text-foreground">{executiveData.summary.completedOrders}</span>
+                      </p>
+                    </CardContent>
+                  </Card>
 
-              <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30 shadow-sm relative overflow-hidden">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                    Avg Spend Per Cover (APC)
-                    <Percent className="h-4 w-4 text-purple-500" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-black text-purple-600 dark:text-purple-400">
-                    {formatCurrency(executiveData.summary.averageSpendPerCover)}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1 font-medium">
-                    AOV: <span className="font-bold text-foreground">{formatCurrency(executiveData.summary.averageOrderValue)}</span>
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+                  <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30 shadow-sm relative overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+                        Avg Spend Per Cover (APC)
+                        <Percent className="h-4 w-4 text-purple-500" />
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-black text-purple-600 dark:text-purple-400">
+                        {formatCurrency(executiveData.summary.averageSpendPerCover)}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 font-medium">
+                        AOV: <span className="font-bold text-foreground">{formatCurrency(executiveData.summary.averageOrderValue)}</span>
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
 
-            {/* Secondary KPI Breakdown Table & Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Financial Breakup Table */}
-              <Card className="border-border/60 shadow-sm">
-                <CardHeader>
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <Receipt className="h-5 w-5 text-blue-500" /> Billing Breakdown Summary
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex justify-between py-2 border-b border-border/40 text-sm font-semibold">
-                      <span className="text-muted-foreground">Gross Sales (Items + Modifiers)</span>
-                      <span className="font-bold">{formatCurrency(executiveData.summary.grossSales)}</span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-border/40 text-sm font-semibold">
-                      <span className="text-muted-foreground">Total Discounts Applied</span>
-                      <span className="font-bold text-rose-500">-{formatCurrency(executiveData.summary.totalDiscounts)}</span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-border/40 text-sm font-semibold">
-                      <span className="text-muted-foreground">Cancelled / Refunded Amount</span>
-                      <span className="font-bold text-rose-500">-{formatCurrency(executiveData.summary.refunds)}</span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-border/40 text-sm font-bold bg-muted/30 px-2 rounded-lg">
-                      <span>Net Sales</span>
-                      <span className="text-emerald-600 dark:text-emerald-400">{formatCurrency(executiveData.summary.netSales)}</span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-border/40 text-sm font-semibold">
-                      <span className="text-muted-foreground">Total GST (CGST: {formatCurrency(executiveData.summary.totalCgst)}, SGST: {formatCurrency(executiveData.summary.totalSgst)})</span>
-                      <span className="font-bold text-blue-600 dark:text-blue-400">+{formatCurrency(executiveData.summary.totalTax)}</span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-border/40 text-sm font-semibold">
-                      <span className="text-muted-foreground">Packaging Charges (Takeaway)</span>
-                      <span className="font-bold">+{formatCurrency(executiveData.summary.packagingCharges)}</span>
-                    </div>
-                    <div className="flex justify-between py-3 border-t-2 border-border text-base font-black bg-blue-500/10 px-3 rounded-xl text-blue-700 dark:text-blue-300">
-                      <span>Grand Total Revenue</span>
-                      <span>{formatCurrency(executiveData.summary.totalSales)}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                {/* Secondary KPI Breakdown Table & Charts */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Financial Breakup Table */}
+                  <Card className="border-border/60 shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base font-bold flex items-center gap-2">
+                        <Receipt className="h-5 w-5 text-blue-500" /> Billing Breakdown Summary
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        <div className="flex justify-between py-2 border-b border-border/40 text-sm font-semibold">
+                          <span className="text-muted-foreground">Gross Sales (Items + Modifiers)</span>
+                          <span className="font-bold">{formatCurrency(executiveData.summary.grossSales)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-border/40 text-sm font-semibold">
+                          <span className="text-muted-foreground">Total Discounts Applied</span>
+                          <span className="font-bold text-rose-500">-{formatCurrency(executiveData.summary.totalDiscounts)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-border/40 text-sm font-semibold">
+                          <span className="text-muted-foreground">Cancelled / Refunded Amount</span>
+                          <span className="font-bold text-rose-500">-{formatCurrency(executiveData.summary.refunds)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-border/40 text-sm font-bold bg-muted/30 px-2 rounded-lg">
+                          <span>Net Sales</span>
+                          <span className="text-emerald-600 dark:text-emerald-400">{formatCurrency(executiveData.summary.netSales)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-border/40 text-sm font-semibold">
+                          <span className="text-muted-foreground">Total Taxes (GST)</span>
+                          <span className="font-bold text-blue-600 dark:text-blue-400">+{formatCurrency(executiveData.summary.totalTax)}</span>
+                        </div>
+                        <div className="flex justify-between py-2 border-b border-border/40 text-sm font-semibold">
+                          <span className="text-muted-foreground">Packaging Charges (Takeaway)</span>
+                          <span className="font-bold">+{formatCurrency(executiveData.summary.packagingCharges)}</span>
+                        </div>
+                        <div className="flex justify-between py-2.5 text-base font-black bg-primary/5 px-2.5 rounded-xl border border-primary/20">
+                          <span className="text-primary">Grand Total Revenue</span>
+                          <span className="text-primary">{formatCurrency(executiveData.summary.totalSales)}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
-              {/* Payment Methods & Order Types Split */}
-              <div className="space-y-6">
-                <Card className="border-border/60 shadow-sm">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-bold flex items-center gap-2">
-                      <DollarSign className="h-5 w-5 text-emerald-500" /> Tender / Payment-wise Sales
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {executiveData.paymentBreakdown.length === 0 ? (
-                      <p className="text-xs text-muted-foreground py-6 text-center">No payment data recorded in this date range.</p>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {executiveData.paymentBreakdown.map((p, idx) => (
-                          <div key={p.method} className="flex items-center justify-between p-2.5 rounded-xl bg-muted/40 border border-border/40">
-                            <div className="flex items-center gap-2">
-                              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
-                              <span className="font-bold text-sm">{p.method}</span>
-                              <span className="text-xs text-muted-foreground">({p.count} txns)</span>
-                            </div>
-                            <span className="font-extrabold text-sm text-foreground">{formatCurrency(p.amount)}</span>
+                  {/* Payment Mode Distribution Chart */}
+                  <Card className="border-border/60 shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="text-base font-bold flex items-center gap-2">
+                        <DollarSign className="h-5 w-5 text-emerald-500" /> Payment Tender Distribution
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col items-center justify-center">
+                      {executiveData.paymentBreakdown.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-12">No settled payments in this date range.</p>
+                      ) : (
+                        <div className="w-full flex flex-col sm:flex-row items-center gap-6">
+                          <div className="h-52 w-52 shrink-0">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={executiveData.paymentBreakdown}
+                                  cx="50%"
+                                  cy="50%"
+                                  innerRadius={50}
+                                  outerRadius={75}
+                                  paddingAngle={4}
+                                  dataKey="amount"
+                                  nameKey="method"
+                                >
+                                  {executiveData.paymentBreakdown.map((_, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                  ))}
+                                </Pie>
+                                <RechartsTooltip formatter={(val: number) => formatCurrency(val)} />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </div>
+                          <div className="flex-1 w-full space-y-2.5">
+                            {executiveData.paymentBreakdown.map((pm, idx) => (
+                              <div key={pm.method} className="flex items-center justify-between text-xs font-semibold p-2 rounded-lg bg-muted/40 border border-border/40">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }} />
+                                  <span>{pm.method}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-muted-foreground">{pm.count} orders</span>
+                                  <span className="font-bold text-foreground">{formatCurrency(pm.amount)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Additional Stats: Order Types Split */}
+                <div className="grid grid-cols-1 gap-6">
+                  <Card className="border-border/60 shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base font-bold flex items-center gap-2">
+                        <Users className="h-5 w-5 text-purple-500" /> Order Type Split (Dine-in vs Takeaway)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {executiveData.orderTypeBreakdown.map((ot) => (
+                          <div key={ot.orderType} className="p-4 rounded-xl bg-muted/40 border border-border/40 text-center space-y-1">
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{ot.orderType}</p>
+                            <p className="text-xl font-black text-foreground">{formatCurrency(ot.sales)}</p>
+                            <p className="text-xs text-muted-foreground font-semibold">{ot.count} Orders · {ot.covers} Covers</p>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-border/60 shadow-sm">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-bold flex items-center gap-2">
-                      <Users className="h-5 w-5 text-purple-500" /> Order Type Split (Dine-in vs Takeaway)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-4">
-                      {executiveData.orderTypeBreakdown.map((ot) => (
-                        <div key={ot.orderType} className="p-4 rounded-xl bg-muted/40 border border-border/40 text-center space-y-1">
-                          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{ot.orderType}</p>
-                          <p className="text-xl font-black text-foreground">{formatCurrency(ot.sales)}</p>
-                          <p className="text-xs text-muted-foreground font-semibold">{ot.count} Orders · {ot.covers} Covers</p>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-16 text-muted-foreground font-medium text-sm">
+                No executive summary data available for this range.
               </div>
-            </div>
+            )}
           </TabsContent>
         )}
 
         {/* ========================================================================= */}
         {/* REPORT 2: SALES SUMMARY */}
         {/* ========================================================================= */}
-        {!loading && activeTab === "sales" && salesData && (
+        {activeTab === "sales" && (
           <TabsContent value="sales" className="space-y-6 mt-0">
             <Card className="border-border/60 shadow-sm overflow-hidden">
               <CardHeader className="border-b border-border/40 pb-4">
@@ -736,7 +804,9 @@ export function PosReportsHub({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {salesData.rows.length === 0 ? (
+                      {loading ? (
+                        <TableSkeleton rows={6} cols={9} />
+                      ) : !salesData || salesData.rows.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={9} className="text-center py-10 text-muted-foreground text-sm font-medium">
                             No sales data found for the selected period.
@@ -762,7 +832,7 @@ export function PosReportsHub({
                 </div>
 
                 {/* Total Summary Footer Row */}
-                {salesData.rows.length > 0 && (
+                {salesData && salesData.rows.length > 0 && !loading && (
                   <div className="bg-muted/80 p-4 border-t-2 border-border flex flex-wrap items-center justify-between gap-4 text-xs font-black">
                     <span className="uppercase tracking-wider text-muted-foreground">Total Period Summary</span>
                     <div className="flex flex-wrap items-center gap-6">
@@ -784,11 +854,15 @@ export function PosReportsHub({
         {/* ========================================================================= */}
         {/* REPORT 3: CATEGORY SUMMARY */}
         {/* ========================================================================= */}
-        {!loading && activeTab === "category" && categoryData && (
+        {activeTab === "category" && (
           <TabsContent value="category" className="space-y-6 mt-0">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="relative w-full sm:w-72">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                {loading ? (
+                  <Loader2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-600" />
+                ) : (
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                )}
                 <Input
                   placeholder="Filter category name..."
                   value={searchQuery}
@@ -797,7 +871,7 @@ export function PosReportsHub({
                 />
               </div>
               <div className="text-xs text-muted-foreground font-semibold">
-                Total Categories: <span className="font-bold text-foreground">{categoryData.rows.length}</span>
+                Total Categories: <span className="font-bold text-foreground">{categoryData ? categoryData.rows.length : 0}</span>
               </div>
             </div>
 
@@ -815,7 +889,9 @@ export function PosReportsHub({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredCategoryRows.length === 0 ? (
+                    {loading ? (
+                      <TableSkeleton rows={6} cols={6} />
+                    ) : filteredCategoryRows.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm font-medium">
                           No category sales found.
@@ -850,11 +926,15 @@ export function PosReportsHub({
         {/* ========================================================================= */}
         {/* REPORT 4: ITEM SUMMARY (BOM & PROFITABILITY) */}
         {/* ========================================================================= */}
-        {!loading && activeTab === "item" && itemData && (
+        {activeTab === "item" && (
           <TabsContent value="item" className="space-y-6 mt-0">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="relative w-full sm:w-80">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                {loading ? (
+                  <Loader2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-600" />
+                ) : (
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                )}
                 <Input
                   placeholder="Filter dish name, variant or code..."
                   value={searchQuery}
@@ -863,7 +943,7 @@ export function PosReportsHub({
                 />
               </div>
               <div className="text-xs text-muted-foreground font-semibold">
-                Total Menu Items Sold: <span className="font-bold text-foreground">{itemData.rows.length}</span>
+                Total Menu Items Sold: <span className="font-bold text-foreground">{itemData ? itemData.rows.length : 0}</span>
               </div>
             </div>
 
@@ -886,7 +966,9 @@ export function PosReportsHub({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredItemRows.length === 0 ? (
+                      {loading ? (
+                        <TableSkeleton rows={7} cols={10} />
+                      ) : filteredItemRows.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={10} className="text-center py-10 text-muted-foreground text-sm font-medium">
                             No menu item sales found.
@@ -931,7 +1013,7 @@ export function PosReportsHub({
                 </div>
 
                 {/* Pagination Controls */}
-                {filteredItemRows.length > itemPageSize && (
+                {!loading && filteredItemRows.length > itemPageSize && (
                   <div className="p-3 border-t border-border/50 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                     <span className="text-muted-foreground">
                       Showing <strong className="text-foreground">{(itemPage - 1) * itemPageSize + 1}</strong> to{" "}
@@ -965,7 +1047,7 @@ export function PosReportsHub({
                 )}
 
                 {/* Footer Totals */}
-                {itemData.rows.length > 0 && (
+                {itemData && itemData.rows.length > 0 && !loading && (
                   <div className="bg-muted/80 p-4 border-t-2 border-border flex flex-wrap items-center justify-between gap-4 text-xs font-black">
                     <span className="uppercase tracking-wider text-muted-foreground">Item Totals</span>
                     <div className="flex flex-wrap items-center gap-6">
@@ -984,19 +1066,22 @@ export function PosReportsHub({
         {/* ========================================================================= */}
         {/* REPORT 5: ORDER SUMMARY */}
         {/* ========================================================================= */}
-        {!loading && activeTab === "order" && orderData && (
+        {activeTab === "order" && (
           <TabsContent value="order" className="space-y-6 mt-0">
             {/* Filter Bar */}
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-center justify-between">
               <div className="flex flex-wrap items-center gap-2.5">
                 <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  {loading ? (
+                    <Loader2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-600" />
+                  ) : (
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  )}
                   <Input
                     placeholder="Search Order # or Customer..."
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
-                      setOrderPage(1);
                     }}
                     className="pl-9 h-10 rounded-xl"
                   />
@@ -1040,7 +1125,7 @@ export function PosReportsHub({
               </div>
 
               <div className="text-xs text-muted-foreground font-semibold">
-                Total Orders Found: <span className="font-bold text-foreground">{orderData.pagination.totalRecords}</span>
+                Total Orders Found: <span className="font-bold text-foreground">{orderData ? orderData.pagination.totalRecords : 0}</span>
               </div>
             </div>
 
@@ -1066,7 +1151,9 @@ export function PosReportsHub({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {orderData.orders.length === 0 ? (
+                      {loading ? (
+                        <TableSkeleton rows={8} cols={13} />
+                      ) : !orderData || orderData.orders.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={13} className="text-center py-10 text-muted-foreground text-sm font-medium">
                             No orders found matching criteria.
@@ -1113,31 +1200,33 @@ export function PosReportsHub({
                 </div>
 
                 {/* Pagination Bar */}
-                <div className="p-3 border-t border-border/50 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-                  <span className="text-muted-foreground">
-                    Page <strong className="text-foreground">{orderData.pagination.page}</strong> of <strong className="text-foreground">{orderData.pagination.totalPages || 1}</strong>
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={orderPage <= 1}
-                      onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
-                      className="h-8 text-xs font-bold rounded-lg"
-                    >
-                      <ChevronLeft className="h-4 w-4 mr-1" /> Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={orderPage >= orderData.pagination.totalPages}
-                      onClick={() => setOrderPage((p) => p + 1)}
-                      className="h-8 text-xs font-bold rounded-lg"
-                    >
-                      Next <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
+                {!loading && orderData && (
+                  <div className="p-3 border-t border-border/50 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                    <span className="text-muted-foreground">
+                      Page <strong className="text-foreground">{orderData.pagination.page}</strong> of <strong className="text-foreground">{orderData.pagination.totalPages || 1}</strong>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={orderPage <= 1}
+                        onClick={() => setOrderPage((p) => Math.max(1, p - 1))}
+                        className="h-8 text-xs font-bold rounded-lg"
+                      >
+                        <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={orderPage >= orderData.pagination.totalPages}
+                        onClick={() => setOrderPage((p) => p + 1)}
+                        className="h-8 text-xs font-bold rounded-lg"
+                      >
+                        Next <ChevronRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -1146,7 +1235,7 @@ export function PosReportsHub({
         {/* ========================================================================= */}
         {/* REPORT 6: GROUP SUMMARY */}
         {/* ========================================================================= */}
-        {!loading && activeTab === "group" && groupData && (
+        {activeTab === "group" && (
           <TabsContent value="group" className="space-y-6 mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Kitchen Station Groups */}
@@ -1167,14 +1256,24 @@ export function PosReportsHub({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {groupData.stationGroups.map((g) => (
-                        <TableRow key={g.groupName}>
-                          <TableCell className="font-bold text-xs">{g.groupName}</TableCell>
-                          <TableCell className="text-center font-semibold text-xs">{g.quantitySold}</TableCell>
-                          <TableCell className="text-right font-bold text-xs">{formatCurrency(g.grossSales)}</TableCell>
-                          <TableCell className="text-right font-extrabold text-xs text-blue-600">{g.salesPercentage}%</TableCell>
+                      {loading ? (
+                        <TableSkeleton rows={4} cols={4} />
+                      ) : !groupData || groupData.stationGroups.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-xs">
+                            No station data available.
+                          </TableCell>
                         </TableRow>
-                      ))}
+                      ) : (
+                        groupData.stationGroups.map((g) => (
+                          <TableRow key={g.groupName}>
+                            <TableCell className="font-bold text-xs">{g.groupName}</TableCell>
+                            <TableCell className="text-center font-semibold text-xs">{g.quantitySold}</TableCell>
+                            <TableCell className="text-right font-bold text-xs">{formatCurrency(g.grossSales)}</TableCell>
+                            <TableCell className="text-right font-extrabold text-xs text-blue-600">{g.salesPercentage}%</TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -1198,7 +1297,9 @@ export function PosReportsHub({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {groupData.modifierGroups.length === 0 ? (
+                      {loading ? (
+                        <TableSkeleton rows={4} cols={4} />
+                      ) : !groupData || groupData.modifierGroups.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={4} className="text-center py-10 text-muted-foreground text-sm font-medium">
                             No modifier group sales recorded.
@@ -1225,11 +1326,15 @@ export function PosReportsHub({
         {/* ========================================================================= */}
         {/* REPORT 7: VARIATION SUMMARY */}
         {/* ========================================================================= */}
-        {!loading && activeTab === "variation" && variationData && (
+        {activeTab === "variation" && (
           <TabsContent value="variation" className="space-y-6 mt-0">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="relative w-full sm:w-80">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                {loading ? (
+                  <Loader2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-600" />
+                ) : (
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                )}
                 <Input
                   placeholder="Filter item or variant size..."
                   value={searchQuery}
@@ -1238,7 +1343,7 @@ export function PosReportsHub({
                 />
               </div>
               <div className="text-xs text-muted-foreground font-semibold">
-                Total Variations Sold: <span className="font-bold text-foreground">{variationData.rows.length}</span>
+                Total Variations Sold: <span className="font-bold text-foreground">{variationData ? variationData.rows.length : 0}</span>
               </div>
             </div>
 
@@ -1259,7 +1364,9 @@ export function PosReportsHub({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredVariationRows.length === 0 ? (
+                    {loading ? (
+                      <TableSkeleton rows={6} cols={9} />
+                    ) : filteredVariationRows.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={9} className="text-center py-10 text-muted-foreground text-sm font-medium">
                           No variation sales found.
@@ -1284,7 +1391,7 @@ export function PosReportsHub({
                 </Table>
 
                 {/* Pagination Controls */}
-                {filteredVariationRows.length > variationPageSize && (
+                {!loading && filteredVariationRows.length > variationPageSize && (
                   <div className="p-3 border-t border-border/50 bg-muted/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
                     <span className="text-muted-foreground">
                       Showing <strong className="text-foreground">{(variationPage - 1) * variationPageSize + 1}</strong> to{" "}
@@ -1324,7 +1431,7 @@ export function PosReportsHub({
         {/* ========================================================================= */}
         {/* REPORT 8: COVER SIZE SUMMARY */}
         {/* ========================================================================= */}
-        {!loading && activeTab === "cover-size" && coverSizeData && (
+        {activeTab === "cover-size" && (
           <TabsContent value="cover-size" className="space-y-6 mt-0">
             <Card className="border-border/60 shadow-sm overflow-hidden">
               <CardHeader className="border-b border-border/40 pb-4">
@@ -1351,7 +1458,9 @@ export function PosReportsHub({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {coverSizeData.rows.length === 0 ? (
+                    {loading ? (
+                      <TableSkeleton rows={6} cols={9} />
+                    ) : !coverSizeData || coverSizeData.rows.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={9} className="text-center py-10 text-muted-foreground text-sm font-medium">
                           No cover size data recorded for this period.
@@ -1379,7 +1488,7 @@ export function PosReportsHub({
                 </Table>
 
                 {/* Footer Totals */}
-                {coverSizeData.rows.length > 0 && (
+                {coverSizeData && coverSizeData.rows.length > 0 && !loading && (
                   <div className="bg-muted/80 p-4 border-t-2 border-border flex flex-wrap items-center justify-between gap-4 text-xs font-black">
                     <span className="uppercase tracking-wider text-muted-foreground">Overall Cover Metrics</span>
                     <div className="flex flex-wrap items-center gap-6">
