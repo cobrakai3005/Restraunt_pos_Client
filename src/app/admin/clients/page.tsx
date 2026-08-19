@@ -61,7 +61,7 @@ export default function ClientManagementPage() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8678";
   
   const handleCopyUrl = () => {
-    navigator.clipboard.writeText(`${appUrl}/client-login`);
+    navigator.clipboard.writeText(`${appUrl}/login`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast({

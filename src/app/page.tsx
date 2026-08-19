@@ -16,7 +16,7 @@ export default function HomePage() {
   }
 
   if (!user) {
-    redirect("/client-login");
+    redirect("/login");
   }
 
   switch (role) {
