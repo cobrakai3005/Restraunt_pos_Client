@@ -563,19 +563,19 @@ export function PosReportsHub({
             <TabsTrigger value="category" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <Layers className="h-4 w-4 shrink-0" /> <span className="truncate">3. Category</span>
             </TabsTrigger>
-            <TabsTrigger value="items" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
+            <TabsTrigger value="item" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <Utensils className="h-4 w-4 shrink-0" /> <span className="truncate">4. Item BOM</span>
             </TabsTrigger>
-            <TabsTrigger value="orders" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
+            <TabsTrigger value="order" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <Receipt className="h-4 w-4 shrink-0" /> <span className="truncate">5. Orders</span>
             </TabsTrigger>
-            <TabsTrigger value="groups" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
+            <TabsTrigger value="group" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <Filter className="h-4 w-4 shrink-0" /> <span className="truncate">6. Groups</span>
             </TabsTrigger>
-            <TabsTrigger value="variations" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
+            <TabsTrigger value="variation" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <ArrowUpDown className="h-4 w-4 shrink-0" /> <span className="truncate">7. Variations</span>
             </TabsTrigger>
-            <TabsTrigger value="covers" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
+            <TabsTrigger value="cover-size" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
               <Users className="h-4 w-4 shrink-0" /> <span className="truncate">8. Cover Size</span>
             </TabsTrigger>
             <TabsTrigger value="z-report" className="gap-1.5 rounded-xl py-2 px-2 text-xs font-bold data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all w-full justify-center">
