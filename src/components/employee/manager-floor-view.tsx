@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { 
   Users, 
   Search, 
@@ -10,7 +10,10 @@ import {
   Eye, 
   RefreshCw,
   Unlock,
-  UserCheck
+  UserCheck,
+  GitMerge,
+  Split,
+  Link2
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +23,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { employeeService } from "@/services/employee.service";
+import { connectSocket, disconnectSocket } from "@/lib/socket";
+import { MergeTablesDialog } from "./merge-tables-dialog";
+import { UnmergeTablesDialog } from "./unmerge-tables-dialog";
 
 function FloorSkeleton() {
   return (
@@ -76,6 +82,12 @@ export function ManagerFloorView() {
   const [selectedTable, setSelectedTable] = useState<any>(null);
   const [reopening, setReopening] = useState(false);
 
+  // Merge & Unmerge state
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [showUnmergeDialog, setShowUnmergeDialog] = useState(false);
+  const [unmergeTargetOrder, setUnmergeTargetOrder] = useState<any | null>(null);
+  const [unmergeTargetTableId, setUnmergeTargetTableId] = useState<string>("");
+
   const extractArray = (res: any, key?: string) => {
     if (!res) return [];
     if (Array.isArray(res)) return res;
@@ -85,8 +97,7 @@ export function ManagerFloorView() {
     return [];
   };
 
-  const fetchFloorData = async () => {
-    setLoading(true);
+  const fetchFloorData = useCallback(async () => {
     try {
       const [tablesRes, ordersRes, empRes] = await Promise.allSettled([
         employeeService.getTables(),
@@ -108,11 +119,33 @@ export function ManagerFloorView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchFloorData();
-  }, []);
+
+    const socket = connectSocket();
+    if (socket) {
+      socket.on("table_status_change", fetchFloorData);
+      socket.on("tables_merged", fetchFloorData);
+      socket.on("tables_unmerged", fetchFloorData);
+      socket.on("order_billed", fetchFloorData);
+      socket.on("order_settled", fetchFloorData);
+      socket.on("new_kot", fetchFloorData);
+    }
+
+    return () => {
+      if (socket) {
+        socket.off("table_status_change", fetchFloorData);
+        socket.off("tables_merged", fetchFloorData);
+        socket.off("tables_unmerged", fetchFloorData);
+        socket.off("order_billed", fetchFloorData);
+        socket.off("order_settled", fetchFloorData);
+        socket.off("new_kot", fetchFloorData);
+      }
+      disconnectSocket();
+    };
+  }, [fetchFloorData]);
 
   // Map active order to each table
   const tableOrderMap: Record<string, any> = {};
@@ -131,7 +164,8 @@ export function ManagerFloorView() {
   const safeTablesList = Array.isArray(tables) ? tables : [];
   const filteredTables = safeTablesList.filter(t => {
     const activeOrder = tableOrderMap[t._id];
-    const status = activeOrder ? activeOrder.status : "AVAILABLE";
+    const isMerged = t.status === "MERGED" || Boolean(t.mergedIntoTableId);
+    const status = isMerged ? "MERGED" : (activeOrder ? activeOrder.status : "AVAILABLE");
 
     if (statusFilter !== "ALL" && status !== statusFilter) return false;
 
@@ -175,7 +209,7 @@ export function ManagerFloorView() {
         <div className="flex flex-wrap items-center gap-3">
           {/* Status Filters */}
           <div className="flex gap-1 bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold shadow-sm">
-            {["ALL", "OPEN", "BILLED", "AVAILABLE"].map(status => (
+            {["ALL", "OPEN", "BILLED", "MERGED", "AVAILABLE"].map(status => (
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
@@ -185,10 +219,26 @@ export function ManagerFloorView() {
                     : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                 }`}
               >
-                {status === "ALL" ? `All (${tables.length})` : status === "OPEN" ? "🔴 Open" : status === "BILLED" ? "🟡 Billed" : "🟢 Available"}
+                {status === "ALL"
+                  ? `All (${tables.length})`
+                  : status === "OPEN"
+                  ? "🔴 Open"
+                  : status === "BILLED"
+                  ? "🟡 Billed"
+                  : status === "MERGED"
+                  ? "🔗 Merged"
+                  : "🟢 Available"}
               </button>
             ))}
           </div>
+
+          {/* Merge Tables CTA */}
+          <Button
+            onClick={() => setShowMergeDialog(true)}
+            className="h-10 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs shadow-md shadow-blue-600/30 gap-1.5 px-4"
+          >
+            <GitMerge className="h-4 w-4" /> Merge Tables
+          </Button>
 
           {/* Search */}
           <div className="relative">
@@ -222,19 +272,30 @@ export function ManagerFloorView() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {filteredTables.map(t => {
-            const activeOrder = tableOrderMap[t._id];
-            const isOpen = activeOrder?.status === "OPEN";
-            const isBilled = activeOrder?.status === "BILLED";
+            const isMergedSecondary = t.status === "MERGED" || Boolean(t.mergedIntoTableId);
+            const parentTableId = isMergedSecondary
+              ? (typeof t.mergedIntoTableId === "object" ? t.mergedIntoTableId?._id : t.mergedIntoTableId)
+              : null;
+            const parentTable = parentTableId ? tables.find(pt => String(pt._id) === String(parentTableId)) : null;
+
+            const activeOrder = isMergedSecondary && parentTableId
+              ? tableOrderMap[parentTableId]
+              : tableOrderMap[t._id];
+
+            const isMergedParent = Boolean(activeOrder?.tableIds && Array.isArray(activeOrder.tableIds) && activeOrder.tableIds.length > 1 && !isMergedSecondary);
+            const isOpen = !isMergedSecondary && activeOrder?.status === "OPEN";
+            const isBilled = !isMergedSecondary && activeOrder?.status === "BILLED";
             const elapsedMins = activeOrder ? getTimeElapsedMinutes(activeOrder.createdAt) : 0;
-            const itemsCount = activeOrder ? (activeOrder.kots || []).reduce((acc: number, k: any) => acc + (k.items?.length || 0), 0) : 0;
             const grandTotal = activeOrder?.financials?.grandTotal || 0;
 
             return (
               <Card
                 key={t._id}
-                onClick={() => setSelectedTable({ table: t, order: activeOrder })}
+                onClick={() => setSelectedTable({ table: t, order: activeOrder, isMergedSecondary, parentTable })}
                 className={`cursor-pointer transition-all duration-200 hover:scale-[1.02] shadow-sm hover:shadow-md border ${
-                  isOpen
+                  isMergedSecondary
+                    ? "bg-indigo-50/60 dark:bg-indigo-950/20 border-indigo-300 dark:border-indigo-900/60 hover:border-indigo-400"
+                    : isOpen
                     ? "bg-red-50/80 dark:bg-red-950/20 border-red-300 dark:border-red-900/60 hover:border-red-400"
                     : isBilled
                     ? "bg-amber-50/80 dark:bg-amber-950/20 border-amber-300 dark:border-amber-900/60 hover:border-amber-400"
@@ -244,21 +305,38 @@ export function ManagerFloorView() {
                 <CardContent className="p-4 flex flex-col justify-between h-40">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="font-black text-xl text-slate-900 dark:text-white leading-tight">Table {t.tableNumber}</h3>
-                      <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">{t.section || "Main Dining"} • {t.capacity || 4} Seats</p>
+                      <h3 className="font-black text-xl text-slate-900 dark:text-white leading-tight flex items-center gap-1.5">
+                        Table {t.tableNumber}
+                        {isMergedParent && (
+                          <span className="text-[10px] bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 px-1.5 py-0.5 rounded-md font-bold">
+                            +{activeOrder.tableIds.length - 1} Merged
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+                        {t.section || "Main Dining"} • {t.capacity || 4} Seats
+                      </p>
                     </div>
 
                     <Badge
                       variant="outline"
                       className={`font-bold text-[10px] px-2 py-0.5 ${
-                        isOpen
+                        isMergedSecondary
+                          ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 text-indigo-300 border-indigo-300"
+                          : isOpen
                           ? "bg-red-100 text-red-700 dark:bg-red-950 text-red-400 border-red-300"
                           : isBilled
                           ? "bg-amber-100 text-amber-800 dark:bg-amber-950 text-amber-400 border-amber-300"
                           : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 text-emerald-400 border-emerald-300"
                       }`}
                     >
-                      {isOpen ? "🔴 Open" : isBilled ? "🟡 Billed" : "🟢 Available"}
+                      {isMergedSecondary
+                        ? `🔗 Merged (T-${parentTable?.tableNumber || "?"})`
+                        : isOpen
+                        ? "🔴 Open"
+                        : isBilled
+                        ? "🟡 Billed"
+                        : "🟢 Available"}
                     </Badge>
                   </div>
 
@@ -278,7 +356,7 @@ export function ManagerFloorView() {
                     </div>
                   ) : (
                     <div className="text-xs text-slate-400 dark:text-slate-500 font-medium py-2 text-center border-t border-slate-200 dark:border-slate-800/60">
-                      Clean & ready for new guests
+                      Clean &amp; ready for new guests
                     </div>
                   )}
                 </CardContent>
@@ -303,7 +381,11 @@ export function ManagerFloorView() {
                       {selectedTable.table.section || "Main Dining Area"} • Capacity: {selectedTable.table.capacity || 4} Seats
                     </DialogDescription>
                   </div>
-                  {selectedTable.order && (
+                  {selectedTable.isMergedSecondary ? (
+                    <Badge variant="outline" className="text-xs font-bold px-3 py-1 bg-indigo-100 text-indigo-700 border-indigo-300">
+                      🔗 Merged into Table {selectedTable.parentTable?.tableNumber || "?"}
+                    </Badge>
+                  ) : selectedTable.order && (
                     <Badge
                       variant="outline"
                       className={`text-xs font-bold px-3 py-1 ${
@@ -320,6 +402,46 @@ export function ManagerFloorView() {
 
               {selectedTable.order ? (
                 <div className="space-y-4 py-3">
+                  {/* Merged Banner */}
+                  {selectedTable.isMergedSecondary ? (
+                    <div className="p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-between">
+                      <div className="text-xs text-indigo-900 dark:text-indigo-200">
+                        <strong className="block font-bold">This table is merged into Table {selectedTable.parentTable?.tableNumber}</strong>
+                        <span>Viewing consolidated order details.</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setUnmergeTargetOrder(selectedTable.order);
+                          setUnmergeTargetTableId(selectedTable.table._id);
+                          setSelectedTable(null);
+                          setShowUnmergeDialog(true);
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl gap-1.5"
+                      >
+                        <Split className="h-3.5 w-3.5" /> Unmerge This Table
+                      </Button>
+                    </div>
+                  ) : selectedTable.order.tableIds && selectedTable.order.tableIds.length > 1 ? (
+                    <div className="p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 flex items-center justify-between">
+                      <div className="text-xs text-indigo-900 dark:text-indigo-200">
+                        <strong className="block font-bold">🔗 Merged Master Table</strong>
+                        <span>Combined with {selectedTable.order.tableIds.length - 1} other tables.</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setUnmergeTargetOrder(selectedTable.order);
+                          setSelectedTable(null);
+                          setShowUnmergeDialog(true);
+                        }}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl gap-1.5"
+                      >
+                        <Split className="h-3.5 w-3.5" /> Unmerge / Split
+                      </Button>
+                    </div>
+                  ) : null}
+
                   {/* Order Meta Bar */}
                   <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
                     <div>
@@ -338,7 +460,7 @@ export function ManagerFloorView() {
 
                   {/* KOT Items List */}
                   <div>
-                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Ordered Dishes & Items</h4>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 mb-2">Ordered Dishes &amp; Items</h4>
                     <ScrollArea className="max-h-56 pr-2">
                       <div className="space-y-2">
                         {(selectedTable.order.kots || []).flatMap((kot: any) => kot.items || []).map((item: any, i: number) => (
@@ -381,6 +503,29 @@ export function ManagerFloorView() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Merge and Unmerge Modals */}
+      <MergeTablesDialog
+        open={showMergeDialog}
+        onOpenChange={setShowMergeDialog}
+        tables={tables}
+        activeOrders={orders}
+        onMergeSuccess={() => fetchFloorData()}
+      />
+
+      <UnmergeTablesDialog
+        open={showUnmergeDialog}
+        onOpenChange={setShowUnmergeDialog}
+        primaryOrder={unmergeTargetOrder}
+        tables={tables}
+        preselectedUnmergeTableId={unmergeTargetTableId || undefined}
+        onUnmergeSuccess={() => {
+          fetchFloorData();
+          setUnmergeTargetOrder(null);
+          setUnmergeTargetTableId("");
+        }}
+      />
     </div>
   );
 }
+

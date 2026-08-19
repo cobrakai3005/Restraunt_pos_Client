@@ -193,6 +193,50 @@ export function InvoicePreviewModal({
   const addr = restaurantDetails?.address;
   const txDate = transaction.transactionDate ? new Date(transaction.transactionDate) : new Date();
 
+  // ── Payment Tender & Credit Breakdown Calculations ──
+  const txPayments: Array<{ method: string; amount: number }> = Array.isArray(transaction.payments) && transaction.payments.length > 0
+    ? transaction.payments
+    : [];
+
+  let txCreditDue = 0;
+  let txPaid = 0;
+
+  if (txPayments.length > 0) {
+    txPayments.forEach((p: any) => {
+      const amt = Number(p.amount) || 0;
+      const m = String(p.method || "").toUpperCase();
+      if (m === "CREDIT" || m === "DUE") {
+        txCreditDue += amt;
+      } else {
+        txPaid += amt;
+      }
+    });
+  } else if (transaction.paidAmount !== undefined) {
+    txPaid = Number(transaction.paidAmount || 0);
+    txCreditDue = Math.max(0, totalAmount - txPaid);
+  } else if (transaction.status === "PAID") {
+    txPaid = totalAmount;
+    txCreditDue = 0;
+  } else {
+    txPaid = 0;
+    txCreditDue = totalAmount;
+  }
+
+  let txStatusDisplay = "PENDING";
+  if (transaction.status === "PAID") {
+    if (txCreditDue > 0 && txPaid > 0) {
+      txStatusDisplay = "PARTIALLY PAID";
+    } else if (txCreditDue > 0 && txPaid === 0) {
+      txStatusDisplay = "CREDIT / UNPAID";
+    } else {
+      txStatusDisplay = "PAID IN FULL";
+    }
+  } else if (transaction.status === "PARTIAL") {
+    txStatusDisplay = "PARTIALLY PAID";
+  } else if (transaction.status === "UNPAID") {
+    txStatusDisplay = "UNPAID / CREDIT";
+  }
+
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto bg-slate-100 dark:bg-slate-900 p-0 flex flex-col h-full border-l-0 shadow-2xl z-[100]">
@@ -319,20 +363,79 @@ export function InvoicePreviewModal({
                 </div>
               </div>
 
+              {/* ── PAYMENT SUMMARY SECTION ── */}
               <div className="border-t border-dashed border-black my-2" />
-
-              {/* Payment Details */}
-              <div className="text-[11px]">
+              <div className="text-center font-bold text-[10px] uppercase tracking-wider py-0.5 bg-slate-50 border-y border-dotted border-black">
+                PAYMENT SUMMARY
+              </div>
+              <div className="text-[11px] space-y-1 pt-1.5">
                 <div className="flex justify-between font-bold">
-                  <span>PAYMENT STATUS:</span>
-                  <span>{transaction.status === "PAID" ? "SETTLED / PAID" : transaction.status || "COMPLETED"}</span>
+                  <span>Grand Total:</span>
+                  <span>₹{totalAmount.toFixed(2)}</span>
                 </div>
-                {transaction.paymentMethod && (
-                  <div className="flex justify-between text-[10px] pl-2 text-slate-700">
-                    <span>↳ METHOD:</span>
-                    <span>{transaction.paymentMethod.toUpperCase()}</span>
+
+                {txPayments.length > 0 ? (
+                  <div className="pt-0.5 pb-0.5 space-y-0.5 border-t border-dotted border-black/40 my-1">
+                    {txPayments.map((p, pIdx) => {
+                      const pMethod = String(p.method || "").toUpperCase();
+                      const pAmt = Number(p.amount) || 0;
+                      const isCredit = pMethod === "CREDIT" || pMethod === "DUE";
+                      const label = isCredit
+                        ? "Credit / Due:"
+                        : `${pMethod === "CASH" ? "Cash" : pMethod === "UPI" ? "UPI" : pMethod === "CARD" ? "Card" : pMethod} Paid:`;
+                      return (
+                        <div key={pIdx} className="flex justify-between pl-1">
+                          <span className={isCredit ? "font-bold text-amber-900" : ""}>{label}</span>
+                          <span className={isCredit ? "font-bold" : ""}>₹{pAmt.toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="pt-0.5 pb-0.5 space-y-0.5 border-t border-dotted border-black/40 my-1">
+                    {txPaid > 0 && (
+                      <div className="flex justify-between pl-1">
+                        <span>{transaction.paymentMethod || "Cash"} Paid:</span>
+                        <span>₹{txPaid.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {txCreditDue > 0 && (
+                      <div className="flex justify-between pl-1 font-bold text-amber-900">
+                        <span>Credit / Due:</span>
+                        <span>₹{txCreditDue.toFixed(2)}</span>
+                      </div>
+                    )}
                   </div>
                 )}
+
+                <div className="border-t border-dotted border-black/60 my-1" />
+
+                <div className="flex justify-between font-bold">
+                  <span>Amount Paid:</span>
+                  <span className="text-emerald-800">₹{txPaid.toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between font-bold">
+                  <span>Balance Due:</span>
+                  <span className={txCreditDue > 0 ? "font-black text-rose-700" : ""}>
+                    ₹{txCreditDue.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="border-t border-dashed border-black/60 my-1" />
+
+                <div className="flex justify-between font-black text-[10px] pt-0.5">
+                  <span>Payment Status:</span>
+                  <span className={`uppercase ${
+                    txCreditDue === 0 && txPaid > 0
+                      ? "text-emerald-800"
+                      : txCreditDue > 0 && txPaid > 0
+                      ? "text-amber-800"
+                      : "text-slate-800"
+                  }`}>
+                    {txStatusDisplay}
+                  </span>
+                </div>
               </div>
 
               <div className="text-center pt-2 pb-1 space-y-0.5 text-[10px] text-slate-700">
@@ -405,15 +508,57 @@ export function InvoicePreviewModal({
 
               <div className="border-t border-dashed border-black my-2" />
 
-              {/* Settlement Summary */}
-              <div className="text-[11px] space-y-0.5">
+              {/* ── STORE SETTLEMENT SUMMARY ── */}
+              <div className="text-center font-bold text-[10px] uppercase tracking-wider py-0.5 bg-slate-50 border-y border-dotted border-black">
+                PAYMENT SUMMARY
+              </div>
+              <div className="text-[11px] space-y-1 pt-1.5">
                 <div className="flex justify-between font-black text-xs">
-                  <span>AMOUNT SETTLED:</span>
+                  <span>GRAND TOTAL:</span>
                   <span>₹{totalAmount.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-[10px]">
-                  <span>PAYMENT METHOD:</span>
-                  <span className="font-bold">{transaction.paymentMethod?.toUpperCase() || "CASH"}</span>
+
+                {txPayments.length > 0 ? (
+                  <div className="pt-0.5 pb-0.5 space-y-0.5 border-t border-dotted border-black/40 my-1">
+                    {txPayments.map((p, pIdx) => {
+                      const pMethod = String(p.method || "").toUpperCase();
+                      const pAmt = Number(p.amount) || 0;
+                      const isCredit = pMethod === "CREDIT" || pMethod === "DUE";
+                      const label = isCredit
+                        ? "Credit / Due:"
+                        : `${pMethod === "CASH" ? "Cash" : pMethod === "UPI" ? "UPI" : pMethod === "CARD" ? "Card" : pMethod} Paid:`;
+                      return (
+                        <div key={pIdx} className="flex justify-between pl-1">
+                          <span className={isCredit ? "font-bold text-amber-900" : ""}>{label}</span>
+                          <span className={isCredit ? "font-bold" : ""}>₹{pAmt.toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-[10px]">
+                    <span>PAYMENT METHOD:</span>
+                    <span className="font-bold">{transaction.paymentMethod?.toUpperCase() || "CASH"}</span>
+                  </div>
+                )}
+
+                <div className="border-t border-dotted border-black/60 my-1" />
+
+                <div className="flex justify-between font-bold">
+                  <span>Amount Paid:</span>
+                  <span className="text-emerald-800">₹{txPaid.toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between font-bold">
+                  <span>Balance Due:</span>
+                  <span className={txCreditDue > 0 ? "font-black text-rose-700" : ""}>
+                    ₹{txCreditDue.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between font-black text-[10px] pt-0.5">
+                  <span>Payment Status:</span>
+                  <span className="uppercase">{txStatusDisplay}</span>
                 </div>
               </div>
 

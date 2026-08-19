@@ -84,9 +84,11 @@ export function CashierBillingOrdersList({
                       {order.status}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
                     {order.orderType === "DINE_IN"
-                      ? `Table ${order.tableId?.tableNumber}`
+                      ? (order.tableIds && Array.isArray(order.tableIds) && order.tableIds.length > 1
+                          ? `Table ${order.tableId?.tableNumber} (+${order.tableIds.length - 1} merged)`
+                          : `Table ${order.tableId?.tableNumber || "?"}`)
                       : order.orderType}
                   </div>
                   <div className="text-sm font-extrabold text-blue-600 dark:text-blue-400 mt-1">

@@ -8,6 +8,7 @@ export interface ReceiptModalProps {
   isOpen: boolean;
   onClose: () => void;
   order: any;
+  tables?: any[];
   restaurant?: {
     name?: string;
     address?: { street?: string; city?: string; state?: string; zipCode?: string; country?: string };
@@ -16,7 +17,7 @@ export interface ReceiptModalProps {
   } | null;
 }
 
-export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModalProps) {
+export function ReceiptModal({ isOpen, onClose, order, tables, restaurant }: ReceiptModalProps) {
   if (!isOpen) return null;
 
   if (!order) {
@@ -57,10 +58,89 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
   }
 
   const receiptNumber = order?._id ? String(order._id).slice(-4).toUpperCase() : (order?.orderNumber ? String(order.orderNumber) : "N/A");
-  const tableLabel = order?.orderType === "DINE_IN" ? `Table ${typeof order?.tableId === 'object' ? order?.tableId?.tableNumber : order?.tableId || "N/A"}` : (order?.orderType || "Takeaway");
+
+  // Helper to extract clean human-readable table numbers and eliminate raw 24-hex Mongo ObjectIds
+  const isMongoId = (val: any) => typeof val === "string" && /^[a-fA-F0-9]{24}$/.test(val.trim());
+
+  const getTableDisplay = (t: any): string => {
+    if (!t) return "";
+    if (typeof t === "object") {
+      return String(t.tableNumber || t.name || "").trim();
+    }
+    const str = String(t).trim();
+    if (isMongoId(str)) {
+      const matched = tables?.find((tbl: any) => String(tbl._id || tbl.id) === str);
+      if (matched) return String(matched.tableNumber || matched.name || "").trim();
+      return ""; // Never display raw 24-character hexadecimal ObjectId
+    }
+    return str;
+  };
+
+  const primaryTableNum = getTableDisplay(order?.tableId) || (order?.tableNumber ? String(order.tableNumber) : "");
+  const otherTableNums = Array.isArray(order?.tableIds)
+    ? order.tableIds
+        .map((t: any) => getTableDisplay(t))
+        .filter((num: string) => num && num !== primaryTableNum)
+    : [];
+
+  const tableLabel = order?.orderType === "DINE_IN"
+    ? primaryTableNum
+      ? `Table ${primaryTableNum}${otherTableNums.length > 0 ? ` (+${otherTableNums.join(", ")})` : ""}`
+      : "Dine-In"
+    : (order?.orderType || "Takeaway");
   const serverName = order?.waiterId?.contactName?.split(" ")[0]?.toUpperCase() || (typeof order?.waiterId === 'string' ? "STAFF" : "CASHIER");
   const customerName = order?.customerDetails?.name?.toUpperCase() || "WALK-IN GUEST";
   const customerPhone = order?.customerDetails?.phone || "";
+
+  // ── Payment Tender & Credit Breakdown Calculations ──
+  const paymentsList: Array<{ method: string; amount: number }> = Array.isArray(order?.financials?.payments) && order.financials.payments.length > 0
+    ? order.financials.payments
+    : [];
+
+  let creditDueAmount = 0;
+  let paidAmount = 0;
+
+  if (paymentsList.length > 0) {
+    paymentsList.forEach((p: any) => {
+      const amt = Number(p.amount) || 0;
+      const m = String(p.method || "").toUpperCase();
+      if (m === "CREDIT" || m === "DUE") {
+        creditDueAmount += amt;
+      } else {
+        paidAmount += amt;
+      }
+    });
+  } else if (order?.financials?.dueAmount !== undefined || order?.financials?.paidAmount !== undefined) {
+    creditDueAmount = Number(order?.financials?.dueAmount || 0);
+    paidAmount = Number(order?.financials?.paidAmount || Math.max(0, grandTotal - creditDueAmount));
+  } else if (order?.status === "PAID") {
+    paidAmount = grandTotal;
+    creditDueAmount = 0;
+  } else {
+    paidAmount = 0;
+    creditDueAmount = grandTotal;
+  }
+
+  if (Array.isArray(order?.financials?.duePayments) && order.financials.duePayments.length > 0) {
+    const extraCollected = order.financials.duePayments.reduce((sum: number, dp: any) => sum + (Number(dp.amount) || 0), 0);
+    paidAmount += extraCollected;
+    creditDueAmount = Math.max(0, creditDueAmount - extraCollected);
+  }
+
+  let paymentStatusDisplay = "PENDING";
+  if (order?.status === "PAID") {
+    if (creditDueAmount > 0 && paidAmount > 0) {
+      paymentStatusDisplay = "PARTIALLY PAID";
+    } else if (creditDueAmount > 0 && paidAmount === 0) {
+      paymentStatusDisplay = "CREDIT / UNPAID";
+    } else {
+      paymentStatusDisplay = "PAID IN FULL";
+    }
+  } else if (order?.status === "BILLED") {
+    paymentStatusDisplay = "BILL GENERATED (UNPAID)";
+  } else if (order?.status === "OPEN") {
+    paymentStatusDisplay = "OPEN / RUNNING TAB";
+  }
 
   const handlePrint = () => {
     const printContent = document.getElementById("receipt-print-area-content");
@@ -86,7 +166,7 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
           <meta charset="utf-8" />
           <style>
             @page { size: 80mm auto; margin: 0; }
-            body { margin: 0; padding: 4mm; font-family: monospace; font-size: 11px; width: 72mm; }
+            body { margin: 0; padding: 4mm; font-family: monospace; font-size: 11px; width: 72mm; color: #000; background: #fff; }
             .text-center { text-align: center; }
             .text-right { text-align: right; }
             .text-left { text-align: left; }
@@ -96,6 +176,7 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
             .border-t { border-top: 1px dashed #000; }
             .border-t-2 { border-top: 2px solid #000; }
             .border-b { border-bottom: 1px dotted #000; }
+            .border-dotted { border-top: 1px dotted #000; }
             .my-1 { margin-top: 4px; margin-bottom: 4px; }
             .my-2 { margin-top: 7px; margin-bottom: 7px; }
             .mb-1 { margin-bottom: 4px; }
@@ -211,6 +292,77 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
                 )}
                 <div className="border-t-2 border-solid border-black my-1" /><div className="flex justify-between font-black text-xs"><span>GRAND TOTAL:</span><span>₹{grandTotal.toFixed(2)}</span></div>
               </div>
+
+              {/* ── PAYMENT SUMMARY SECTION ── */}
+              <div className="border-t border-dashed border-black my-2" />
+              <div className="text-center font-bold text-[10px] uppercase tracking-wider py-0.5 bg-slate-50 border-y border-dotted border-black">
+                PAYMENT SUMMARY
+              </div>
+              <div className="text-[11px] space-y-1 pt-1.5">
+                <div className="flex justify-between font-bold">
+                  <span>Grand Total:</span>
+                  <span>₹{grandTotal.toFixed(2)}</span>
+                </div>
+                {paymentsList.length > 0 ? (
+                  <div className="pt-0.5 pb-0.5 space-y-0.5 border-t border-dotted border-black/40 my-1">
+                    {paymentsList.map((p, pIdx) => {
+                      const pMethod = String(p.method || "").toUpperCase();
+                      const pAmt = Number(p.amount) || 0;
+                      const isCredit = pMethod === "CREDIT" || pMethod === "DUE";
+                      const label = isCredit
+                        ? "Credit / Due:"
+                        : `${pMethod === "CASH" ? "Cash" : pMethod === "UPI" ? "UPI" : pMethod === "CARD" ? "Card" : pMethod} Paid:`;
+                      return (
+                        <div key={pIdx} className="flex justify-between pl-1">
+                          <span className={isCredit ? "font-bold text-amber-900" : ""}>{label}</span>
+                          <span className={isCredit ? "font-bold" : ""}>₹{pAmt.toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  order?.status === "PAID" && (
+                    <div className="pt-0.5 pb-0.5 space-y-0.5 border-t border-dotted border-black/40 my-1">
+                      {paidAmount > 0 && (
+                        <div className="flex justify-between pl-1">
+                          <span>{order?.paymentMethod || "Cash"} Paid:</span>
+                          <span>₹{paidAmount.toFixed(2)}</span>
+                        </div>
+                      )}
+                      {creditDueAmount > 0 && (
+                        <div className="flex justify-between pl-1 font-bold text-amber-900">
+                          <span>Credit / Due:</span>
+                          <span>₹{creditDueAmount.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+                <div className="border-t border-dotted border-black/60 my-1" />
+                <div className="flex justify-between font-bold">
+                  <span>Amount Paid:</span>
+                  <span className="text-emerald-800">₹{paidAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-bold">
+                  <span>Balance Due:</span>
+                  <span className={creditDueAmount > 0 ? "font-black text-rose-700" : ""}>
+                    ₹{creditDueAmount.toFixed(2)}
+                  </span>
+                </div>
+                <div className="border-t border-dashed border-black/60 my-1" />
+                <div className="flex justify-between font-black text-[10px] pt-0.5">
+                  <span>Payment Status:</span>
+                  <span className={`uppercase ${
+                    creditDueAmount === 0 && paidAmount > 0
+                      ? "text-emerald-800"
+                      : creditDueAmount > 0 && paidAmount > 0
+                      ? "text-amber-800"
+                      : "text-slate-800"
+                  }`}>
+                    {paymentStatusDisplay}
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="tear-divider"><span className="tear-text"><Scissors className="w-3 h-3 inline" /> Tear Along Perforation</span></div>
@@ -254,23 +406,63 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
 
               <div className="border-t border-dashed border-black my-2" />
 
-              {/* Settlement Summary */}
-              <div className="text-[11px] space-y-0.5">
+              <div className="text-center font-bold text-[10px] uppercase tracking-wider py-0.5 bg-slate-50 border-y border-dotted border-black">
+                PAYMENT SUMMARY
+              </div>
+              <div className="text-[11px] space-y-1 pt-1.5">
                 <div className="flex justify-between font-black text-xs">
-                  <span>AMOUNT SETTLED:</span>
+                  <span>GRAND TOTAL:</span>
                   <span>₹{grandTotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-[10px]">
-                  <span>PAYMENT METHOD:</span>
-                  <span className="font-bold">
-                    {order.financials?.payments && order.financials.payments.length > 0
-                      ? order.financials.payments.map((p: any) => p.method).join(" + ")
-                      : "CASH"}
+
+                {paymentsList.length > 0 ? (
+                  <div className="pt-0.5 pb-0.5 space-y-0.5 border-t border-dotted border-black/40 my-1">
+                    {paymentsList.map((p, pIdx) => {
+                      const pMethod = String(p.method || "").toUpperCase();
+                      const pAmt = Number(p.amount) || 0;
+                      const isCredit = pMethod === "CREDIT" || pMethod === "DUE";
+                      const label = isCredit
+                        ? "Credit / Due:"
+                        : `${pMethod === "CASH" ? "Cash" : pMethod === "UPI" ? "UPI" : pMethod === "CARD" ? "Card" : pMethod} Paid:`;
+                      return (
+                        <div key={pIdx} className="flex justify-between pl-1">
+                          <span className={isCredit ? "font-bold text-amber-900" : ""}>{label}</span>
+                          <span className={isCredit ? "font-bold" : ""}>₹{pAmt.toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-[10px]">
+                    <span>PAYMENT METHOD:</span>
+                    <span className="font-bold">
+                      {order.financials?.payments && order.financials.payments.length > 0
+                        ? order.financials.payments.map((p: any) => p.method).join(" + ")
+                        : order.paymentMethod || "CASH"}
+                    </span>
+                  </div>
+                )}
+
+                <div className="border-t border-dotted border-black/60 my-1" />
+
+                <div className="flex justify-between font-bold">
+                  <span>Amount Paid:</span>
+                  <span className="text-emerald-800">₹{paidAmount.toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between font-bold">
+                  <span>Balance Due:</span>
+                  <span className={creditDueAmount > 0 ? "font-black text-rose-700" : ""}>
+                    ₹{creditDueAmount.toFixed(2)}
                   </span>
+                </div>
+
+                <div className="flex justify-between font-black text-[10px] pt-0.5">
+                  <span>Payment Status:</span>
+                  <span className="uppercase">{paymentStatusDisplay}</span>
                 </div>
               </div>
 
-              {/* Cashier / Customer Signatures */}
               <div className="pt-3 pb-1 text-[10px] space-y-2">
                 <div className="flex justify-between items-end gap-4">
                   <div className="flex-1 border-t border-dotted border-black pt-1 text-center font-bold">
@@ -288,7 +480,6 @@ export function ReceiptModal({ isOpen, onClose, order, restaurant }: ReceiptModa
 
           </div>
           
-          {/* Action Buttons (Excluded from print) */}
           <div className="mt-5 pt-3 border-t border-slate-300 dark:border-slate-700 flex justify-center gap-3">
             <Button
               variant="outline"

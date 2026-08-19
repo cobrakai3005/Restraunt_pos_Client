@@ -1,87 +1,20 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useToast } from "@/components/ui/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Trash2, Plus, Minus, ShoppingBag, Search, Store, Loader2, UserX, UtensilsCrossed, Clock, RotateCcw, X, ChevronRight, Receipt, Layers, Heart, Star, Briefcase, Sparkles, Users } from "lucide-react";
 import { employeeService } from "@/services/employee.service";
 import { customerService, Customer } from "@/services/customer.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { VariantPickerDialog, SelectedModifier } from "./variant-picker-dialog";
-import { MenuItemCard } from "./menu-item-card";
 import { ReceiptModal } from "./ReceiptModal";
-import { ModifierGroup } from "@/services/menu.service";
-
-const PRESET_COOKING_NOTES = ["Less Spicy", "No Onion/Garlic", "Extra Spicy", "Jain", "Less Oil", "Takeaway Pack"];
-
-interface Menu {
-  _id: string;
-  name: string;
-  categoryId: {
-    _id: string;
-    name: string;
-  };
-  variants: {
-    _id?: string;
-    name: string;
-    price: number;
-    sku?: string;
-  }[];
-  modifierGroups?: ModifierGroup[];
-  station: string;
-  isAvailable: boolean;
-  imageUrl?: string | null;
-  isVeg?: boolean | null;
-  shortCode?: string | null;
-  numericCode?: string | null;
-}
-
-interface Table {
-  _id: string;
-  tableNumber: string;
-  capacity: number;
-  status: string;
-}
-
-interface CartItem extends Menu {
-  cartId: string;
-  quantity: number;
-  notes: string;
-  selectedVariant: {
-    name: string;
-    price: number;
-  };
-  selectedModifiers?: SelectedModifier[];
-}
-
-interface Order {
-  _id: string;
-  orderNumber?: number;
-  guestCount?: number;
-  tableId?: {
-    _id: string;
-    tableNumber: string;
-  };
-  orderType: string;
-  status: string;
-  customerDetails?: {
-    name: string;
-    phone: string;
-  };
-  kots?: {
-    _id: string;
-    items?: {
-      _id: string;
-      itemStatus: string;
-      quantity?: number;
-      menuItemId?: { name: string };
-    }[];
-  }[];
-}
+import { MergeTablesDialog } from "./merge-tables-dialog";
+import { UnmergeTablesDialog } from "./unmerge-tables-dialog";
+import { Menu, Table, CartItem, Order, PRESET_COOKING_NOTES } from "./order-taking/types";
+import { TableFloorSidebar } from "./order-taking/table-floor-sidebar";
+import { CategorySidebar } from "./order-taking/category-sidebar";
+import { MenuCatalogSection } from "./order-taking/menu-catalog-section";
+import { FloatingActionButtons } from "./order-taking/floating-action-buttons";
+import { CartDrawer } from "./order-taking/cart-drawer";
 
 interface OrderTakingPanelProps {
   onOrderFired?: () => void;
@@ -135,7 +68,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
       }
     }, 350);
     return () => clearTimeout(timer);
-  }, [customerPhone]);
+  }, [customerPhone, customerName]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isQuickReceiptSubmitting, setIsQuickReceiptSubmitting] = useState(false);
@@ -143,6 +76,10 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   const [pickerMenu, setPickerMenu] = useState<Menu | null>(null);
   const [receiptOrder, setReceiptOrder] = useState<any | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [showUnmergeDialog, setShowUnmergeDialog] = useState(false);
+  const [unmergeTargetOrder, setUnmergeTargetOrder] = useState<any | null>(null);
+  const [unmergeTargetTableId, setUnmergeTargetTableId] = useState<string>("");
   const { toast } = useToast();
 
   const isFirstLoadRef = useRef(true);
@@ -155,12 +92,12 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   const [cartOpen, setCartOpen] = useState(false);
   // UX: recently added strip — last 4 unique items added to cart for quick re-add
   const [recentlyAdded, setRecentlyAdded] = useState<Menu[]>([]);
-  // UX: repeat last order loading state per table
-  const [repeatLoading, setRepeatLoading] = useState<string | null>(null);
 
   // Close cart drawer on Escape key
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setCartOpen(false); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCartOpen(false);
+    };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
@@ -168,7 +105,11 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   // Focus search input on '/' shortcut
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+      if (
+        e.key === "/" &&
+        document.activeElement?.tagName !== "INPUT" &&
+        document.activeElement?.tagName !== "TEXTAREA"
+      ) {
         e.preventDefault();
         searchInputRef.current?.focus();
       }
@@ -192,9 +133,14 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
               if (!isFirstLoadRef.current && !toastedItemsRef.current.has(newItem._id)) {
                 toast({
                   title: "Food Ready! 🔔",
-                  description: `${newItem.menuItemId?.name || "An item"} is ready for ${newOrder.orderType === 'DINE_IN' ? 'Table ' + newOrder.tableId?.tableNumber : newOrder.orderType}`,
+                  description: `${newItem.menuItemId?.name || "An item"} is ready for ${
+                    newOrder.orderType === "DINE_IN"
+                      ? "Table " + newOrder.tableId?.tableNumber
+                      : newOrder.orderType
+                  }`,
                   duration: 8000,
-                  className: "bg-green-50 border-green-500 text-green-900 dark:bg-green-950 dark:border-green-800 dark:text-green-100",
+                  className:
+                    "bg-green-50 border-green-500 text-green-900 dark:bg-green-950 dark:border-green-800 dark:text-green-100",
                 });
               }
               toastedItemsRef.current.add(newItem._id);
@@ -209,6 +155,16 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
       console.error("Failed to fetch active orders", error);
     }
   }, [toast]);
+
+  const refreshFloorAndOrders = useCallback(async () => {
+    fetchActiveOrders();
+    try {
+      const tabRes = await employeeService.getTables();
+      setTables(tabRes.data?.tables || []);
+    } catch {
+      // ignore
+    }
+  }, [fetchActiveOrders]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -233,7 +189,9 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
     const socket = connectSocket();
     if (socket) {
-      socket.on("table_status_change", fetchActiveOrders);
+      socket.on("table_status_change", refreshFloorAndOrders);
+      socket.on("tables_merged", refreshFloorAndOrders);
+      socket.on("tables_unmerged", refreshFloorAndOrders);
       socket.on("item_status_update", fetchActiveOrders);
       socket.on("order_billed", fetchActiveOrders);
       socket.on("new_kot", fetchActiveOrders);
@@ -241,14 +199,16 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
     return () => {
       if (socket) {
-        socket.off("table_status_change", fetchActiveOrders);
+        socket.off("table_status_change", refreshFloorAndOrders);
+        socket.off("tables_merged", refreshFloorAndOrders);
+        socket.off("tables_unmerged", refreshFloorAndOrders);
         socket.off("item_status_update", fetchActiveOrders);
         socket.off("order_billed", fetchActiveOrders);
         socket.off("new_kot", fetchActiveOrders);
       }
       disconnectSocket();
     };
-  }, [toast, fetchActiveOrders]);
+  }, [toast, fetchActiveOrders, refreshFloorAndOrders]);
 
   const addToCart = (
     menu: Menu,
@@ -258,30 +218,33 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     addedQty: number = 1
   ) => {
     if (!menu.isAvailable) {
-      toast({ variant: "destructive", title: "Item Unavailable", description: "This item is currently marked as unavailable." });
+      toast({
+        variant: "destructive",
+        title: "Item Unavailable",
+        description: "This item is currently marked as unavailable.",
+      });
       return;
     }
 
     const selectedVariant = chosenVariant || menu.variants?.[0] || { name: "Standard", price: 0 };
-    const modifiersKey = (selectedModifiers || []).map(m => `${m.name}:${m.price}`).sort().join("|");
+    const modifiersKey = (selectedModifiers || [])
+      .map((m) => `${m.groupName}:${m.name}`)
+      .sort()
+      .join("|");
+    const cartId = `${menu._id}_${selectedVariant.name}_${modifiersKey}`;
 
-    setCart(prev => {
-      const existing = prev.find(
-        item => item._id === menu._id &&
-        (item.notes || "") === itemNotes &&
-        item.selectedVariant.name === selectedVariant.name &&
-        (item.selectedModifiers || []).map(m => `${m.name}:${m.price}`).sort().join("|") === modifiersKey
-      );
+    setCart((prev) => {
+      const existing = prev.find((item) => item.cartId === cartId);
       if (existing) {
-        return prev.map(item =>
-          item.cartId === existing.cartId ? { ...item, quantity: item.quantity + addedQty } : item
+        return prev.map((item) =>
+          item.cartId === cartId ? { ...item, quantity: item.quantity + addedQty } : item
         );
       }
       return [
         ...prev,
         {
           ...menu,
-          cartId: Math.random().toString(),
+          cartId,
           quantity: addedQty,
           notes: itemNotes,
           selectedVariant,
@@ -290,180 +253,57 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
       ];
     });
 
-    // UX: pulse the FAB to confirm the item was added
-    setCartFlash(true);
-    setTimeout(() => setCartFlash(false), 700);
-
-    // UX: track recently added strip (last 4 unique items)
-    setRecentlyAdded(prev => {
-      const filtered = prev.filter(r => r._id !== menu._id);
+    setRecentlyAdded((prev) => {
+      const filtered = prev.filter((m) => m._id !== menu._id);
       return [menu, ...filtered].slice(0, 4);
     });
-  };
 
-  const handleQuickPunch = (inputStr: string) => {
-    const raw = inputStr.trim().toLowerCase();
-    if (!raw) return;
+    setCartFlash(true);
+    setTimeout(() => setCartFlash(false), 400);
 
-    let qty = 1;
-    let codeStr = raw;
-
-    // Support "3*bn" or "bn*3" or "2*101" or "101*2"
-    if (raw.includes("*")) {
-      const parts = raw.split("*").map(p => p.trim());
-      if (parts.length === 2) {
-        if (!isNaN(parseInt(parts[0]))) {
-          qty = parseInt(parts[0]);
-          codeStr = parts[1];
-        } else if (!isNaN(parseInt(parts[1]))) {
-          qty = parseInt(parts[1]);
-          codeStr = parts[0];
-        }
-      }
-    }
-
-    if (qty <= 0) qty = 1;
-
-    // Support dot syntax for variant picking e.g. "101.1", "101.2", "bn.1", "3*bn.2"
-    let variantIdx: number | null = null;
-    if (codeStr.includes(".")) {
-      const subParts = codeStr.split(".");
-      codeStr = subParts[0];
-      const parsedV = parseInt(subParts[1]);
-      if (!isNaN(parsedV) && parsedV > 0) {
-        variantIdx = parsedV - 1; // 0-based index
-      }
-    }
-
-    // Find match by server-side shortCode, numericCode, or explicit SKU
-    let matchedIndex = menus.findIndex((m) => {
-      const sc = m.shortCode?.toLowerCase().trim();
-      const nc = m.numericCode?.trim();
-      const sku = m.variants?.[0]?.sku?.toLowerCase().trim();
-      return (sc && sc === codeStr) || (nc && nc === codeStr) || (sku && sku === codeStr);
+    toast({
+      title: `Added to Cart 🛒`,
+      description: `${addedQty > 1 ? `${addedQty}x ` : ""}${menu.name} (${selectedVariant.name})`,
+      duration: 1500,
     });
+  };
 
-    // Fallback: search top filtered menu item
-    if (matchedIndex === -1 && filteredMenus.length > 0) {
-      const topItem = filteredMenus[0];
-      matchedIndex = menus.findIndex(m => m._id === topItem._id);
-    }
-
-    if (matchedIndex !== -1) {
-      const targetMenu = menus[matchedIndex];
-      const codeDisplay = [
-        targetMenu.shortCode ? targetMenu.shortCode.toUpperCase() : null,
-        targetMenu.numericCode ? `#${targetMenu.numericCode}` : null,
-      ].filter(Boolean).join(" / ") || targetMenu.name;
-
-      if (variantIdx !== null && targetMenu.variants && targetMenu.variants[variantIdx]) {
-        const chosenVariant = targetMenu.variants[variantIdx];
-        addToCart(targetMenu, chosenVariant, [], "", qty);
-        toast({
-          title: `⚡ Punched ${qty}x ${targetMenu.name} (${chosenVariant.name})`,
-          description: `Code: ${codeDisplay}.${variantIdx + 1}`,
-        });
-      } else {
-        handleMenuClickWithQty(targetMenu, qty);
-        toast({
-          title: `⚡ Punched ${qty}x ${targetMenu.name}`,
-          description: `Code: ${codeDisplay}`,
-        });
-      }
-      setSearchQuery("");
+  const handleMenuClick = (menu: Menu) => {
+    const hasMultipleVariants = menu.variants && menu.variants.length > 1;
+    const hasModifiers = menu.modifierGroups && menu.modifierGroups.length > 0;
+    if (hasMultipleVariants || hasModifiers) {
+      setPickerMenu(menu);
     } else {
-      toast({
-        variant: "destructive",
-        title: "Item Code Not Found ❌",
-        description: `No menu item matching "${codeStr}"`,
-      });
+      addToCart(menu);
     }
   };
 
-  // Instant Auto-Punch: triggers as soon as the typed code exactly matches an item's shortcode / numeric code / SKU
-  const tryAutoPunch = (inputStr: string): boolean => {
-    const raw = inputStr.trim().toLowerCase();
-    if (!raw) return false;
+  const tryAutoPunch = (rawInput: string): boolean => {
+    const trimmed = rawInput.trim();
+    if (!trimmed) return false;
 
     let qty = 1;
-    let codeStr = raw;
+    let codeStr = trimmed;
 
-    // Support "3*bn" or "bn*3" or "2*101" or "101*2"
-    if (raw.includes("*")) {
-      const parts = raw.split("*").map(p => p.trim());
-      if (parts.length === 2) {
-        if (!isNaN(parseInt(parts[0]))) {
-          qty = parseInt(parts[0]);
-          codeStr = parts[1];
-        } else if (!isNaN(parseInt(parts[1]))) {
-          qty = parseInt(parts[1]);
-          codeStr = parts[0];
-        }
-      }
-    }
-
-    if (qty <= 0) qty = 1;
-
-    // Support dot syntax for variant picking e.g. "101.1", "101.2", "bn.1", "3*bn.2"
-    let variantIdx: number | null = null;
-    if (codeStr.includes(".")) {
-      const subParts = codeStr.split(".");
-      codeStr = subParts[0];
-      const parsedV = parseInt(subParts[1]);
-      if (!isNaN(parsedV) && parsedV > 0) {
-        variantIdx = parsedV - 1;
-      }
+    const multMatch = trimmed.match(/^(\d+)\s*[*xX]\s*(.+)$/);
+    if (multMatch) {
+      qty = parseInt(multMatch[1], 10) || 1;
+      codeStr = multMatch[2].trim();
     }
 
     if (!codeStr) return false;
 
-    // Exact match against shortCode, numericCode, or variant sku
-    const targetMenu = menus.find((m) => {
-      const sc = m.shortCode?.toLowerCase().trim();
-      const nc = m.numericCode?.trim();
-      const sku = m.variants?.[0]?.sku?.toLowerCase().trim();
-      return (sc && sc === codeStr) || (nc && nc === codeStr) || (sku && sku === codeStr);
+    const exactMatch = menus.find((m) => {
+      if (!m.isAvailable) return false;
+      const matchShort =
+        m.shortCode && m.shortCode.trim().toLowerCase() === codeStr.toLowerCase();
+      const matchNum =
+        m.numericCode && m.numericCode.trim().toLowerCase() === codeStr.toLowerCase();
+      return matchShort || matchNum;
     });
 
-    if (targetMenu) {
-      // Collision prevention: Check if another menu item has a longer code starting with codeStr (e.g. "ccc" starts with "cc")
-      const hasLongerPrefixMatch = menus.some((m) => {
-        if (m._id === targetMenu._id) return false;
-        const sc = m.shortCode?.toLowerCase().trim();
-        const nc = m.numericCode?.trim();
-        const sku = m.variants?.[0]?.sku?.toLowerCase().trim();
-        return (
-          (sc && sc.startsWith(codeStr) && sc.length > codeStr.length) ||
-          (nc && nc.startsWith(codeStr) && nc.length > codeStr.length) ||
-          (sku && sku.startsWith(codeStr) && sku.length > codeStr.length)
-        );
-      });
-
-      // If a longer code exists (e.g. user might be typing "CCC" while "CC" also exists),
-      // DO NOT auto-punch immediately on keystroke. Wait for exact completion or Enter press!
-      if (hasLongerPrefixMatch) {
-        return false;
-      }
-
-      const codeDisplay = [
-        targetMenu.shortCode ? targetMenu.shortCode.toUpperCase() : null,
-        targetMenu.numericCode ? `#${targetMenu.numericCode}` : null,
-      ].filter(Boolean).join(" / ") || targetMenu.name;
-
-      if (variantIdx !== null && targetMenu.variants && targetMenu.variants[variantIdx]) {
-        const chosenVariant = targetMenu.variants[variantIdx];
-        addToCart(targetMenu, chosenVariant, [], "", qty);
-        toast({
-          title: `⚡ Punched ${qty}x ${targetMenu.name} (${chosenVariant.name})`,
-          description: `Code: ${codeDisplay}.${variantIdx + 1}`,
-        });
-      } else {
-        handleMenuClickWithQty(targetMenu, qty);
-        toast({
-          title: `⚡ Punched ${qty}x ${targetMenu.name}`,
-          description: `Code: ${codeDisplay}`,
-        });
-      }
+    if (exactMatch) {
+      addToCart(exactMatch, undefined, [], "", qty);
       setSearchQuery("");
       setDebouncedSearchQuery("");
       return true;
@@ -472,366 +312,248 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     return false;
   };
 
-  const handleMenuClickWithQty = (menu: Menu, qty: number = 1) => {
-    if (!menu.isAvailable) {
-      toast({ variant: "destructive", title: "Item Unavailable", description: "This item is currently marked as unavailable." });
-      return;
-    }
-    const hasModifiers = menu.modifierGroups && menu.modifierGroups.length > 0;
-    if ((menu.variants && menu.variants.length > 1) || hasModifiers) {
-      setPickerMenu(menu);
-    } else {
-      addToCart(menu, undefined, [], "", qty);
-    }
-  };
+  const handleQuickPunch = (input: string) => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
 
-  const handleMenuClick = (menu: Menu) => {
-    handleMenuClickWithQty(menu, 1);
+    if (tryAutoPunch(trimmed)) return;
+
+    let qty = 1;
+    let term = trimmed;
+    const multMatch = trimmed.match(/^(\d+)\s*[*xX]\s*(.+)$/);
+    if (multMatch) {
+      qty = parseInt(multMatch[1], 10) || 1;
+      term = multMatch[2].trim();
+    }
+
+    const matched = menus.find(
+      (m) =>
+        m.isAvailable &&
+        (m.name.toLowerCase().includes(term.toLowerCase()) ||
+          (m.shortCode && m.shortCode.toLowerCase().includes(term.toLowerCase())) ||
+          (m.numericCode && m.numericCode.toLowerCase().includes(term.toLowerCase())))
+    );
+
+    if (matched) {
+      addToCart(matched, undefined, [], "", qty);
+      setSearchQuery("");
+      setDebouncedSearchQuery("");
+    } else {
+      toast({
+        variant: "destructive",
+        title: "No Match Found",
+        description: `Could not find an available dish matching "${trimmed}".`,
+      });
+    }
   };
 
   const updateQuantity = (cartId: string, delta: number) => {
-    setCart(prev => {
-      const newCart = prev.map(item => {
-        if (item.cartId === cartId) {
-          const newQ = item.quantity + delta;
-          // Bug Fix: auto-remove item when qty goes to 0 on minus press
-          return newQ > 0 ? { ...item, quantity: newQ } : null;
-        }
-        return item;
-      }).filter(Boolean) as CartItem[];
-      return newCart;
-    });
-  };
-
-  const removeFromCart = (cartId: string) => {
-    setCart(prev => prev.filter(item => item.cartId !== cartId));
+    setCart((prev) =>
+      prev
+        .map((item) => {
+          if (item.cartId === cartId) {
+            const newQty = item.quantity + delta;
+            return newQty > 0 ? { ...item, quantity: newQty } : null;
+          }
+          return item;
+        })
+        .filter(Boolean) as CartItem[]
+    );
   };
 
   const updateNotes = (cartId: string, notes: string) => {
-    setCart(prev => prev.map(item => item.cartId === cartId ? { ...item, notes } : item));
+    setCart((prev) =>
+      prev.map((item) => (item.cartId === cartId ? { ...item, notes } : item))
+    );
   };
 
-  const togglePresetNote = (cartId: string, noteText: string) => {
-    setCart(prev => prev.map(item => {
-      if (item.cartId === cartId) {
-        const currentNotes = item.notes ? item.notes.split(", ").map(s => s.trim()).filter(Boolean) : [];
+  const togglePresetNote = (cartId: string, preset: string) => {
+    setCart((prev) =>
+      prev.map((item) => {
+        if (item.cartId !== cartId) return item;
+        const current = item.notes ? item.notes.trim() : "";
+        const parts = current ? current.split(",").map((s) => s.trim()) : [];
         let updated: string[];
-        if (currentNotes.includes(noteText)) {
-          updated = currentNotes.filter(n => n !== noteText);
+        if (parts.includes(preset)) {
+          updated = parts.filter((p) => p !== preset);
         } else {
-          updated = [...currentNotes, noteText];
+          updated = [...parts, preset];
         }
         return { ...item, notes: updated.join(", ") };
-      }
-      return item;
-    }));
+      })
+    );
   };
 
-  const filteredMenus = menus.filter((m) => {
-    const matchesCategory = activeCategoryId === "All" || m.categoryId?._id === activeCategoryId;
-    const q = debouncedSearchQuery.trim().toLowerCase();
-    if (!q) return matchesCategory;
+  const removeFromCart = (cartId: string) => {
+    setCart((prev) => prev.filter((item) => item.cartId !== cartId));
+  };
 
-    // Extract quantity pattern e.g. "3*bn" or "bn*3" -> query is "bn"
-    let cleanQ = q;
-    if (q.includes("*")) {
-      const parts = q.split("*").map(p => p.trim());
-      if (parts.length === 2) {
-        if (!isNaN(parseInt(parts[0]))) cleanQ = parts[1];
-        else if (!isNaN(parseInt(parts[1]))) cleanQ = parts[0];
+  const getItemUnitPrice = (item: CartItem): number => {
+    const variantP = item.selectedVariant?.price || 0;
+    const modifiersP = (item.selectedModifiers || []).reduce(
+      (sum, m) => sum + (Number(m.price) || 0),
+      0
+    );
+    return variantP + modifiersP;
+  };
+
+  const subtotal = cart.reduce((sum, item) => sum + getItemUnitPrice(item) * item.quantity, 0);
+
+  const calculateTotalTaxes = () => {
+    return cart.reduce((sum, item) => {
+      const itemSubtotal = getItemUnitPrice(item) * item.quantity;
+      const rate = ((item.variants?.[0] as any)?.taxPercentage ?? 5) / 100;
+      return sum + itemSubtotal * rate;
+    }, 0);
+  };
+
+  const taxes = calculateTotalTaxes();
+  const total = subtotal + taxes;
+  const effectiveTaxPct = subtotal > 0 ? ((taxes / subtotal) * 100).toFixed(0) : "5";
+
+  const categoryCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const menu of menus) {
+      if (menu.isAvailable) {
+        const catId = menu.categoryId?._id;
+        if (catId) {
+          map.set(catId, (map.get(catId) || 0) + 1);
+        }
       }
     }
+    return map;
+  }, [menus]);
 
-    const sc = m.shortCode?.toLowerCase().trim() || "";
-    const nc = m.numericCode?.trim() || "";
-    const sku = m.variants?.[0]?.sku?.toLowerCase().trim() || "";
+  const filteredMenus = useMemo(() => {
+    let result = menus;
+    if (activeCategoryId !== "All") {
+      result = result.filter((m) => m.categoryId?._id === activeCategoryId);
+    }
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.toLowerCase().trim();
+      result = result.filter(
+        (m) =>
+          m.name.toLowerCase().includes(query) ||
+          m.shortCode?.toLowerCase().includes(query) ||
+          m.numericCode?.toLowerCase().includes(query) ||
+          m.categoryId?.name.toLowerCase().includes(query)
+      );
+    }
+    return result;
+  }, [menus, activeCategoryId, debouncedSearchQuery]);
 
-    const matchesName = m.name.toLowerCase().includes(cleanQ);
-    const matchesCode = (sc && sc === cleanQ) || (nc && nc === cleanQ) || (sku && sku === cleanQ);
-    const matchesPrefix = (sc && sc.startsWith(cleanQ)) || (nc && nc.startsWith(cleanQ)) || (sku && sku.startsWith(cleanQ));
-
-    return matchesCategory && (matchesName || matchesCode || matchesPrefix);
-  });
-
-  // UX: count items per category for badge display
-  const categoryCountMap = new Map<string, number>();
-  menus.forEach(m => {
-    const cid = m.categoryId?._id;
-    if (cid) categoryCountMap.set(cid, (categoryCountMap.get(cid) || 0) + 1);
-  });
-
-  const getItemUnitPrice = (item: CartItem) => {
-    const modPrice = (item.selectedModifiers || []).reduce((sum, m) => sum + (Number(m.price) || 0), 0);
-    return (item.selectedVariant?.price || 0) + modPrice;
-  };
-
-  const subtotal = cart.reduce((sum, item) => sum + (getItemUnitPrice(item) * item.quantity), 0);
-  // Use real per-item taxPercentage from menu data (same logic as backend generateBill)
-  const taxes = cart.reduce((sum, item) => {
-    const itemTotal = getItemUnitPrice(item) * item.quantity;
-    const taxPct = (item as any).taxPercentage ?? 0;
-    return sum + (itemTotal * taxPct) / 100;
-  }, 0);
-  const total = subtotal + taxes;
-  const effectiveTaxPct = subtotal > 0 ? Math.round((taxes / subtotal) * 100) : 0;
-
-  const placeOrder = async () => {
-    if (cart.length === 0) return toast({ variant: "destructive", title: "Cart is empty" });
-    if (orderType === "DINE_IN" && !selectedTable) return toast({ variant: "destructive", title: "Select a table" });
+  const placeOrder = async (): Promise<any> => {
+    if (cart.length === 0) return null;
+    if (orderType === "DINE_IN" && !selectedTable) {
+      toast({
+        variant: "destructive",
+        title: "Table Required",
+        description: "Please select a table from the floor layout.",
+      });
+      return null;
+    }
 
     setIsSubmitting(true);
     try {
-      // ── Bug Fix: Group cart items by their station for correct kitchen routing ──
-      // Each station gets its own KOT payload so the right kitchen screen sees it.
-      const stationMap = new Map<string, typeof cart>();
-      for (const c of cart) {
-        const station = (c as any).station || "MAIN_KITCHEN";
-        if (!stationMap.has(station)) stationMap.set(station, []);
-        stationMap.get(station)!.push(c);
-      }
-      const kotPayloads = Array.from(stationMap.entries()).map(([station, items]) => ({
-        station,
-        items: items.map(c => ({
-          menuItemId: c._id,
-          variantName: c.selectedVariant.name,
-          quantity: c.quantity,
-          selectedModifiers: c.selectedModifiers || [],
-          notes: c.notes || undefined,
-        })),
-      }));
+      let orderId: string | null = null;
 
-      const existingOpenOrder = orderType === "DINE_IN"
-        ? activeOrders.find(o => {
-            if (!o || o.status !== "OPEN") return false;
-            const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
-            const tNum = typeof o.tableId === "object" ? o.tableId?.tableNumber : (o as any).tableNumber;
-            return (tId && String(tId) === String(selectedTable)) || (tNum && String(tNum) === String(selectedTable));
-          })
-        : null;
+      // Check if table already has an active OPEN order (including merged primary order)
+      const existingOrder = activeOrders.find((o) => {
+        if (!o || o.status !== "OPEN") return false;
+        const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
+        const linkedIds = Array.isArray(o.tableIds)
+          ? o.tableIds.map((t: any) => (typeof t === "object" ? t._id : t))
+          : [];
+        return String(tId) === String(selectedTable) || linkedIds.includes(String(selectedTable));
+      });
 
-      const existingBilledOrder = orderType === "DINE_IN" && !existingOpenOrder
-        ? activeOrders.find(o => {
-            if (!o || o.status !== "BILLED") return false;
-            const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
-            const tNum = typeof o.tableId === "object" ? o.tableId?.tableNumber : (o as any).tableNumber;
-            return (tId && String(tId) === String(selectedTable)) || (tNum && String(tNum) === String(selectedTable));
-          })
-        : null;
-
-      if (existingBilledOrder) {
-        setIsSubmitting(false);
-        const tabObj = tables.find(t => t._id === selectedTable);
-        return toast({
-          variant: "destructive",
-          title: "Table Bill Generated 🧾",
-          description: `Table ${tabObj?.tableNumber || ""} (Order #${existingBilledOrder._id.slice(-4)}) has an unpaid bill. Please settle payment in Billing & Settlements to release the table, or switch to Takeaway.`,
-          duration: 7000,
-        });
-      }
-
-      let targetOrderId: string;
-
-      if (existingOpenOrder) {
-        targetOrderId = existingOpenOrder._id;
-        // Fire all per-station KOTs to the existing order
-        await Promise.all(kotPayloads.map(kp => employeeService.addKot(targetOrderId, kp)));
-        toast({ title: `Additional KOT(s) sent to kitchen! (${kotPayloads.length} station${kotPayloads.length > 1 ? "s" : ""})` });
+      if (existingOrder) {
+        orderId = existingOrder._id;
       } else {
-        const orderPayload = {
-          tableId: selectedTable || undefined,
+        const payload: any = {
           orderType,
-          guestCount: orderType === "DINE_IN" ? Math.max(1, guestCount) : 1,
-          customerDetails: customerName || customerPhone ? {
-            name: customerName,
-            phone: customerPhone,
-            customerId: matchedCustomer?._id || undefined,
-          } : undefined,
+          guestCount: Math.max(1, guestCount),
         };
 
-        const orderRes = await employeeService.createOrder(orderPayload);
-        targetOrderId = orderRes.data._id;
+        if (orderType === "DINE_IN") {
+          payload.tableId = selectedTable;
+        }
 
-        // Fire all per-station KOTs to the newly created order
-        await Promise.all(kotPayloads.map(kp => employeeService.addKot(targetOrderId, kp)));
-        toast({ title: `New order fired to kitchen! (${kotPayloads.length} station${kotPayloads.length > 1 ? "s" : ""})` });
+        if (customerName.trim() || customerPhone.trim()) {
+          payload.customerDetails = {
+            name: customerName.trim() || "Walk-in",
+            phone: customerPhone.trim() || "",
+            customerId: matchedCustomer?._id || null,
+          };
+        }
+
+        const createRes = await employeeService.createOrder(payload);
+        const createdData = createRes.data || createRes;
+        orderId = createdData._id || createdData.id || createdData.order?._id;
       }
+
+      if (!orderId) {
+        throw new Error("Could not initialize order for this table.");
+      }
+
+      // Add KOT to the order
+      const kotPayload = {
+        station: cart[0]?.station || "KITCHEN",
+        items: cart.map((item) => ({
+          menuItemId: item._id,
+          variantName: item.selectedVariant.name,
+          quantity: item.quantity,
+          notes: item.notes || "",
+          selectedModifiers: (item.selectedModifiers || []).map((m) => ({
+            name: m.name,
+            price: m.price,
+            groupName: m.groupName,
+          })),
+        })),
+      };
+
+      const kotRes = await employeeService.addKot(orderId, kotPayload);
+
+      toast({
+        title: "Order Fired! 🔥",
+        description: `Successfully fired to kitchen stations${
+          orderType === "DINE_IN"
+            ? ` for Table ${tables.find((t) => t._id === selectedTable)?.tableNumber || selectedTable}`
+            : ""
+        }.`,
+        className: "bg-emerald-50 border-emerald-500 text-emerald-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-100",
+      });
 
       setCart([]);
-      if (!existingOpenOrder) {
-        setCustomerName("");
-        setCustomerPhone("");
-        setMatchedCustomer(null);
-        setSelectedTable("");
-      }
-      fetchActiveOrders();
+      setRecentlyAdded([]);
+      await fetchActiveOrders();
       onOrderFired?.();
+      return kotRes?.data || kotRes;
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error placing order", description: error.message || "Failed to place order." });
+      toast({
+        variant: "destructive",
+        title: "Order Failed",
+        description: error.response?.data?.message || error.message || "Failed to fire order.",
+      });
+      return null;
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // ── Quick Receipt ──
-  // Automatically creates an order, fires KOT to kitchen, generates bill & opens the printable receipt
   const handleQuickReceipt = async () => {
-    if (cart.length === 0) {
-      return toast({ variant: "destructive", title: "Cart is empty", description: "Please select menu items to print a quick receipt." });
-    }
-
+    if (cart.length === 0) return;
     setIsQuickReceiptSubmitting(true);
     try {
-      // 1. Group items by station
-      const stationMap = new Map<string, typeof cart>();
-      for (const c of cart) {
-        const station = (c as any).station || "MAIN_KITCHEN";
-        if (!stationMap.has(station)) stationMap.set(station, []);
-        stationMap.get(station)!.push(c);
+      const createdOrder = await placeOrder();
+      if (createdOrder) {
+        setReceiptOrder(createdOrder);
+        setShowReceiptModal(true);
       }
-      const kotPayloads = Array.from(stationMap.entries()).map(([station, items]) => ({
-        station,
-        items: items.map(c => ({
-          menuItemId: c._id,
-          variantName: c.selectedVariant.name,
-          quantity: c.quantity,
-          selectedModifiers: c.selectedModifiers || [],
-          notes: c.notes || undefined,
-        })),
-      }));
-
-      // 2. Automatically create order (DINE_IN if table selected, else TAKEAWAY)
-      const orderPayload: {
-        tableId?: string;
-        orderType: "DINE_IN" | "TAKEAWAY" | "DELIVERY";
-        customerDetails?: { name?: string; phone?: string; customerId?: string };
-      } = {
-        tableId: selectedTable || undefined,
-        orderType: selectedTable ? "DINE_IN" : "TAKEAWAY",
-        customerDetails: customerName || customerPhone ? {
-          name: customerName || (selectedTable ? "Dine-In Guest" : "Takeaway Customer"),
-          phone: customerPhone || undefined,
-          customerId: matchedCustomer?._id || undefined,
-        } : undefined,
-      };
-
-      const orderRes = await employeeService.createOrder(orderPayload);
-      const targetOrderId = orderRes.data?._id || orderRes.data?.order?._id || orderRes._id;
-
-      if (!targetOrderId) {
-        throw new Error("Failed to create takeaway order.");
-      }
-
-      // 3. Fire per-station KOTs
-      for (const kp of kotPayloads) {
-        await employeeService.addKot(targetOrderId, kp);
-      }
-
-      // 4. Generate bill (order status becomes BILLED)
-      let grandTotal = total;
-      let billedOrderData: any = null;
-      try {
-        const billRes = await employeeService.generateBill(targetOrderId);
-        billedOrderData = billRes?.data?.order || billRes?.data || billRes;
-        if (billedOrderData?.financials?.grandTotal) {
-          grandTotal = Number(billedOrderData.financials.grandTotal);
-        }
-      } catch (billErr: any) {
-        console.warn("Bill generation fallback:", billErr?.message);
-      }
-
-      // 5. Fetch fully populated billed order to pass to ReceiptModal
-      let finalOrderData: any = billedOrderData;
-      try {
-        const fetchRes = await employeeService.getOrderById(targetOrderId);
-        finalOrderData = fetchRes?.data?.order || fetchRes?.data || fetchRes;
-      } catch {
-        if (!finalOrderData) {
-          finalOrderData = {
-            _id: targetOrderId,
-            orderNumber: targetOrderId.slice(-4),
-            status: "BILLED",
-            orderType: selectedTable ? "DINE_IN" : "TAKEAWAY",
-            tableId: selectedTable || undefined,
-            createdAt: new Date().toISOString(),
-            customerDetails: { name: customerName || (selectedTable ? "Dine-In Guest" : "Takeaway Customer"), phone: customerPhone || "" },
-            financials: { subtotal, totalTax: taxes, grandTotal },
-            kots: kotPayloads.map((kp, idx) => ({
-              kotNumber: idx + 1,
-              createdAt: new Date().toISOString(),
-              items: kp.items.map(i => {
-                const matchedCartItem = cart.find(c => c._id === i.menuItemId);
-                return {
-                  menuItemId: { name: matchedCartItem?.name || "Item" },
-                  variantName: i.variantName,
-                  variantPrice: matchedCartItem?.selectedVariant?.price || 0,
-                  quantity: i.quantity,
-                  notes: i.notes,
-                };
-              }),
-            })),
-          };
-        }
-      }
-
-      setReceiptOrder(finalOrderData);
-      setShowReceiptModal(true);
-
-      toast({
-        title: "⚡ Order Billed & Receipt Ready! 🧾",
-        description: `Order #${finalOrderData?.orderNumber || targetOrderId.slice(-4)} (₹${grandTotal}) billed & receipt ready.`,
-      });
-
-      // 7. Reset state
-      setCart([]);
-      setCustomerName("");
-      setCustomerPhone("");
-      setSelectedTable("");
-      setOrderType("DINE_IN");
-      fetchActiveOrders();
-      onOrderFired?.();
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error processing quick takeaway",
-        description: error.message || "Failed to process quick takeaway order.",
-      });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Receipt failed", description: err.message });
     } finally {
       setIsQuickReceiptSubmitting(false);
-    }
-  };
-
-  // UX: One-tap Repeat Last Order — re-fire the last KOT items of an occupied table
-  const repeatLastOrder = async (tableId: string, order: Order) => {
-    if (!order.kots || order.kots.length === 0) return;
-    setRepeatLoading(tableId);
-    try {
-      const lastKot = order.kots[order.kots.length - 1];
-      if (!lastKot.items || lastKot.items.length === 0) {
-        toast({ variant: "destructive", title: "No items in last KOT" });
-        return;
-      }
-      // Group by station using item data from the KOT
-      const stationMap = new Map<string, typeof lastKot.items>();
-      lastKot.items.forEach((item: any) => {
-        const station = item.station || "MAIN_KITCHEN";
-        if (!stationMap.has(station)) stationMap.set(station, []);
-        stationMap.get(station)!.push(item);
-      });
-      const kotPayloads = Array.from(stationMap.entries()).map(([station, items]) => ({
-        station,
-        items: items.map((item: any) => ({
-          menuItemId: typeof item.menuItemId === "object" ? item.menuItemId._id || item.menuItemId : item.menuItemId,
-          variantName: item.variantName,
-          quantity: item.quantity,
-        })),
-      }));
-      await Promise.all(kotPayloads.map(kp => employeeService.addKot(order._id, kp)));
-      toast({ title: "🔁 Repeated last KOT!", description: `${lastKot.items.length} item(s) re-sent to kitchen.` });
-      fetchActiveOrders();
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Repeat failed", description: err.message });
-    } finally {
-      setRepeatLoading(null);
     }
   };
 
@@ -848,6 +570,49 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     });
   };
 
+  const handleTableSelection = (tableId: string) => {
+    const t = tables.find((tab) => tab._id === tableId);
+    const isMergedSecondary = t?.status === "MERGED" || Boolean(t?.mergedIntoTableId);
+    const parentTableId = isMergedSecondary
+      ? typeof t?.mergedIntoTableId === "object"
+        ? t?.mergedIntoTableId?._id
+        : t?.mergedIntoTableId
+      : null;
+    const parentTable = parentTableId ? tables.find((pt) => String(pt._id) === String(parentTableId)) : null;
+
+    if (isMergedSecondary && parentTableId) {
+      setSelectedTable(parentTableId);
+      setOrderType("DINE_IN");
+      toast({
+        title: `🔗 Table ${t?.tableNumber} is Merged`,
+        description: `Switched to Primary Table ${parentTable?.tableNumber || ""}.`,
+      });
+      return;
+    }
+
+    setSelectedTable(tableId);
+    setOrderType("DINE_IN");
+    const order = activeOrders.find(
+      (o) =>
+        (o.tableId?._id === tableId || (o as any).tableId === tableId) &&
+        o.status === "OPEN"
+    );
+
+    if (order) {
+      if (order.guestCount) {
+        setGuestCount(order.guestCount);
+      }
+      if (order.customerDetails) {
+        setCustomerName(order.customerDetails.name || "");
+        setCustomerPhone(order.customerDetails.phone || "");
+      }
+    } else {
+      setGuestCount(t?.capacity || 2);
+      setCustomerName("");
+      setCustomerPhone("");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-full min-h-[300px] items-center justify-center bg-slate-50 dark:bg-slate-950 transition-colors">
@@ -857,843 +622,158 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   }
 
   return (
-    <div className="relative  flex flex-col md:flex-row h-full bg-slate-100/50 dark:bg-slate-900/50 rounded-xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 transition-colors backdrop-blur-xl shadow-2xl">
+    <div className="relative flex flex-col md:flex-row h-full bg-slate-100/50 dark:bg-slate-900/50 rounded-xl overflow-hidden border border-slate-200/50 dark:border-slate-800/50 transition-colors backdrop-blur-xl shadow-2xl">
+      {/* 1. Left Table Floor Sidebar */}
+      <TableFloorSidebar
+        tables={tables}
+        activeOrders={activeOrders}
+        selectedTable={selectedTable}
+        onSelectTable={handleTableSelection}
+        onOpenMergeDialog={() => setShowMergeDialog(true)}
+        onUnmergeOrder={(order, tableId) => {
+          setUnmergeTargetOrder(order);
+          setUnmergeTargetTableId(tableId || "");
+          setShowUnmergeDialog(true);
+        }}
+      />
 
-      {/* Tables Sidebar */}
-      <div className="hidden md:flex flex-col w-[200px]  border-r border-white/30 dark:border-white/10 bg-white/60 dark:bg-slate-950/60 z-10 shrink-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] transition-colors backdrop-blur-xl">
-        <div className="p-4 border-b border-white/30 dark:border-slate-800/50 shrink-0 space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-              <Store className="h-5 w-5 text-blue-500" /> Table Floor
-            </h2>
-          </div>
-          <div className="flex items-center gap-1.5 text-[10px] font-bold">
-            <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/20">
-              {tables.filter(t => !activeOrders.some(o => {
-                if (!o || o.status === "COMPLETED" || o.status === "CANCELLED" || o.status === "CLOSED") return false;
-                const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
-                const tNum = typeof o.tableId === "object" ? o.tableId?.tableNumber : (o as any).tableNumber;
-                return (tId && String(tId) === String(t._id)) || (tNum && String(tNum) === String(t.tableNumber));
-              })).length} Free
-            </span>
-            <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/20">
-              {tables.filter(t => activeOrders.some(o => {
-                if (!o || o.status === "COMPLETED" || o.status === "CANCELLED" || o.status === "CLOSED") return false;
-                const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
-                const tNum = typeof o.tableId === "object" ? o.tableId?.tableNumber : (o as any).tableNumber;
-                return (tId && String(tId) === String(t._id)) || (tNum && String(tNum) === String(t.tableNumber));
-              })).length} Active
-            </span>
-          </div>
-        </div>
-        <ScrollArea className="flex-1 p-3">
-          <div className="grid grid-cols-2 gap-2.5">
-            {tables.map(t => {
-              const order = activeOrders.find(o => {
-                if (!o || o.status === "COMPLETED" || o.status === "CANCELLED" || o.status === "CLOSED") return false;
-                const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
-                const tNum = typeof o.tableId === "object" ? o.tableId?.tableNumber : (o as any).tableNumber;
-                return (tId && String(tId) === String(t._id)) || (tNum && String(tNum) === String(t.tableNumber));
-              });
-              const isOccupied = !!order || t.status === "OCCUPIED" || (t as any).isOccupied === true;
-              let hasReady = false;
-              if (order) {
-                order.kots?.forEach(kot => {
-                  kot.items?.forEach(item => {
-                    if (item.itemStatus === "READY") hasReady = true;
-                  });
-                });
-              }
+      {/* 2. Vertical Category Sidebar */}
+      <CategorySidebar
+        categories={categories}
+        menus={menus}
+        activeCategoryId={activeCategoryId}
+        onSelectCategory={setActiveCategoryId}
+        categoryCountMap={categoryCountMap}
+      />
 
-              const isSelected = selectedTable === t._id;
+      {/* 3. Central Menu Catalog Grid */}
+      <MenuCatalogSection
+        searchInputRef={searchInputRef}
+        searchQuery={searchQuery}
+        onSearchChange={(val) => {
+          const punched = tryAutoPunch(val);
+          if (!punched) {
+            setSearchQuery(val);
+          }
+        }}
+        onSearchKeyDown={(e) => {
+          if (e.key === "Enter" && searchQuery.trim()) {
+            e.preventDefault();
+            setDebouncedSearchQuery(searchQuery);
+            handleQuickPunch(searchQuery);
+          } else if (e.key === "Escape") {
+            setSearchQuery("");
+            setDebouncedSearchQuery("");
+          }
+        }}
+        onClearSearch={() => {
+          setSearchQuery("");
+          setDebouncedSearchQuery("");
+          searchInputRef.current?.focus();
+        }}
+        orderType={orderType}
+        onSwitchOrderType={setOrderType}
+        selectedTable={selectedTable}
+        tables={tables}
+        onUnselectTable={() => setSelectedTable("")}
+        guestCount={guestCount}
+        onUpdateGuestCount={(delta) => setGuestCount((g) => Math.max(1, g + delta))}
+        recentlyAdded={recentlyAdded}
+        onMenuClick={handleMenuClick}
+        filteredMenus={filteredMenus}
+        cart={cart}
+      />
 
-              return (
-                <div
-                  key={t._id}
-                  onClick={() => {
-                    setSelectedTable(t._id);
-                    setOrderType("DINE_IN");
-                    if (order) {
-                      if ((order as any).guestCount) {
-                        setGuestCount((order as any).guestCount);
-                      }
-                      if (order.customerDetails) {
-                        setCustomerName(order.customerDetails.name || "");
-                        setCustomerPhone(order.customerDetails.phone || "");
-                      }
-                    } else {
-                      setGuestCount(t.capacity || 2);
-                      setCustomerName("");
-                      setCustomerPhone("");
-                    }
-                  }}
-                  className={`p-3 rounded-2xl border cursor-pointer transition-all duration-200 flex flex-col justify-between h-[70px] relative overflow-hidden active:scale-95 group ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/50 shadow-md'
-                      : isOccupied
-                      ? 'border-amber-400 dark:border-amber-700 bg-amber-500/15 hover:bg-amber-500/20'
-                      : 'border-white/60 dark:border-slate-800/60 bg-white/50 dark:bg-slate-900/50 hover:bg-white/90 dark:hover:bg-slate-800/90'
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <span className={`font-extrabold text-sm ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-900 dark:text-white'}`}>
-                      {t.tableNumber}
-                    </span>
-                    {hasReady ? (
-                      <span className="h-3 w-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] animate-ping" title="Food Ready"></span>
-                    ) : isOccupied ? (
-                      <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.8)]" title="Occupied / Order Active"></span>
-                    ) : (
-                      <span className="h-2 w-2 rounded-full bg-emerald-500/40" title="Free"></span>
-                    )}
-                  </div>
+      {/* 4. Floating Action Buttons */}
+      <FloatingActionButtons
+        cart={cart}
+        cartFlash={cartFlash}
+        selectedTable={selectedTable}
+        customerName={customerName}
+        customerPhone={customerPhone}
+        onResetAll={handleResetAll}
+        onQuickReceipt={handleQuickReceipt}
+        isQuickReceiptSubmitting={isQuickReceiptSubmitting}
+        onPlaceOrder={async () => {
+          await placeOrder();
+        }}
+        isSubmitting={isSubmitting}
+        onOpenCart={() => setCartOpen(true)}
+        total={total}
+      />
 
-                  <div className="mt-auto space-y-0.5">
-                    {isOccupied && (
-                      <div className="text-[10px] font-mono font-bold text-amber-600 dark:text-amber-400">
-                        #{String(order?.orderNumber || order?._id || "").slice(-4)}
-                      </div>
-                    )}
-                    <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                      {t.capacity} Seats
-                    </div>
-                  </div>
+      {/* 5. Cart Drawer */}
+      <CartDrawer
+        cartOpen={cartOpen}
+        onCloseCart={() => setCartOpen(false)}
+        cart={cart}
+        selectedTable={selectedTable}
+        onResetAll={handleResetAll}
+        orderType={orderType}
+        onSetOrderType={(type) => {
+          setOrderType(type);
+          if (type === "TAKEAWAY") setSelectedTable("");
+        }}
+        tables={tables}
+        activeOrders={activeOrders}
+        onSelectTable={handleTableSelection}
+        guestCount={guestCount}
+        onUpdateGuestCount={(delta) => setGuestCount((g) => Math.max(1, g + delta))}
+        customerName={customerName}
+        onCustomerNameChange={setCustomerName}
+        customerPhone={customerPhone}
+        onCustomerPhoneChange={setCustomerPhone}
+        matchedCustomer={matchedCustomer}
+        onClearCustomer={() => {
+          setCustomerName("");
+          setCustomerPhone("");
+          setMatchedCustomer(null);
+        }}
+        getItemUnitPrice={getItemUnitPrice}
+        updateNotes={updateNotes}
+        togglePresetNote={togglePresetNote}
+        updateQuantity={updateQuantity}
+        removeFromCart={removeFromCart}
+        subtotal={subtotal}
+        taxes={taxes}
+        effectiveTaxPct={effectiveTaxPct}
+        total={total}
+        isSubmitting={isSubmitting}
+        isQuickReceiptSubmitting={isQuickReceiptSubmitting}
+        onQuickReceipt={handleQuickReceipt}
+        onPlaceOrder={placeOrder}
+      />
 
-                  {/* UX: table hover preview — show order summary & Repeat button */}
-                  {isOccupied && order && (
-                    <div className="absolute inset-0 rounded-2xl bg-slate-900/90 dark:bg-slate-950/95 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center gap-1.5 p-2 z-10">
-                      {/* order item count + total */}
-                      {(() => {
-                        const allItems = order.kots?.flatMap(k => k.items || []) || [];
-                        const totalQty = allItems.reduce((s: number, i: any) => s + (i.quantity || 1), 0);
-                        const totalAmt = allItems.reduce((s: number, i: any) => s + ((i.variantPrice || 0) * (i.quantity || 1)), 0);
-                        return (
-                          <>
-                            <span className="text-[10px] font-bold text-white/80">{totalQty} item{totalQty !== 1 ? 's' : ''}</span>
-                            {totalAmt > 0 && <span className="text-[11px] font-extrabold text-emerald-400">₹{totalAmt.toFixed(0)}</span>}
-                          </>
-                        );
-                      })()}
-                      {/* Repeat last KOT button */}
-                      {order.status === "OPEN" && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); repeatLastOrder(t._id, order); }}
-                          disabled={repeatLoading === t._id}
-                          className="mt-0.5 flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-bold transition-colors disabled:opacity-60"
-                        >
-                          {repeatLoading === t._id
-                            ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                            : <RotateCcw className="h-2.5 w-2.5" />}
-                          Repeat
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
-      </div>
-      {/* Categories Vertical Navigation Sidebar */}
-      <div className="hidden lg:flex flex-col w-[175px] border-r border-white/30 dark:border-white/10 bg-white/40 dark:bg-slate-950/40 z-10 shrink-0 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.05)] transition-colors backdrop-blur-xl">
-        <div className="p-4 border-b border-white/30 dark:border-slate-800/50 shrink-0 flex items-center justify-between">
-          <h2 className="font-extrabold tracking-tight text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-            <Layers className="h-4 w-4 text-blue-500" /> Categories
-          </h2>
-          <span className="text-[10px] font-extrabold bg-blue-500/10 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-full">
-            {categories.length + 1}
-          </span>
-        </div>
-        <ScrollArea className="flex-1 p-2.5">
-          <div className="space-y-1.5">
-            <button
-              onClick={() => setActiveCategoryId("All")}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 text-left ${
-                activeCategoryId === "All"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-[1.02]"
-                  : "text-slate-700 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-800/80 bg-white/30 dark:bg-slate-900/30"
-              }`}
-            >
-              <span className="truncate">All Items</span>
-              <span
-                className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
-                  activeCategoryId === "All"
-                    ? "bg-white/20 text-white"
-                    : "bg-slate-200/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300"
-                }`}
-              >
-                {menus.length}
-              </span>
-            </button>
-            {categories.map((cat) => {
-              const count = categoryCountMap.get(cat._id) || 0;
-              const isActive = activeCategoryId === cat._id;
-              return (
-                <button
-                  key={cat._id}
-                  onClick={() => setActiveCategoryId(cat._id)}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[0.9rem] font-bold transition-all duration-200 text-left ${
-                    isActive
-                      ? "bg-blue-600 text-white shadow-md shadow-blue-500/25 scale-[1.02]"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-white/80 dark:hover:bg-slate-800/80 bg-white/30 dark:bg-slate-900/30"
-                  }`}
-                >
-                  <span className="truncate">{cat.name}</span>
-                  {count > 0 && (
-                    <span
-                      className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
-                        isActive
-                          ? "bg-white/20 text-white"
-                          : "bg-slate-200/80 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300"
-                      }`}
-                    >
-                      {count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </ScrollArea>
-      </div>
-
-      {/* Menu Section */}
-      <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden bg-transparent">
-
-        {/* Search & Active Table / Mode Bar */}
-        <div className="space-y-3 shrink-0">
-          <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
-            {/* Search Input with Auto-Punch */}
-            <div className="relative flex-1 group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors" />
-              <Input
-                ref={searchInputRef}
-                placeholder="Search dish or type shortcode e.g. 'bn', '101', '3*bn' (Punches instantly on match)..."
-                value={searchQuery}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const punched = tryAutoPunch(val);
-                  if (!punched) {
-                    setSearchQuery(val);
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && searchQuery.trim()) {
-                    e.preventDefault();
-                    setDebouncedSearchQuery(searchQuery);
-                    handleQuickPunch(searchQuery);
-                  } else if (e.key === "Escape") {
-                    setSearchQuery("");
-                    setDebouncedSearchQuery("");
-                  }
-                }}
-                className="pl-12 pr-32 h-11 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-white/60 dark:border-slate-700/60 shadow-sm text-sm font-medium rounded-2xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50 focus-visible:ring-offset-0 transition-all hover:bg-white dark:hover:bg-slate-900"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setDebouncedSearchQuery("");
-                    searchInputRef.current?.focus();
-                  }}
-                  className="absolute right-28 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:inline-flex h-6 select-none items-center gap-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/80 px-2 font-mono text-[10px] font-bold text-amber-700 dark:text-amber-300 shadow-xs">
-                ⚡ Instant Punch
-              </kbd>
-            </div>
-
-            {/* Active Table / Mode Status Chip */}
-            <div className="flex items-center gap-2 shrink-0">
-              {orderType === "TAKEAWAY" ? (
-                <div className="flex items-center gap-2 px-3.5 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-extrabold shadow-sm">
-                  <span>🛵 Takeaway Mode</span>
-                  <button
-                    onClick={() => setOrderType("DINE_IN")}
-                    className="ml-1 text-[10px] underline hover:text-emerald-700 dark:hover:text-emerald-300"
-                  >
-                    Switch to Dine-In
-                  </button>
-                </div>
-              ) : selectedTable ? (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-2 px-3.5 h-11 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 text-xs font-extrabold shadow-sm">
-                    <span>
-                      🍽️ Table {tables.find((t) => t._id === selectedTable)?.tableNumber || selectedTable}
-                    </span>
-                    <button
-                      onClick={() => setSelectedTable("")}
-                      className="p-1 hover:bg-blue-500/20 rounded-md text-blue-600 dark:text-blue-400 transition-colors"
-                      title="Unselect table"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-1.5 px-3 h-11 rounded-2xl bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-sm text-xs font-bold text-slate-700 dark:text-slate-200">
-                    <Users className="h-4 w-4 text-blue-500 shrink-0" />
-                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hidden sm:inline">Covers:</span>
-                    <button
-                      type="button"
-                      onClick={() => setGuestCount((g) => Math.max(1, g - 1))}
-                      className="h-6 w-6 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 active:scale-95 transition-all text-xs font-bold border border-slate-300 dark:border-slate-700"
-                      title="Decrease guest count"
-                    >
-                      -
-                    </button>
-                    <span className="w-5 text-center font-extrabold text-blue-600 dark:text-blue-400">{guestCount}</span>
-                    <button
-                      type="button"
-                      onClick={() => setGuestCount((g) => g + 1)}
-                      className="h-6 w-6 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 active:scale-95 transition-all text-xs font-bold border border-slate-300 dark:border-slate-700"
-                      title="Increase guest count"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 px-3 h-11 rounded-2xl bg-slate-200/50 dark:bg-slate-800/50 border border-slate-300/40 dark:border-slate-700/40 text-slate-500 dark:text-slate-400 text-xs font-medium">
-                  <span>👈 Select Table on Left</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* UX: Recently Added strip */}
-          {recentlyAdded.length > 0 && !searchQuery && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400 dark:text-slate-500 shrink-0">
-                <Clock className="h-3 w-3" /> Recent
-              </span>
-              {recentlyAdded.map((item) => (
-                <button
-                  key={item._id}
-                  onClick={() => handleMenuClick(item)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/70 dark:bg-slate-800/70 border border-slate-200/50 dark:border-slate-700/50 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all shadow-sm active:scale-95"
-                >
-                  {item.isVeg === true && <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />}
-                  {item.isVeg === false && <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />}
-                  {item.name}
-                  <span className="text-blue-600 dark:text-blue-400 font-bold">+</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Menu Grid */}
-        <ScrollArea className="flex-1 -mx-6 px-6">
-          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 pb-10">
-            {filteredMenus.map(menu => {
-              const inCartCount = cart.filter(item => item._id === menu._id).reduce((sum, item) => sum + item.quantity, 0);
-              const badgeParts = [
-                menu.shortCode ? menu.shortCode.toUpperCase() : null,
-                menu.numericCode ? `#${menu.numericCode}` : null,
-              ].filter(Boolean);
-              const shortBadge = badgeParts.length > 0 ? badgeParts.join(" / ") : undefined;
-
-              return (
-                <MenuItemCard
-                  key={menu._id}
-                  name={menu.name}
-                  categoryName={menu.categoryId?.name}
-                  shortCode={shortBadge}
-                  price={menu.variants?.[0]?.price || 0}
-                  variantsCount={menu.variants?.length || 0}
-                  isAvailable={menu.isAvailable}
-                  imageUrl={menu.imageUrl}
-                  isVeg={menu.isVeg}
-                  inCartCount={inCartCount}
-                  onClick={() => handleMenuClick(menu)}
-                />
-              );
-            })}
-            {filteredMenus.length === 0 && (
-              <div className="col-span-full py-12 text-center text-slate-500 dark:text-slate-500">
-                No menu items found.
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-      </div>
-
-      {/* ── Floating Action Button Group ── */}
-      <div className={`absolute bottom-6 right-6 z-30 flex items-center gap-2 transition-all duration-300 ${cartFlash ? 'scale-105' : ''}`}>
-
-        {/* Reset / Unselect All Button */}
-        {(cart.length > 0 || selectedTable || customerName || customerPhone) && (
-          <button
-            onClick={handleResetAll}
-            title="Unselect items, clear table & reset order details"
-            className="flex items-center justify-center h-14 px-4 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-600 dark:text-amber-400 border border-amber-500/40 font-extrabold text-xs transition-all active:scale-95 shadow-lg backdrop-blur-md gap-1.5"
-          >
-            <RotateCcw className="h-4 w-4" />
-            <span className="hidden sm:inline">Reset Order</span>
-          </button>
-        )}
-
-        {/* Quick Receipt FAB */}
-        <button
-          onClick={handleQuickReceipt}
-          disabled={cart.length === 0 || isSubmitting || isQuickReceiptSubmitting}
-          title="Create Order & Print Receipt Instantly"
-          className={`flex items-center gap-2 px-4 h-14 rounded-2xl shadow-2xl font-extrabold text-white transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
-            cart.length > 0 && !isSubmitting && !isQuickReceiptSubmitting
-              ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/40 ring-2 ring-emerald-400/50'
-              : 'bg-slate-600/70 shadow-slate-900/20'
-          }`}
-        >
-          {isQuickReceiptSubmitting ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Receipt className="h-5 w-5" />
-          )}
-          <span className="text-sm">{isQuickReceiptSubmitting ? 'Printing...' : 'Quick Receipt'}</span>
-        </button>
-
-        {/* Fire to Kitchen FAB */}
-        <button
-          onClick={async () => { await placeOrder(); }}
-          disabled={cart.length === 0 || !selectedTable|| isSubmitting || isQuickReceiptSubmitting}
-          className={`flex items-center gap-2 px-4 h-14 rounded-2xl shadow-2xl font-extrabold text-white transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
-            cart.length > 0 && !isSubmitting && !isQuickReceiptSubmitting
-              ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-600/40'
-              : 'bg-slate-600/70 shadow-slate-900/20'
-          }`}
-        >
-          {isSubmitting
-            ? <Loader2 className="h-5 w-5 animate-spin" />
-            : <span className="text-base">🔥</span>}
-          <span className="text-sm">{isSubmitting ? 'Firing...' : 'Fire'}</span>
-        </button>
-
-        {/* Cart / Review FAB */}
-        <button
-          onClick={() => setCartOpen(true)}
-          className={`flex items-center gap-2.5 px-5 h-14 rounded-2xl shadow-2xl font-extrabold text-white transition-all duration-300 active:scale-95 ${
-            cart.length > 0
-              ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/40'
-              : 'bg-slate-700/80 hover:bg-slate-600/80 shadow-slate-900/30'
-          } ${cartFlash ? 'ring-4 ring-blue-400/60' : ''}`}
-        >
-          <ShoppingBag className="h-5 w-5 shrink-0" />
-          <span className="text-sm">
-            {cart.length === 0 ? 'Cart' : `${cart.reduce((s, i) => s + i.quantity, 0)} item${cart.reduce((s, i) => s + i.quantity, 0) !== 1 ? 's' : ''}`}
-          </span>
-          {cart.length > 0 && (
-            <span className="bg-white text-blue-600 text-xs font-extrabold px-2 py-0.5 rounded-full">
-              ₹{total.toFixed(0)}
-            </span>
-          )}
-          <ChevronRight className="h-4 w-4 opacity-60" />
-        </button>
-
-      </div>
-
-      {/* ── Cart Backdrop ── */}
-      {cartOpen && (
-        <div
-          className="absolute inset-0 z-30 bg-black/30 backdrop-blur-[2px]"
-          onClick={() => setCartOpen(false)}
-        />
-      )}
-
-      {/* ── Cart Slide-out Drawer ── */}
-      <div
-        className={`absolute top-0 right-0 h-full z-40 flex flex-col
-          w-[340px] lg:w-[360px]
-          bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl
-          border-l border-white/30 dark:border-slate-800/60
-          shadow-[-20px_0_60px_-10px_rgba(0,0,0,0.25)]
-          transition-transform duration-300 ease-in-out
-          ${ cartOpen ? 'translate-x-0' : 'translate-x-full' }
-        `}
-      >
-        {/* Drawer header with close and clear buttons */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200/50 dark:border-slate-800/50 shrink-0">
-          <div className="flex items-center gap-2">
-            <ShoppingBag className="h-4 w-4 text-blue-500" />
-            <span className="font-extrabold text-slate-900 dark:text-white text-sm">Order Cart</span>
-            {cart.length > 0 && (
-              <span className="bg-blue-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full">
-                {cart.reduce((s, i) => s + i.quantity, 0)}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5">
-            {(cart.length > 0 || selectedTable) && (
-              <button
-                onClick={handleResetAll}
-                title="Clear all items and unselect table"
-                className="px-2 py-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors flex items-center gap-1"
-              >
-                <Trash2 className="h-3 w-3" /> Clear All
-              </button>
-            )}
-            <button
-              onClick={() => setCartOpen(false)}
-              className="h-8 w-8 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto hide-scrollbar">
-          <div className="p-4 space-y-4">
-          <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/50 dark:bg-slate-900/50 rounded-xl border border-white/50 dark:border-slate-800/50 shadow-inner">
-            <Button size="sm" variant={orderType === "DINE_IN" ? "default" : "ghost"} onClick={() => setOrderType("DINE_IN")} className={`rounded-lg transition-all ${orderType === "DINE_IN" ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-md font-bold" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"}`}>
-              Dine In
-            </Button>
-            <Button size="sm" variant={orderType === "TAKEAWAY" ? "default" : "ghost"} onClick={() => {
-              setOrderType("TAKEAWAY")
-              setSelectedTable("")
-            }} className={`rounded-lg transition-all ${orderType === "TAKEAWAY" ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-md font-bold" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"}`}>
-              Takeaway
-            </Button>
-            {/* <Button size="sm" variant={orderType === "DELIVERY" ? "default" : "ghost"} onClick={() => setOrderType("DELIVERY")} className={`rounded-lg transition-all ${orderType === "DELIVERY" ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-md font-bold" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-medium"}`}>
-              Delivery
-            </Button> */}
-          </div>
-
-          {orderType === "DINE_IN" && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-widest pl-1">Select Table</Label>
-                <Select value={selectedTable} onValueChange={(val) => {
-                  setSelectedTable(val);
-                  const order = activeOrders.find(o => o.tableId?._id === val && o.status === "OPEN");
-                  const tab = tables.find(t => t._id === val);
-                  if (order) {
-                    if ((order as any).guestCount) setGuestCount((order as any).guestCount);
-                    if (order.customerDetails) {
-                      setCustomerName(order.customerDetails.name || "");
-                      setCustomerPhone(order.customerDetails.phone || "");
-                    }
-                  } else {
-                    if (tab?.capacity) setGuestCount(tab.capacity);
-                    setCustomerName("");
-                    setCustomerPhone("");
-                  }
-                }}>
-                  <SelectTrigger className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm text-slate-900 dark:text-white h-12 rounded-xl focus:ring-blue-500/50">
-                    <SelectValue placeholder="Choose table" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl shadow-xl">
-                    {tables.map(t => {
-                      // Bug Fix: disable tables that are BILLED (pending payment) — can still add KOT to OPEN tables
-                      const isBilled = activeOrders.some(o => {
-                        if (!o || o.status !== "BILLED") return false;
-                        const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
-                        return tId && String(tId) === String(t._id);
-                      });
-                      return (
-                        <SelectItem
-                          key={t._id}
-                          value={t._id}
-                          disabled={isBilled}
-                          className="focus:bg-slate-100 dark:focus:bg-slate-800 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {t.tableNumber}
-                          {isBilled ? (
-                            <span className="text-red-400 dark:text-red-500 text-xs ml-1 font-medium">(Bill Pending)</span>
-                          ) : t.status === "OCCUPIED" ? (
-                            <span className="text-amber-500 dark:text-amber-400 text-xs ml-1 font-medium">(Active Order)</span>
-                          ) : (
-                            <span className="text-emerald-500 dark:text-emerald-400 text-xs ml-1 font-medium">(Free)</span>
-                          )}
-                        </SelectItem>
-                      );
-                    })}
-                    {tables.length === 0 && <SelectItem value="none" disabled>No tables available</SelectItem>}
-                  </SelectContent>
-                </Select>
-                {activeOrders.some(o => o.tableId?._id === selectedTable && o.status === "OPEN") && (
-                  <div className="text-xs text-amber-700 dark:text-amber-400 font-medium bg-amber-100/50 dark:bg-amber-900/20 p-2.5 rounded-lg border border-amber-200/50 dark:border-amber-800/50 shadow-inner mt-2">
-                    This table currently has an active order. New items will be appended as a new KOT.
-                  </div>
-                )}
-              </div>
-
-              {selectedTable && (
-                <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-blue-500 shrink-0" />
-                    <div>
-                      <p className="text-xs font-bold text-slate-900 dark:text-white">Guest Count (Covers)</p>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">People seated at table</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setGuestCount((g) => Math.max(1, g - 1))}
-                      className="h-7 w-7 rounded-lg flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 active:scale-95 transition-all text-sm font-bold border border-slate-300 dark:border-slate-700 shadow-xs"
-                      title="Decrease guest count"
-                    >
-                      -
-                    </button>
-                    <span className="w-6 text-center font-extrabold text-sm text-blue-600 dark:text-blue-400">{guestCount}</span>
-                    <button
-                      type="button"
-                      onClick={() => setGuestCount((g) => g + 1)}
-                      className="h-7 w-7 rounded-lg flex items-center justify-center bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 active:scale-95 transition-all text-sm font-bold border border-slate-300 dark:border-slate-700 shadow-xs"
-                      title="Increase guest count"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="space-y-1.5 pt-1">
-            <div className="flex justify-between items-center pl-1">
-              <div className="flex items-center gap-1.5">
-                <Label className="text-[11px] text-slate-500 dark:text-slate-400 uppercase font-extrabold tracking-widest">
-                  Customer Details <span className="opacity-50 font-medium lowercase">(optional)</span>
-                </Label>
-                {matchedCustomer && (
-                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                    matchedCustomer.tags === "FRIEND"
-                      ? "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
-                      : matchedCustomer.tags === "VIP"
-                      ? "bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800"
-                      : matchedCustomer.tags === "STAFF"
-                      ? "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
-                      : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300"
-                  }`}>
-                    {matchedCustomer.tags === "FRIEND" && <Heart className="w-2.5 h-2.5 fill-emerald-600" />}
-                    {matchedCustomer.tags === "VIP" && <Star className="w-2.5 h-2.5 fill-purple-600" />}
-                    {matchedCustomer.tags === "STAFF" && <Briefcase className="w-2.5 h-2.5" />}
-                    {matchedCustomer.tags || "CUSTOMER"}
-                    {matchedCustomer.discountType && matchedCustomer.discountType !== "NONE" && (matchedCustomer.discountValue || 0) > 0 && (
-                      <span className="opacity-75 ml-0.5">({matchedCustomer.discountType === "PERCENTAGE" ? `${matchedCustomer.discountValue}%` : `₹${matchedCustomer.discountValue}`})</span>
-                    )}
-                  </span>
-                )}
-              </div>
-              {(customerName || customerPhone) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { setCustomerName(""); setCustomerPhone(""); setMatchedCustomer(null); }}
-                  className="h-5 text-[10px] text-slate-400 hover:text-red-500 p-0"
-                >
-                  <UserX className="h-3 w-3 mr-1" /> Clear
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Name"
-                value={customerName}
-                onChange={e => setCustomerName(e.target.value)}
-                className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm text-slate-900 dark:text-white h-11 rounded-xl placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50"
-              />
-              <Input
-                placeholder="Phone"
-                value={customerPhone}
-                onChange={e => setCustomerPhone(e.target.value)}
-                className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 shadow-sm text-slate-900 dark:text-white h-11 w-32 rounded-xl placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:ring-blue-500/50"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 p-4 shrink-0">
-          {(() => {
-            const existingOrder = activeOrders.find(o => o.tableId?._id === selectedTable && o.status === "OPEN");
-            const hasExistingItems = existingOrder && existingOrder.kots && existingOrder.kots.length > 0;
-
-            return (
-              <div className="space-y-5">
-                {hasExistingItems && (
-                  <div className="space-y-3 bg-white/50 dark:bg-slate-900/30 border border-slate-200/50 dark:border-slate-800/50 p-4 rounded-2xl shadow-sm backdrop-blur-md">
-                    <h3 className="font-extrabold text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-widest pl-1">Already Ordered</h3>
-                    <div className="space-y-1">
-                      {existingOrder.kots?.flatMap(kot =>
-                        kot.items?.map((item: any) => (
-                          <div key={item._id} className="flex justify-between items-center py-2.5 border-b border-slate-200/50 dark:border-slate-800/50 last:border-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-800 dark:text-slate-200 text-sm bg-slate-100 dark:bg-slate-800 w-6 h-6 flex items-center justify-center rounded-md">{item.quantity}</span>
-                              <div>
-                                <span className="font-semibold text-slate-900 dark:text-white text-sm">{item.menuItemId?.name || "Item"}</span>
-                                {item.isComplimentary && (
-                                  <span className="ml-1.5 text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                                    FOC
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                              item.itemStatus === 'SERVED' ? 'bg-slate-200/50 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400' :
-                              item.itemStatus === 'READY' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' :
-                              item.itemStatus === 'PREPARING' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400' :
-                              'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
-                            }`}>
-                              {item.itemStatus}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {hasExistingItems && cart.length > 0 && (
-                  <div className="border-t-2 border-dashed border-slate-200 dark:border-slate-700 my-2 pt-4">
-                    <h3 className="font-extrabold text-[11px] text-slate-500 dark:text-slate-400 uppercase tracking-widest pl-1 mb-2">New Items</h3>
-                  </div>
-                )}
-
-                {cart.length === 0 ? (
-                  !hasExistingItems && (
-                    <div className="h-full h-[100px] flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 space-y-4 py-12">
-                      <div className="h-20 w-20 bg-slate-100 dark:bg-slate-800/50 rounded-full flex items-center justify-center">
-                        <ShoppingBag className="h-10 w-10 opacity-50" />
-                      </div>
-                      <p className="text-lg font-medium text-slate-500 dark:text-slate-400">Cart is empty</p>
-                    </div>
-                  )
-                ) : (
-                  <div className="space-y-3">
-                    {cart.map(item => (
-                      <div key={item.cartId} className="flex flex-col gap-3 p-3.5 border rounded-2xl bg-white dark:bg-slate-900 border-slate-200/50 dark:border-slate-800/50 shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
-                        <div className="flex items-start gap-3">
-                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-slate-100 dark:bg-slate-800">
-                            {item.imageUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center">
-                                <UtensilsCrossed className="h-4 w-4 text-slate-300 dark:text-slate-600" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <div className="font-bold text-sm leading-tight pr-2 text-slate-900 dark:text-white">
-                                  {item.name} <span className="text-[11px] text-slate-500 font-semibold ml-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">({item.selectedVariant.name})</span>
-                                </div>
-                                {item.selectedModifiers && item.selectedModifiers.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 mt-1">
-                                    {item.selectedModifiers.map((m, mIdx) => (
-                                      <span key={mIdx} className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
-                                        +{m.name} {m.price > 0 ? `(+₹${m.price})` : ''}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="font-extrabold text-sm text-blue-600 dark:text-blue-400 shrink-0">₹{(getItemUnitPrice(item) * item.quantity).toFixed(2)}</div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <Input
-                          placeholder="Add cooking notes (e.g. no onions)"
-                          value={item.notes}
-                          onChange={(e) => updateNotes(item.cartId, e.target.value)}
-                          className="h-8 text-xs bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-600 rounded-lg focus-visible:ring-blue-500/30"
-                        />
-
-                        {/* Preset Note Pills */}
-                        <div className="flex flex-wrap gap-1">
-                          {PRESET_COOKING_NOTES.map(preset => {
-                            const isSelected = (item.notes || "").includes(preset);
-                            return (
-                              <button
-                                key={preset}
-                                type="button"
-                                onClick={() => togglePresetNote(item.cartId, preset)}
-                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all ${
-                                  isSelected
-                                    ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                                    : "bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
-                                }`}
-                              >
-                                {isSelected ? "✓ " : "+ "}{preset}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <div className="flex items-center justify-between mt-1">
-                          <div className="flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-100 dark:bg-slate-800 p-1">
-                            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 shadow-sm transition-all" onClick={() => updateQuantity(item.cartId, -1)}>
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-8 text-center text-sm font-bold text-slate-900 dark:text-white">{item.quantity}</span>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-md text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 shadow-sm transition-all" onClick={() => updateQuantity(item.cartId, 1)}>
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors" onClick={() => removeFromCart(item.cartId)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
-        </div>
-
-        {/* Sticky drawer footer: totals + FIRE button */}
-        <div className="p-4 border-t border-slate-200/50 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-950/50 space-y-4 shrink-0 backdrop-blur-md">
-          <div className="space-y-2 text-sm font-medium">
-            <div className="flex justify-between text-slate-500 dark:text-slate-400">
-              <span>Subtotal</span>
-              <span className="text-slate-700 dark:text-slate-300">₹{subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-slate-500 dark:text-slate-400">
-              <span>Taxes ({effectiveTaxPct}%)</span>
-              <span className="text-slate-700 dark:text-slate-300">₹{taxes.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between font-extrabold text-xl pt-3 border-t border-slate-200/50 dark:border-slate-800/50 mt-2 text-slate-900 dark:text-white">
-              <span>Total</span>
-              <span className="text-blue-600 dark:text-blue-400">₹{total.toFixed(2)}</span>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              className="flex-1 h-14 text-sm font-extrabold tracking-wide shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl active:scale-[0.98] transition-all duration-200"
-              disabled={cart.length === 0 || isSubmitting || isQuickReceiptSubmitting}
-              onClick={async () => {
-                await handleQuickReceipt();
-                setCartOpen(false);
-              }}
-            >
-              {isQuickReceiptSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin inline" /> : <Receipt className="mr-2 h-5 w-5 inline" />}
-              {isQuickReceiptSubmitting ? "Printing..." : "QUICK RECEIPT"}
-            </Button>
-            <Button
-              className="flex-1 h-14 text-sm font-extrabold tracking-wide shadow-[0_4px_14px_0_rgba(37,99,235,0.39)] hover:shadow-[0_6px_20px_rgba(37,99,235,0.23)] hover:bg-[rgba(37,99,235,0.9)] bg-blue-600 text-white rounded-xl active:scale-[0.98] transition-all duration-200"
-              disabled={cart.length === 0 || isSubmitting || isQuickReceiptSubmitting}
-              onClick={async () => { await placeOrder(); if (cart.length === 0) setCartOpen(false); }}
-            >
-              {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin inline" /> : null}
-              {isSubmitting ? "Firing..." : "FIRE TO KITCHEN"}
-            </Button>
-          </div>
-        </div>
-      </div>
-
+      {/* 6. Modals */}
       <ReceiptModal
         isOpen={showReceiptModal}
         onClose={() => setShowReceiptModal(false)}
         order={receiptOrder}
+        tables={tables}
+      />
+
+      <MergeTablesDialog
+        open={showMergeDialog}
+        onOpenChange={setShowMergeDialog}
+        tables={tables}
+        activeOrders={activeOrders}
+        preselectedTableId={selectedTable || undefined}
+        onMergeSuccess={() => {
+          refreshFloorAndOrders();
+        }}
+      />
+
+      <UnmergeTablesDialog
+        open={showUnmergeDialog}
+        onOpenChange={setShowUnmergeDialog}
+        primaryOrder={unmergeTargetOrder}
+        tables={tables}
+        preselectedUnmergeTableId={unmergeTargetTableId || undefined}
+        onUnmergeSuccess={() => {
+          refreshFloorAndOrders();
+          setUnmergeTargetOrder(null);
+          setUnmergeTargetTableId("");
+        }}
       />
 
       <VariantPickerDialog

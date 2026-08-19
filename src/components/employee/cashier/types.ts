@@ -27,6 +27,8 @@ export interface Order {
   _id: string;
   orderNumber?: number;
   tableId?: { tableNumber: string };
+  tableIds?: Array<{ _id?: string; tableNumber?: string; section?: string } | string>;
+  mergedIntoOrderId?: string;
   orderType: string;
   kots: { items: KotItem[] }[];
   status: string;

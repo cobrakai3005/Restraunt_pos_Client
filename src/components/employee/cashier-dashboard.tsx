@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { OrderTakingPanel } from "./order-taking-panel";
 import { CashierPickupPanel } from "./cashier-pickup-panel";
@@ -27,6 +28,7 @@ export type { DashboardProps, KotItem, Order, Mode };
 export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange }: DashboardProps) {
   const {
     orders,
+    tables,
     filteredOrders,
     searchQuery,
     setSearchQuery,
@@ -123,6 +125,10 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
     internalSetMode(newMode);
     if (onModeChange) onModeChange(newMode);
   };
+
+  useEffect(() => {
+    fetchOrders();
+  }, [mode]);
 
   if (isLoading) {
     return (
@@ -237,6 +243,7 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
             isOpen={showReceipt}
             onClose={() => setShowReceipt(false)}
             order={completedReceiptOrder || selectedOrder}
+            tables={tables}
             restaurant={(user as any)?.restaurant}
           />
         </div>

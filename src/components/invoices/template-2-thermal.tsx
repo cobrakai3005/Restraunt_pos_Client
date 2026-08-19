@@ -79,6 +79,73 @@ export function Template2Thermal({ data, restaurantName }: TemplateProps) {
           </div>
         </div>
 
+        {/* ── PAYMENT SUMMARY SECTION ── */}
+        <div className="border-t border-dashed border-black my-2" />
+        <div className="text-center font-bold text-[10px] uppercase tracking-wider py-0.5 bg-slate-100 border-y border-dotted border-black">
+          PAYMENT SUMMARY
+        </div>
+        <div className="text-[11px] space-y-1 pt-1">
+          <div className="flex justify-between font-bold">
+            <span>Grand Total:</span>
+            <span>₹{total.toFixed(2)}</span>
+          </div>
+
+          {Array.isArray(data.payments) && data.payments.length > 0 ? (
+            <div className="pt-0.5 pb-0.5 space-y-0.5 border-t border-dotted border-black/40 my-1">
+              {data.payments.map((p: any, pIdx: number) => {
+                const pMethod = String(p.method || "").toUpperCase();
+                const pAmt = Number(p.amount) || 0;
+                const isCredit = pMethod === "CREDIT" || pMethod === "DUE";
+                const label = isCredit
+                  ? "Credit / Due:"
+                  : `${pMethod === "CASH" ? "Cash" : pMethod === "UPI" ? "UPI" : pMethod === "CARD" ? "Card" : pMethod} Paid:`;
+                return (
+                  <div key={pIdx} className="flex justify-between pl-1">
+                    <span className={isCredit ? "font-bold text-amber-900" : ""}>{label}</span>
+                    <span className={isCredit ? "font-bold" : ""}>₹{pAmt.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="pt-0.5 pb-0.5 space-y-0.5 border-t border-dotted border-black/40 my-1">
+              {Number(data.paidAmount || 0) > 0 && (
+                <div className="flex justify-between pl-1">
+                  <span>Cash Paid:</span>
+                  <span>₹{Number(data.paidAmount || 0).toFixed(2)}</span>
+                </div>
+              )}
+              {Number(data.dueAmount || 0) > 0 && (
+                <div className="flex justify-between pl-1 font-bold text-amber-900">
+                  <span>Credit / Due:</span>
+                  <span>₹{Number(data.dueAmount || 0).toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="border-t border-dotted border-black/60 my-1" />
+
+          <div className="flex justify-between font-bold">
+            <span>Amount Paid:</span>
+            <span className="text-emerald-800">₹{Number(data.paidAmount !== undefined ? data.paidAmount : total).toFixed(2)}</span>
+          </div>
+
+          <div className="flex justify-between font-bold">
+            <span>Balance Due:</span>
+            <span className={Number(data.dueAmount || 0) > 0 ? "font-black text-rose-700" : ""}>
+              ₹{Number(data.dueAmount || 0).toFixed(2)}
+            </span>
+          </div>
+
+          <div className="border-t border-dashed border-black/60 my-1" />
+
+          <div className="flex justify-between font-black text-[10px] pt-0.5">
+            <span>Payment Status:</span>
+            <span className="uppercase">{data.paymentStatus || (Number(data.dueAmount || 0) > 0 ? "PARTIALLY PAID" : "PAID")}</span>
+          </div>
+        </div>
+
         <div className="text-center text-[10px] pt-2 pb-1 border-t border-dashed border-black mt-2">
           <p className="font-bold">TIP IS NOT INCLUDED</p>
           <p>THANK YOU! PLEASE VISIT AGAIN</p>
@@ -132,10 +199,31 @@ export function Template2Thermal({ data, restaurantName }: TemplateProps) {
 
         <div className="border-t border-black border-dashed my-1" />
 
-        <div className="text-[11px] space-y-0.5">
-          <div className="flex justify-between font-black text-xs">
-            <span>SETTLED:</span>
+        {/* ── STORE SETTLEMENT SUMMARY ── */}
+        <div className="text-center font-bold text-[10px] uppercase tracking-wider py-0.5 bg-slate-100 border-y border-dotted border-black">
+          PAYMENT SUMMARY
+        </div>
+        <div className="text-[10px] space-y-1 pt-1">
+          <div className="flex justify-between font-black">
+            <span>GRAND TOTAL:</span>
             <span>₹{total.toFixed(2)}</span>
+          </div>
+
+          <div className="flex justify-between font-bold">
+            <span>Amount Paid:</span>
+            <span className="text-emerald-800">₹{Number(data.paidAmount !== undefined ? data.paidAmount : total).toFixed(2)}</span>
+          </div>
+
+          <div className="flex justify-between font-bold">
+            <span>Balance Due:</span>
+            <span className={Number(data.dueAmount || 0) > 0 ? "font-black text-rose-700" : ""}>
+              ₹{Number(data.dueAmount || 0).toFixed(2)}
+            </span>
+          </div>
+
+          <div className="flex justify-between font-black text-[9px] pt-0.5">
+            <span>Payment Status:</span>
+            <span className="uppercase">{data.paymentStatus || (Number(data.dueAmount || 0) > 0 ? "PARTIALLY PAID" : "PAID")}</span>
           </div>
         </div>
 

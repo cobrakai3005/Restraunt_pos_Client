@@ -17,6 +17,7 @@ export interface CustomerContextData {
 
 export function useCashierOrders(getCustomerContext?: () => CustomerContextData) {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [tables, setTables] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -46,15 +47,19 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
     return calculateOrderFinancials(order).grandTotal;
   };
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       if (!hasLoadedOnce.current) {
         setIsLoading(true);
       }
-      const [resActive, resBilled] = await Promise.all([
+      const [resActive, resBilled, resTables] = await Promise.all([
         employeeService.getOrders({ status: "OPEN" }),
         employeeService.getOrders({ status: "BILLED" }),
+        employeeService.getTables(),
       ]);
+
+      if (resTables?.data) setTables(resTables.data);
+      else if (Array.isArray(resTables)) setTables(resTables);
 
       const getList = (res: any) =>
         Array.isArray(res)
@@ -70,7 +75,12 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
       const activeList = getList(resActive);
       const billedList = getList(resBilled);
       const allActiveOrders: Order[] = [...activeList, ...billedList].filter(
-        (o) => o.status !== "PAID" && o.status !== "CANCELLED"
+        (o) =>
+          o.status !== "PAID" &&
+          o.status !== "CANCELLED" &&
+          o.status !== "MERGED" &&
+          Array.isArray(o.kots) &&
+          o.kots.some((k: any) => Array.isArray(k.items) && k.items.length > 0)
       );
 
       setOrders(allActiveOrders);
@@ -86,7 +96,7 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
       hasLoadedOnce.current = true;
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
   const debouncedFetchOrders = useCallback(() => {
     if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
@@ -101,6 +111,8 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
     const socket = connectSocket();
     if (socket) {
       socket.on("table_status_change", debouncedFetchOrders);
+      socket.on("tables_merged", debouncedFetchOrders);
+      socket.on("tables_unmerged", debouncedFetchOrders);
       socket.on("order_billed", debouncedFetchOrders);
       socket.on("order_settled", debouncedFetchOrders);
       socket.on("item_status_update", debouncedFetchOrders);
@@ -111,6 +123,8 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
     return () => {
       if (socket) {
         socket.off("table_status_change", debouncedFetchOrders);
+        socket.off("tables_merged", debouncedFetchOrders);
+        socket.off("tables_unmerged", debouncedFetchOrders);
         socket.off("order_billed", debouncedFetchOrders);
         socket.off("order_settled", debouncedFetchOrders);
         socket.off("item_status_update", debouncedFetchOrders);
@@ -408,6 +422,7 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
 
   return {
     orders,
+    tables,
     filteredOrders,
     searchQuery,
     setSearchQuery,

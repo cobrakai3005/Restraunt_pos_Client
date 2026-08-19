@@ -17,7 +17,13 @@ export function PrintableInvoice({ invoice, restaurantName, templateId, type = '
     invoiceNumber: type === 'purchase' ? invoice.invoiceNumber : invoice._id?.slice(-6).toUpperCase() || 'N/A',
     invoiceDate: type === 'purchase' ? invoice.invoiceDate : invoice.createdAt,
     partyName: type === 'purchase' ? invoice.vendorName : (invoice.customerDetails?.name || invoice.customerName || invoice.companyName || 'Walk-in Guest'),
+    subtotal: type === 'purchase' ? invoice.subtotal : (invoice.financials?.subtotal || 0),
+    totalTax: type === 'purchase' ? invoice.taxAmount : (invoice.financials?.totalTax || 0),
     totalAmount: type === 'purchase' ? invoice.totalAmount : (invoice.financials?.grandTotal || 0),
+    payments: type === 'purchase' ? [] : (invoice.financials?.payments || invoice.payments || []),
+    paidAmount: type === 'purchase' ? invoice.totalAmount : (invoice.financials?.paidAmount !== undefined ? invoice.financials.paidAmount : invoice.paidAmount),
+    dueAmount: type === 'purchase' ? 0 : (invoice.financials?.dueAmount !== undefined ? invoice.financials.dueAmount : invoice.dueAmount),
+    paymentStatus: type === 'purchase' ? 'PAID' : (invoice.financials?.dueStatus || invoice.status || 'PAID'),
     title: type === 'purchase' ? 'Purchase Invoice' : 'Sales Invoice',
     partyTitle: type === 'purchase' ? 'Vendor Details' : 'Bill To',
     items: [] as any[]

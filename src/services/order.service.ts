@@ -42,7 +42,11 @@ export interface Order {
   restaurantId: string;
   orderType: "DINE_IN" | "TAKEAWAY";
   tableId?: any;
-  status: "OPEN" | "BILLED" | "PAID" | "CANCELLED";
+  tableIds?: any[];
+  mergedIntoOrderId?: any;
+  mergedFromOrderIds?: any[];
+  mergeAudit?: any[];
+  status: "OPEN" | "BILLED" | "PAID" | "CANCELLED" | "MERGED";
   customerDetails: {
     name: string;
     phone: string;
@@ -180,4 +184,28 @@ export const orderService = {
     });
     return response.data;
   },
+
+  checkMergeConflicts: async (restaurantId: string, tableIds: string[]) => {
+    const response = await api.post(
+      `/orders/check-merge-conflicts`,
+      { tableIds },
+      { headers: { "x-restaurant-id": restaurantId } }
+    );
+    return response.data;
+  },
+
+  mergeTables: async (restaurantId: string, data: any) => {
+    const response = await api.post(`/orders/merge-tables`, data, {
+      headers: { "x-restaurant-id": restaurantId },
+    });
+    return response.data;
+  },
+
+  unmergeTables: async (restaurantId: string, data: any) => {
+    const response = await api.post(`/orders/unmerge-tables`, data, {
+      headers: { "x-restaurant-id": restaurantId },
+    });
+    return response.data;
+  },
 };
+

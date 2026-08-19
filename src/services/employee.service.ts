@@ -142,5 +142,47 @@ export const employeeService = {
   async getAnalytics(params?: Record<string, any>) {
     const response = await apiClient.get("/analytics/dashboard", { params });
     return response.data;
-  }
+  },
+
+  // ----------------------------------------
+  // TABLE MERGE & UNMERGE (Order Module)
+  // ----------------------------------------
+  async checkMergeConflicts(tableIds: string[]) {
+    const response = await apiClient.post("/orders/check-merge-conflicts", { tableIds });
+    return response.data;
+  },
+
+  async mergeTables(data: {
+    primaryTableId: string;
+    secondaryTableIds: string[];
+    resolvedCustomerDetails?: {
+      name?: string;
+      phone?: string;
+      customerId?: string | null;
+    };
+    resolvedDiscount?: {
+      discountType?: "NONE" | "PERCENTAGE" | "FIXED" | "MANUAL";
+      discountValue?: number;
+      discountReason?: string;
+    };
+    guestCount?: number;
+  }) {
+    const response = await apiClient.post("/orders/merge-tables", data);
+    return response.data;
+  },
+
+  async unmergeTables(data: {
+    orderId: string;
+    unmergeTableId: string;
+    itemSelections?: Array<{
+      kotId: string;
+      itemId: string;
+      quantity: number;
+    }>;
+    wholeKotIds?: string[];
+    unmergedGuestCount?: number;
+  }) {
+    const response = await apiClient.post("/orders/unmerge-tables", data);
+    return response.data;
+  },
 };

@@ -27,7 +27,8 @@ export interface Transaction {
   discountAmount: number;
   totalAmount: number;
   items: TransactionItem[];
-  paymentMethod?: "Cash" | "Credit" | "UPI" | "Bank Transfer" | "Cheque" | "Others";
+  paymentMethod?: "Cash" | "Credit" | "UPI" | "Bank Transfer" | "Cheque" | "Others" | "Split" | "Card" | "Complimentary";
+  payments?: Array<{ method: string; amount: number; transactionDate?: string }>;
   bank?: string;
   referenceNumber?: string;
   description?: string;
