@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -88,7 +89,6 @@ export default function CloseRegisterPage() {
 
   // Print slip ref
   const printRef = useRef<HTMLDivElement>(null);
-  const historyPrintRef = useRef<HTMLDivElement>(null);
 
   // Authenticate user & resolve restaurant
   useEffect(() => {
@@ -123,7 +123,7 @@ export default function CloseRegisterPage() {
       toast({
         variant: "destructive",
         title: "Failed to load cash drawer",
-        description: error.message || "Please check connection",
+        description: error.response?.data?.message || error.message || "Please check connection",
       });
     } finally {
       setIsLoading(false);
@@ -205,7 +205,7 @@ export default function CloseRegisterPage() {
       fetchZReports();
       setActiveTab("reconciliation");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Failed to open register", description: error.message });
+      toast({ variant: "destructive", title: "Failed to open register", description: error.response?.data?.message || error.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -237,7 +237,7 @@ export default function CloseRegisterPage() {
       setPayoutReason("");
       await fetchDrawerData();
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Payout Failed", description: error.message });
+      toast({ variant: "destructive", title: "Payout Failed", description: error.response?.data?.message || error.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -279,7 +279,7 @@ export default function CloseRegisterPage() {
       fetchZReports();
       setActiveTab("print");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Failed to close register", description: error.message });
+      toast({ variant: "destructive", title: "Failed to close register", description: error.response?.data?.message || error.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -460,6 +460,86 @@ export default function CloseRegisterPage() {
         notes: notes || "",
       }
     : latestClosedZReport || drawerData?.drawer?.zReportData;
+
+  // Render Full Page Skeleton while loading initial drawer state
+  if (isLoading && !drawerData) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200">
+        {/* Header Skeleton */}
+        <header className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-10 w-28 rounded-xl" />
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+            <div className="space-y-1.5">
+              <Skeleton className="h-5 w-56 rounded-md" />
+              <Skeleton className="h-3.5 w-40 rounded-md" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <Skeleton className="h-10 w-10 rounded-xl" />
+            <Skeleton className="h-10 w-36 rounded-xl" />
+          </div>
+        </header>
+
+        {/* Main Content Skeleton */}
+        <main className="flex-1 p-4 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+          {/* Top 4 KPI Cards Skeleton */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+            <Skeleton className="h-24 rounded-2xl bg-slate-200/70 dark:bg-slate-900" />
+            <Skeleton className="h-24 rounded-2xl bg-slate-200/70 dark:bg-slate-900" />
+            <Skeleton className="h-24 rounded-2xl bg-slate-200/70 dark:bg-slate-900" />
+            <Skeleton className="h-24 rounded-2xl bg-slate-200/70 dark:bg-slate-900" />
+          </div>
+
+          {/* Tab Bar Skeleton */}
+          <Skeleton className="h-12 w-full rounded-2xl bg-slate-200/70 dark:bg-slate-900" />
+
+          {/* Grid Content Skeleton */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left 2 Cols: Denominations Counter Card Skeleton */}
+            <div className="lg:col-span-2 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-6 rounded-2xl space-y-6 shadow-sm">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-60 rounded-md" />
+                <Skeleton className="h-3.5 w-80 rounded-md" />
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {Array.from({ length: 6 }).map((_, idx) => (
+                  <Skeleton key={idx} className="h-24 rounded-xl bg-slate-100 dark:bg-slate-800/80" />
+                ))}
+                <Skeleton className="h-24 rounded-xl col-span-2 bg-slate-100 dark:bg-slate-800/80" />
+              </div>
+
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-32 rounded-md" />
+                <Skeleton className="h-20 w-full rounded-xl bg-slate-100 dark:bg-slate-800/80" />
+              </div>
+            </div>
+
+            {/* Right Col: Reconciliation Summary Card Skeleton */}
+            <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-6 rounded-2xl space-y-6 shadow-sm flex flex-col justify-between">
+              <div className="space-y-4">
+                <Skeleton className="h-5 w-44 rounded-md" />
+                <div className="space-y-3 py-2">
+                  <Skeleton className="h-5 w-full rounded-md" />
+                  <Skeleton className="h-5 w-full rounded-md" />
+                  <Skeleton className="h-5 w-full rounded-md" />
+                  <Skeleton className="h-6 w-full rounded-md" />
+                  <Skeleton className="h-7 w-full rounded-md" />
+                </div>
+                <Skeleton className="h-16 w-full rounded-2xl bg-slate-100 dark:bg-slate-800/80" />
+              </div>
+
+              <div className="space-y-2.5 pt-4">
+                <Skeleton className="h-12 w-full rounded-xl" />
+                <Skeleton className="h-10 w-full rounded-xl" />
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200">
