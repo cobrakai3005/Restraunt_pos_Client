@@ -71,7 +71,7 @@ apiClient.interceptors.response.use(
       localStorage.clear();
       sessionStorage.clear();
 
-      window.location.href = "/login";
+      window.location.href = "/client-login";
 
       return Promise.reject(error);
     }

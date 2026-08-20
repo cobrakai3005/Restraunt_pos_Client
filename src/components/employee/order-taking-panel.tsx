@@ -85,6 +85,11 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   const isFirstLoadRef = useRef(true);
   const toastedItemsRef = useRef<Set<string>>(new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // Debounce timer for auto-punch: waits for the user to stop typing before matching shortcode
+  const autoPunchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // When a shortcode punch opens the variant picker (e.g. "3*cc"), stores the qty multiplier
+  // so the picker's onConfirm can add the correct quantity to the cart.
+  const pickerQtyRef = useRef<number>(1);
 
   // UX: cart flash animation — pulses the FAB when a new item is added
   const [cartFlash, setCartFlash] = useState(false);
@@ -302,9 +307,17 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     });
 
     if (exactMatch) {
-      addToCart(exactMatch, undefined, [], "", qty);
-      setSearchQuery("");
-      setDebouncedSearchQuery("");
+      const hasMultipleVariants = exactMatch.variants && exactMatch.variants.length > 1;
+      const hasModifiers = exactMatch.modifierGroups && exactMatch.modifierGroups.length > 0;
+
+      if (hasMultipleVariants || hasModifiers) {
+        // Open variant/modifier picker — store qty so the confirm callback can use it
+        pickerQtyRef.current = qty;
+        setPickerMenu(exactMatch);
+      } else {
+        // Single variant, no modifiers — add directly with qty
+        addToCart(exactMatch, undefined, [], "", qty);
+      }
       return true;
     }
 
@@ -650,10 +663,27 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         searchInputRef={searchInputRef}
         searchQuery={searchQuery}
         onSearchChange={(val) => {
-          const punched = tryAutoPunch(val);
-          if (!punched) {
-            setSearchQuery(val);
+          // Always update the visible search box immediately so the user sees what they're typing
+          setSearchQuery(val);
+
+          // Cancel any pending auto-punch from the previous keystroke
+          if (autoPunchTimerRef.current) {
+            clearTimeout(autoPunchTimerRef.current);
+            autoPunchTimerRef.current = null;
           }
+
+          if (!val.trim()) return;
+
+          // Wait 600ms after the user STOPS typing before attempting an exact shortcode match.
+          // This prevents 'cc' from firing when the user intends to type 'ccc'.
+          autoPunchTimerRef.current = setTimeout(() => {
+            autoPunchTimerRef.current = null;
+            const punched = tryAutoPunch(val);
+            if (punched) {
+              setSearchQuery("");
+              setDebouncedSearchQuery("");
+            }
+          }, 600);
         }}
         onSearchKeyDown={(e) => {
           if (e.key === "Enter" && searchQuery.trim()) {
@@ -777,14 +807,21 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
       <VariantPickerDialog
         open={!!pickerMenu}
-        onOpenChange={(open) => !open && setPickerMenu(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPickerMenu(null);
+            pickerQtyRef.current = 1; // reset after close
+          }
+        }}
         itemName={pickerMenu?.name || ""}
         itemImage={pickerMenu?.imageUrl || undefined}
         variants={pickerMenu?.variants || []}
         modifierGroups={pickerMenu?.modifierGroups || []}
         onSelect={(variant, selectedModifiers, notes) => {
           if (pickerMenu) {
-            addToCart(pickerMenu, variant, selectedModifiers || [], notes || "", 1);
+            const qty = pickerQtyRef.current || 1;
+            pickerQtyRef.current = 1; // reset after use
+            addToCart(pickerMenu, variant, selectedModifiers || [], notes || "", qty);
           }
         }}
       />
