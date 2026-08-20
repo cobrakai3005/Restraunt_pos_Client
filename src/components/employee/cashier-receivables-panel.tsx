@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { employeeService } from "@/services/employee.service";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,11 +32,13 @@ import type { Order } from "./cashier-dashboard";
 interface CashierReceivablesPanelProps {
   onCollectPayment: (order: Order) => void;
   onViewHistory: (order: Order) => void;
+  onBulkSettle?: (customer: Customer, orders?: Order[]) => void;
 }
 
 export function CashierReceivablesPanel({
   onCollectPayment,
   onViewHistory,
+  onBulkSettle,
 }: CashierReceivablesPanelProps) {
   const { toast } = useToast();
 
@@ -58,18 +60,38 @@ export function CashierReceivablesPanel({
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Fetch customers list for filter dropdown
-  useEffect(() => {
-    customerService
-      .getCustomers(undefined, { isActive: true })
-      .then((res) => {
-        const list = res?.data?.customers || res?.data || res?.customers || [];
-        setCustomers(Array.isArray(list) ? list : []);
-      })
-      .catch((err) => {
-        console.error("Failed to load customer list for credit filter", err);
-      });
+  // Fetch customers list for filter dropdown & balance sync
+  const fetchCustomers = useCallback(async () => {
+    try {
+      const res = await customerService.getCustomers(undefined, { isActive: true });
+      const list = res?.data?.customers || res?.data || res?.customers || [];
+      setCustomers(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.error("Failed to load customer list for credit filter", err);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
+
+  // Map of customerId -> outstanding due orders in current view
+  const customerDueOrdersMap = useMemo(() => {
+    const map = new Map<string, Order[]>();
+    orders.forEach((o) => {
+      const cId =
+        typeof o.customerDetails?.customerId === "object"
+          ? (o.customerDetails?.customerId as any)?._id
+          : o.customerDetails?.customerId;
+      const due = Number(o.financials?.dueAmount || 0);
+      if (cId && due > 0) {
+        const existing = map.get(String(cId)) || [];
+        existing.push(o);
+        map.set(String(cId), existing);
+      }
+    });
+    return map;
+  }, [orders]);
 
   const fetchDueOrders = useCallback(async () => {
     try {
@@ -114,16 +136,21 @@ export function CashierReceivablesPanel({
   useEffect(() => {
     fetchDueOrders();
 
+    const handleUpdate = () => {
+      fetchDueOrders();
+      fetchCustomers();
+    };
+
     const socket = connectSocket();
     if (socket) {
-      socket.on("order_due_updated", fetchDueOrders);
+      socket.on("order_due_updated", handleUpdate);
     }
     return () => {
       if (socket) {
-        socket.off("order_due_updated", fetchDueOrders);
+        socket.off("order_due_updated", handleUpdate);
       }
     };
-  }, [fetchDueOrders]);
+  }, [fetchDueOrders, fetchCustomers]);
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 md:p-6 pb-16 space-y-5">
@@ -238,7 +265,10 @@ export function CashierReceivablesPanel({
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => fetchDueOrders()}
+                onClick={() => {
+                  fetchDueOrders();
+                  fetchCustomers();
+                }}
                 className="h-10 w-10 rounded-xl shrink-0"
                 title="Refresh"
               >
@@ -252,11 +282,20 @@ export function CashierReceivablesPanel({
             const selectedCustomerObj = customers.find(c => c._id === selectedCustomerId);
             const custTotalDue = (() => {
               const ordersSum = orders
-                .filter(o => o.financials?.dueStatus === "PENDING" || o.financials?.dueStatus === "PARTIAL" || Number(o.financials?.dueAmount || 0) > 0)
+                .filter(
+                  (o) =>
+                    o.financials?.dueStatus === "PENDING" ||
+                    o.financials?.dueStatus === "PARTIAL" ||
+                    Number(o.financials?.dueAmount || 0) > 0
+                )
                 .reduce((sum, o) => sum + Number(o.financials?.dueAmount || 0), 0);
 
-              if (ordersSum > 0) return ordersSum;
+              // If orders have finished loading or returned records, ordersSum is the live accurate truth
+              if (!isLoading || orders.length > 0) {
+                return ordersSum;
+              }
 
+              // Fallback during initial loading only
               if (Number(selectedCustomerObj?.outstandingDue || 0) > 0) {
                 return Number(selectedCustomerObj?.outstandingDue);
               }
@@ -265,30 +304,85 @@ export function CashierReceivablesPanel({
               }
               return ordersSum;
             })();
+
+            const isFullySettled = custTotalDue === 0;
+
             return (
-              <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200 shadow-2xs">
+              <div
+                className={`flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl border text-xs shadow-2xs transition-colors ${
+                  isFullySettled
+                    ? "bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-950 dark:text-emerald-200"
+                    : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200"
+                }`}
+              >
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <User className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <User
+                    className={`w-4 h-4 shrink-0 ${
+                      isFullySettled
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-amber-600 dark:text-amber-400"
+                    }`}
+                  />
                   <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                     <span>
-                      Viewing credit receivables for: <strong>{selectedCustomerObj?.name || "Selected Customer"}</strong> {selectedCustomerObj?.phone ? `(${selectedCustomerObj.phone})` : ""}
+                      Viewing credit receivables for:{" "}
+                      <strong>{selectedCustomerObj?.name || "Selected Customer"}</strong>{" "}
+                      {selectedCustomerObj?.phone ? `(${selectedCustomerObj.phone})` : ""}
                     </span>
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-amber-200/80 dark:bg-amber-900/70 text-amber-950 dark:text-amber-100 font-extrabold text-xs border border-amber-300 dark:border-amber-700">
-                      Total Due: <strong className="text-sm font-black text-red-600 dark:text-red-400">₹{custTotalDue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg font-extrabold text-xs border ${
+                        isFullySettled
+                          ? "bg-emerald-200/80 dark:bg-emerald-900/70 text-emerald-950 dark:text-emerald-100 border-emerald-400 dark:border-emerald-700"
+                          : "bg-amber-200/80 dark:bg-amber-900/70 text-amber-950 dark:text-amber-100 border-amber-300 dark:border-amber-700"
+                      }`}
+                    >
+                      Total Due:{" "}
+                      <strong
+                        className={`text-sm font-black ${
+                          isFullySettled
+                            ? "text-emerald-700 dark:text-emerald-300"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        ₹{custTotalDue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        {isFullySettled && " (All Settled! ✓)"}
+                      </strong>
                     </span>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedCustomerId("ALL");
-                    setPage(1);
-                  }}
-                  className="h-7 px-2.5 text-xs font-bold text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 rounded-lg shrink-0"
-                >
-                  ✕ Clear Customer Filter
-                </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {onBulkSettle && selectedCustomerObj && custTotalDue > 0 && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const customerDueOrders = orders.filter(
+                          (o) =>
+                            (o.financials?.dueStatus === "PENDING" ||
+                              o.financials?.dueStatus === "PARTIAL" ||
+                              Number(o.financials?.dueAmount || 0) > 0) &&
+                            ((typeof o.customerDetails?.customerId === "object"
+                              ? (o.customerDetails?.customerId as any)?._id
+                              : o.customerDetails?.customerId) === selectedCustomerId)
+                        );
+                        onBulkSettle(selectedCustomerObj, customerDueOrders);
+                      }}
+                      className="h-8 px-3 text-xs font-extrabold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg shadow-xs flex items-center gap-1.5 active:scale-95"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" /> Settle in One Go (₹{custTotalDue.toLocaleString("en-IN")})
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedCustomerId("ALL");
+                      setPage(1);
+                    }}
+                    className="h-7 px-2.5 text-xs font-bold text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/50 rounded-lg shrink-0"
+                  >
+                    ✕ Clear Customer Filter
+                  </Button>
+                </div>
               </div>
             );
           })()}
@@ -344,16 +438,29 @@ export function CashierReceivablesPanel({
                         <TableCell className="text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap">
                           {o.createdAt ? (
                             <>
-                              {new Date(o.createdAt).toLocaleDateString("en-IN", {
-                                day: "2-digit",
-                                month: "short",
-                              })}
+                              <div className="font-bold text-slate-900 dark:text-white">
+                                {new Date(o.createdAt).toLocaleDateString("en-IN", {
+                                  day: "2-digit",
+                                  month: "short",
+                                })}
+                              </div>
                               <div className="text-[10px] text-muted-foreground">
-                                {new Date(o.createdAt).toLocaleTimeString("en-IN", {
+                                Billed: {new Date(o.createdAt).toLocaleTimeString("en-IN", {
                                   hour: "2-digit",
                                   minute: "2-digit",
                                 })}
                               </div>
+                              {o.financials?.duePayments && o.financials.duePayments.length > 0 && (
+                                <div className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                                  Paid: {new Date(o.financials.duePayments[o.financials.duePayments.length - 1].receivedAt).toLocaleDateString("en-IN", {
+                                    day: "2-digit",
+                                    month: "short",
+                                  })} {new Date(o.financials.duePayments[o.financials.duePayments.length - 1].receivedAt).toLocaleTimeString("en-IN", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </div>
+                              )}
                             </>
                           ) : (
                             "—"
@@ -438,6 +545,30 @@ export function CashierReceivablesPanel({
                                 💰 Collect
                               </Button>
                             )}
+
+                            {(() => {
+                              const cId =
+                                typeof o.customerDetails?.customerId === "object"
+                                  ? (o.customerDetails?.customerId as any)?._id
+                                  : o.customerDetails?.customerId;
+                              const custDueList = cId ? customerDueOrdersMap.get(String(cId)) || [] : [];
+                              const custObj = cId ? customers.find((c) => c._id === String(cId)) : null;
+
+                              if (onBulkSettle && custObj && custDueList.length > 1 && dueAmt > 0) {
+                                return (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => onBulkSettle(custObj, custDueList)}
+                                    className="h-8 text-xs font-extrabold px-2.5 rounded-lg border-amber-400/80 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/50 shadow-2xs"
+                                    title={`Settle all ${custDueList.length} credit orders for ${custObj.name}`}
+                                  >
+                                    ⚡ Settle All ({custDueList.length})
+                                  </Button>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
                         </TableCell>
                       </TableRow>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Search, Edit, Trash2, AlertCircle, ChevronLeft, ChevronRight, UploadCloud } from "lucide-react";
+import { Plus, Search, Edit, Trash2, AlertCircle, ChevronLeft, ChevronRight, UploadCloud, History, Sliders } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,6 +8,9 @@ import { inventoryService, InventoryItem } from "@/services/inventory.service";
 import { AddInventoryDialog } from "./add-inventory-dialog";
 import { EditInventoryDialog } from "./edit-inventory-dialog";
 import { BulkImportDialog } from "@/components/client/bulk-import-dialog";
+import { LogWastageDialog } from "@/components/client/log-wastage-dialog";
+import { StockAdjustmentDialog } from "@/components/client/stock-adjustment-dialog";
+import { ItemHistoryDrawer } from "@/components/client/item-history-drawer";
 import { inventoryBulkImportConfig } from "@/lib/bulk-import-configs";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
@@ -23,6 +26,11 @@ export function InventoryTab() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+
+  // Wastage, Adjustment & History states
+  const [wastageItem, setWastageItem] = useState<InventoryItem | null>(null);
+  const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
 
   const fetchItems = async () => {
     try {
@@ -203,12 +211,42 @@ export function InventoryTab() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setWastageItem(item)}
+                            className="h-8 px-2 text-xs border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 gap-1"
+                            title="Log Food Wastage / Spoilage"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Wastage
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAdjustItem(item)}
+                            className="h-8 px-2 text-xs border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-900/50 dark:text-blue-400 gap-1"
+                            title="Audit / Quick Count Adjust"
+                          >
+                            <Sliders className="h-3.5 w-3.5" />
+                            Adjust
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setHistoryItem(item)}
+                            className="h-8 px-2 text-xs border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 gap-1"
+                            title="View Stock Movement Audit Trail"
+                          >
+                            <History className="h-3.5 w-3.5" />
+                            History
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => setEditItem(item)}
-                            className="text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            className="h-8 w-8 text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
@@ -216,7 +254,7 @@ export function InventoryTab() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDelete(item._id)}
-                            className="text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            className="h-8 w-8 text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -344,6 +382,32 @@ export function InventoryTab() {
         onOpenChange={setIsBulkImportOpen}
         config={inventoryBulkImportConfig}
         onSuccess={fetchItems}
+      />
+
+      {/* Log Wastage Modal */}
+      <LogWastageDialog
+        open={!!wastageItem}
+        onOpenChange={(open) => !open && setWastageItem(null)}
+        item={wastageItem}
+        restaurantId=""
+        onSuccess={fetchItems}
+      />
+
+      {/* Stock Adjustment / Physical Audit Modal */}
+      <StockAdjustmentDialog
+        open={!!adjustItem}
+        onOpenChange={(open) => !open && setAdjustItem(null)}
+        item={adjustItem}
+        restaurantId=""
+        onSuccess={fetchItems}
+      />
+
+      {/* Stock Movement Audit Trail Drawer */}
+      <ItemHistoryDrawer
+        open={!!historyItem}
+        onOpenChange={(open) => !open && setHistoryItem(null)}
+        item={historyItem}
+        restaurantId=""
       />
     </div>
   );

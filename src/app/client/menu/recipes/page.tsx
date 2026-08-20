@@ -291,7 +291,7 @@ export default function RecipesPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {r.ingredients.map((ing: any, i: number) => {
                           const name = typeof ing.inventoryItemId === "object" ? ing.inventoryItemId.name : "Item";
-                          const unit = typeof ing.inventoryItemId === "object" ? ing.inventoryItemId.unit : "";
+                          const unit = ing.unit || (typeof ing.inventoryItemId === "object" ? ing.inventoryItemId.unit : "");
                           return (
                             <Badge
                               key={i}

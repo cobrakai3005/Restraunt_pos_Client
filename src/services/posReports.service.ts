@@ -280,7 +280,14 @@ export interface CashDrawerSession {
 }
 
 export interface CurrentDrawerResponse {
+  restaurant?: {
+    name?: string;
+    address?: string;
+    phone?: string;
+    gstin?: string;
+  };
   drawer: CashDrawerSession;
+  lastClosedDrawer?: CashDrawerSession | null;
   liveMetrics: {
     openingCash: number;
     cashSales: number;

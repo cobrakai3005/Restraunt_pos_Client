@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { Clock, CheckCircle2, Flame, Loader2, Eye, AlertCircle, ChefHat, UserCheck, Menu } from "lucide-react";
+import { Clock, CheckCircle2, Flame, Loader2, Eye, AlertCircle, ChefHat, UserCheck, Menu, Trash2 } from "lucide-react";
 import { User } from "@/services/auth.service";
 import { employeeService } from "@/services/employee.service";
+import { inventoryService, InventoryItem } from "@/services/inventory.service";
+import { LogWastageDialog } from "@/components/client/log-wastage-dialog";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 interface DashboardProps {
   user: User;
@@ -78,6 +81,9 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
   const [filterUrgency, setFilterUrgency] = useState<"ALL" | "URGENT" | "COOKING" | "PENDING">("ALL");
   const [selectedStation, setSelectedStation] = useState<string>((user as any)?.station || "ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [inventoryList, setInventoryList] = useState<InventoryItem[]>([]);
+  const [isWastageDialogOpen, setIsWastageDialogOpen] = useState(false);
+  const [selectedWastageItem, setSelectedWastageItem] = useState<InventoryItem | null>(null);
   const { toast } = useToast();
 
   const fetchActiveOrders = async () => {
@@ -271,6 +277,25 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
               ⚡ Dense
             </button>
           </div>
+
+          {/* Quick Log Wastage Button for Kitchen */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const res = await inventoryService.getInventoryItems();
+                setInventoryList(res.data || []);
+                setIsWastageDialogOpen(true);
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            className="h-8 md:h-9 gap-1.5 border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 bg-white dark:bg-slate-950 text-xs font-bold rounded-xl shadow-sm"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Log Kitchen Waste
+          </Button>
         </div>
       </div>
 
@@ -659,6 +684,55 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Chef Quick Raw Item Selector */}
+      <Dialog open={isWastageDialogOpen && !selectedWastageItem} onOpenChange={setIsWastageDialogOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-5 h-5" />
+              Select Wasted Raw Material
+            </DialogTitle>
+            <DialogDescription>
+              Choose the kitchen raw ingredient that was spoiled, burnt, or dropped.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <SearchableSelect
+              options={inventoryList.map((item) => ({
+                value: item._id,
+                label: item.name,
+                subLabel: `Current Stock: ${item.currentStock} ${item.unit} • ₹${item.costPerUnit}/${item.unit}`,
+                badge: `${item.currentStock} ${item.unit}`,
+              }))}
+              value=""
+              onChange={(id) => {
+                const found = inventoryList.find(i => i._id === id);
+                if (found) {
+                  setSelectedWastageItem(found);
+                  setIsWastageDialogOpen(false);
+                }
+              }}
+              placeholder="Search & select raw material (e.g. Milk, Paneer)..."
+              searchPlaceholder="Type to search kitchen ingredients..."
+              className="h-11 text-sm font-medium"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Log Wastage Modal */}
+      <LogWastageDialog
+        open={!!selectedWastageItem}
+        onOpenChange={(open) => !open && setSelectedWastageItem(null)}
+        item={selectedWastageItem}
+        restaurantId=""
+        onSuccess={() => {
+          setSelectedWastageItem(null);
+          toast({ title: "Recorded", description: "Kitchen wastage recorded and stock updated." });
+        }}
+      />
     </div>
   );
 }

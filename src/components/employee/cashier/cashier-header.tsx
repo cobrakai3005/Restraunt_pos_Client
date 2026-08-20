@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Calculator, Menu } from "lucide-react";
 import { Mode, TABS } from "./types";
@@ -21,7 +22,16 @@ export function CashierHeader({
   onOpenDrawer,
   onOpenZReport,
 }: CashierHeaderProps) {
+  const router = useRouter();
   const activeTab = TABS.find((t) => t.id === mode) || TABS[0];
+
+  const handleZReportClick = () => {
+    if (onOpenZReport) {
+      onOpenZReport();
+    } else {
+      router.push("/pos/register/close");
+    }
+  };
 
   return (
     <div className="shrink-0 z-20 px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -50,18 +60,16 @@ export function CashierHeader({
 
       <div className="flex items-center gap-2 flex-wrap">
         {/* Day-End / Z-Report Action Button */}
-        {onOpenZReport && (
-          <Button
-            size="sm"
-            onClick={onOpenZReport}
-            className="h-11 rounded-xl px-4 text-xs font-black bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-black hover:to-slate-800 text-white dark:from-slate-800 dark:to-slate-700 dark:hover:from-slate-700 dark:hover:to-slate-600 border border-slate-700 dark:border-slate-600 shadow-md flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
-            title="Open Cash Drawer & Day-End Z-Report Reconciliation"
-          >
-            <Calculator className="h-4 w-4 text-amber-400" />
-            <span className="hidden sm:inline">End Day / Z-Report</span>
-            <span className="sm:hidden">Z-Report</span>
-          </Button>
-        )}
+        <Button
+          size="sm"
+          onClick={handleZReportClick}
+          className="h-11 rounded-xl px-4 text-xs font-black bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-black hover:to-slate-800 text-white dark:from-slate-800 dark:to-slate-700 dark:hover:from-slate-700 dark:hover:to-slate-600 border border-slate-700 dark:border-slate-600 shadow-md flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
+          title="Open Cash Drawer & Day-End Z-Report Reconciliation"
+        >
+          <Calculator className="h-4 w-4 text-amber-400" />
+          <span className="hidden sm:inline">End Day / Z-Report</span>
+          <span className="sm:hidden">Z-Report</span>
+        </Button>
 
         {/* Segmented control */}
         <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/90 p-1.5 shadow-sm backdrop-blur-sm transition-colors dark:border-slate-800 dark:bg-slate-950/80 dark:shadow-inner">

@@ -24,6 +24,7 @@ interface CashierSettlementDrawerProps {
   onUnlinkCustomer: () => void;
   onApplyCustomerDiscount: (cust: Customer) => void;
   onOpenCreateCustomerDialog: () => void;
+  onBulkSettle?: (cust: Customer) => void;
   // Discount props
   discountAmount: string;
   setDiscountAmount: (val: string) => void;
@@ -60,6 +61,7 @@ export function CashierSettlementDrawer({
   onUnlinkCustomer,
   onApplyCustomerDiscount,
   onOpenCreateCustomerDialog,
+  onBulkSettle,
   discountAmount,
   setDiscountAmount,
   isSavingDiscount,
@@ -197,6 +199,7 @@ export function CashierSettlementDrawer({
               onUnlinkCustomer={onUnlinkCustomer}
               onApplyCustomerDiscount={onApplyCustomerDiscount}
               onOpenCreateCustomerDialog={onOpenCreateCustomerDialog}
+              onBulkSettle={onBulkSettle}
             />
           </div>
         </div>

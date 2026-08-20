@@ -258,7 +258,8 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
       }
       await fetchOrders();
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Billing Error", description: error.message });
+      const msg = error.response?.data?.message || error.message || "Failed to generate bill";
+      toast({ variant: "destructive", title: "Billing Error", description: msg });
     } finally {
       setIsProcessing(false);
     }
@@ -427,7 +428,8 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
       setSelectedOrder(null);
       await fetchOrders();
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Quick Cash Error", description: error.message });
+      const msg = error.response?.data?.message || error.message || "Failed to process quick cash";
+      toast({ variant: "destructive", title: "Quick Cash Error", description: msg });
     } finally {
       setIsProcessing(false);
     }
@@ -445,10 +447,11 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
       });
       await fetchOrders();
     } catch (error: any) {
+      const msg = error.response?.data?.message || error.message || "Failed to re-open order";
       toast({
         variant: "destructive",
         title: "Re-open Error",
-        description: error.message || "Failed to re-open order",
+        description: msg,
       });
     } finally {
       setIsProcessing(false);

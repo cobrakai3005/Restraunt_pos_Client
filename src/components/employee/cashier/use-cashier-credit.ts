@@ -35,6 +35,12 @@ export function useCashierCredit(
   const [creditPaymentNotes, setCreditPaymentNotes] = useState<string>("");
   const [isSubmittingCreditPayment, setIsSubmittingCreditPayment] = useState(false);
 
+  // Bulk Settle All Dues Dialog state
+  const [showBulkSettleDialog, setShowBulkSettleDialog] = useState(false);
+  const [bulkSettleCustomer, setBulkSettleCustomer] = useState<Customer | null>(null);
+  const [bulkSettleOrders, setBulkSettleOrders] = useState<Order[]>([]);
+  const [isSubmittingBulkSettle, setIsSubmittingBulkSettle] = useState(false);
+
   // Discount Tab state
   const [discountAmount, setDiscountAmount] = useState("");
   const [isSavingDiscount, setIsSavingDiscount] = useState(false);
@@ -246,6 +252,63 @@ export function useCashierCredit(
     }
   };
 
+  const handleOpenBulkSettle = (customer: Customer, orders?: Order[]) => {
+    setBulkSettleCustomer(customer);
+    if (orders && orders.length > 0) {
+      setBulkSettleOrders(orders);
+    } else {
+      // If orders not directly provided, fetch customer due summary
+      employeeService
+        .getCustomerDueSummary(customer._id)
+        .then((res) => {
+          if (res?.data?.orders) {
+            setBulkSettleOrders(res.data.orders);
+          }
+        })
+        .catch(() => {});
+    }
+    setShowBulkSettleDialog(true);
+  };
+
+  const handleConfirmBulkSettle = async (payload: {
+    customerId: string;
+    amount?: number;
+    method?: "CASH" | "UPI" | "CARD" | "OTHER";
+    payments?: Array<{ amount: number; method: "CASH" | "UPI" | "CARD" | "OTHER" }>;
+    notes?: string;
+  }) => {
+    try {
+      setIsSubmittingBulkSettle(true);
+      const res = await employeeService.bulkSettleDues(payload);
+
+      const totalSettled = res?.data?.totalSettled || payload.amount || 0;
+      const remainingDue = res?.data?.remainingDue ?? 0;
+
+      toast({
+        title: "Bulk Settlement Completed! 💰",
+        description: `Settled ₹${Number(totalSettled).toLocaleString("en-IN", {
+          minimumFractionDigits: 2,
+        })} across ${res?.data?.updatedOrdersCount || "multiple"} orders. Remaining customer due: ₹${Number(
+          remainingDue
+        ).toLocaleString("en-IN", { minimumFractionDigits: 2 })}.`,
+      });
+
+      setShowBulkSettleDialog(false);
+      setBulkSettleCustomer(null);
+      setBulkSettleOrders([]);
+      await fetchOrders();
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Bulk Settlement Error",
+        description:
+          error.response?.data?.message || error.message || "Failed to complete bulk settlement.",
+      });
+    } finally {
+      setIsSubmittingBulkSettle(false);
+    }
+  };
+
   const handleUpdateCustomer = async () => {
     if (!selectedOrder) return;
     if (selectedOrder.status === "BILLED" || selectedOrder.status === "PAID") {
@@ -278,7 +341,8 @@ export function useCashierCredit(
       await fetchOrders();
       setBillingTab("bill");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Save Error", description: error.message });
+      const msg = error.response?.data?.message || error.message || "Failed to save customer";
+      toast({ variant: "destructive", title: "Save Error", description: msg });
     } finally {
       setIsSavingCustomer(false);
     }
@@ -300,7 +364,8 @@ export function useCashierCredit(
       await fetchOrders();
       setBillingTab("bill");
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+      const msg = e.response?.data?.message || e.message || "Failed to unlink customer";
+      toast({ variant: "destructive", title: "Error", description: msg });
     } finally {
       setIsSavingCustomer(false);
     }
@@ -356,7 +421,8 @@ export function useCashierCredit(
       await fetchOrders();
       setBillingTab("bill");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Discount Error", description: error.message });
+      const msg = error.response?.data?.message || error.message || "Failed to apply discount";
+      toast({ variant: "destructive", title: "Discount Error", description: msg });
     } finally {
       setIsSavingDiscount(false);
     }
@@ -393,7 +459,8 @@ export function useCashierCredit(
       await fetchOrders();
       setBillingTab("bill");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Save Error", description: error.message });
+      const msg = error.response?.data?.message || error.message || "Failed to update discount";
+      toast({ variant: "destructive", title: "Save Error", description: msg });
     } finally {
       setIsSavingDiscount(false);
     }
@@ -432,6 +499,16 @@ export function useCashierCredit(
     creditPaymentNotes,
     setCreditPaymentNotes,
     isSubmittingCreditPayment,
+    // Bulk Settle
+    showBulkSettleDialog,
+    setShowBulkSettleDialog,
+    bulkSettleCustomer,
+    setBulkSettleCustomer,
+    bulkSettleOrders,
+    setBulkSettleOrders,
+    isSubmittingBulkSettle,
+    handleOpenBulkSettle,
+    handleConfirmBulkSettle,
     discountAmount,
     setDiscountAmount,
     isSavingDiscount,

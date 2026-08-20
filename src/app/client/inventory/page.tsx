@@ -27,9 +27,14 @@ import { clientService } from "@/services/client.service";
 import { inventoryService, InventoryItem } from "@/services/inventory.service";
 import { AddInventoryDialog } from "@/components/client/add-inventory-dialog";
 import { EditInventoryDialog } from "@/components/client/edit-inventory-dialog";
+import { CreateTransactionModal } from "@/components/client/create-transaction-modal";
 import { BulkImportDialog } from "@/components/client/bulk-import-dialog";
+import { LogWastageDialog } from "@/components/client/log-wastage-dialog";
+import { StockAdjustmentDialog } from "@/components/client/stock-adjustment-dialog";
+import { ItemHistoryDrawer } from "@/components/client/item-history-drawer";
 import { inventoryBulkImportConfig } from "@/lib/bulk-import-configs";
 import { toast } from "@/components/ui/use-toast";
+import { History, Sliders } from "lucide-react";
 
 interface Restaurant {
   _id: string;
@@ -47,7 +52,13 @@ export default function ClientInventoryPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+
+  // Wastage, Adjustment & History states
+  const [wastageItem, setWastageItem] = useState<InventoryItem | null>(null);
+  const [adjustItem, setAdjustItem] = useState<InventoryItem | null>(null);
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
 
   // Search + Pagination State
   const [search, setSearch] = useState("");
@@ -238,38 +249,17 @@ export default function ClientInventoryPage() {
 
   return (
     <div className="flex-1 space-y-6 p-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {/* Top Header Row: Title & Action Buttons */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Inventory Management</h2>
-          <p className="text-muted-foreground mt-1">
-            Manage ingredients and products across all your restaurants.
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Inventory Management</h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Manage ingredients, stocks, and purchases across your restaurants.
           </p>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          <div className="relative w-full sm:w-56">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search items..."
-              value={search}
-              onChange={e => handleSearchChange(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select 
-            value={selectedRestaurantId} 
-            onValueChange={setSelectedRestaurantId}
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Select a restaurant" />
-            </SelectTrigger>
-            <SelectContent>
-              {restaurants.map(r => (
-                <SelectItem key={r._id} value={r._id}>{r.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
+        {/* Action Buttons with auto-wrap */}
+        <div className="flex flex-wrap items-center gap-2.5">
           <Button 
             variant="outline" 
             onClick={handleExportLowStock} 
@@ -279,14 +269,62 @@ export default function ClientInventoryPage() {
             <Download className="h-4 w-4" />
             {isExporting ? "Exporting..." : "Export Low Stock"}
           </Button>
-          <Button variant="outline" onClick={() => setIsBulkImportOpen(true)} className="gap-2" disabled={!selectedRestaurantId}>
+
+          <Button 
+            variant="outline" 
+            onClick={() => setIsBulkImportOpen(true)} 
+            className="gap-2" 
+            disabled={!selectedRestaurantId}
+          >
             <UploadCloud className="h-4 w-4" />
             Bulk Import
           </Button>
-          <Button onClick={() => setIsAddDialogOpen(true)} className="gap-2">
+
+          <Button 
+            onClick={() => setIsPurchaseModalOpen(true)} 
+            className="gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+            disabled={!selectedRestaurantId}
+          >
+            <Plus className="h-4 w-4" />
+            Add Purchase
+          </Button>
+
+          <Button 
+            onClick={() => setIsAddDialogOpen(true)} 
+            className="gap-2 shadow-sm"
+          >
             <Plus className="h-4 w-4" />
             Create Product
           </Button>
+        </div>
+      </div>
+
+      {/* Filter Toolbar Row: Search & Restaurant Selector */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Search items by name..."
+            value={search}
+            onChange={e => handleSearchChange(e.target.value)}
+            className="pl-9 bg-white dark:bg-slate-900"
+          />
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Select 
+            value={selectedRestaurantId} 
+            onValueChange={setSelectedRestaurantId}
+          >
+            <SelectTrigger className="w-full sm:w-[240px] bg-white dark:bg-slate-900 font-medium">
+              <SelectValue placeholder="Select a restaurant" />
+            </SelectTrigger>
+            <SelectContent>
+              {restaurants.map(r => (
+                <SelectItem key={r._id} value={r._id}>{r.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -349,19 +387,52 @@ export default function ClientInventoryPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
                           <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => handleEdit(item)}
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setWastageItem(item)}
+                            className="h-8 px-2 text-xs border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:text-red-400 gap-1"
+                            title="Log Food Wastage / Spoilage"
                           >
-                            <Edit className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Wastage
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setAdjustItem(item)}
+                            className="h-8 px-2 text-xs border-blue-200 text-blue-600 hover:bg-blue-50 dark:border-blue-900/50 dark:text-blue-400 gap-1"
+                            title="Audit / Quick Count Adjust"
+                          >
+                            <Sliders className="h-3.5 w-3.5" />
+                            Adjust
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setHistoryItem(item)}
+                            className="h-8 px-2 text-xs border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 gap-1"
+                            title="View Stock Movement Audit Trail"
+                          >
+                            <History className="h-3.5 w-3.5" />
+                            History
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            className="h-8 w-8"
+                            onClick={() => handleEdit(item)}
+                            title="Edit Product"
+                          >
+                            <Edit className="h-4 w-4 text-slate-500" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
                             onClick={() => handleDelete(item)}
+                            title="Delete Product"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -417,6 +488,49 @@ export default function ClientInventoryPage() {
         onSuccess={() => {
           if (selectedRestaurantId) fetchInventory(selectedRestaurantId, page, search);
         }}
+      />
+
+      {isPurchaseModalOpen && (
+        <CreateTransactionModal
+          isOpen={isPurchaseModalOpen}
+          onClose={() => setIsPurchaseModalOpen(false)}
+          restaurantId={selectedRestaurantId}
+          defaultTab="PURCHASE"
+          allowedTypes={["PURCHASE"]}
+          onSuccess={() => {
+            if (selectedRestaurantId) fetchInventory(selectedRestaurantId, page, search);
+          }}
+        />
+      )}
+
+      {/* Log Wastage Modal */}
+      <LogWastageDialog
+        open={!!wastageItem}
+        onOpenChange={(open) => !open && setWastageItem(null)}
+        item={wastageItem}
+        restaurantId={selectedRestaurantId}
+        onSuccess={() => {
+          if (selectedRestaurantId) fetchInventory(selectedRestaurantId, page, search);
+        }}
+      />
+
+      {/* Stock Adjustment / Physical Audit Modal */}
+      <StockAdjustmentDialog
+        open={!!adjustItem}
+        onOpenChange={(open) => !open && setAdjustItem(null)}
+        item={adjustItem}
+        restaurantId={selectedRestaurantId}
+        onSuccess={() => {
+          if (selectedRestaurantId) fetchInventory(selectedRestaurantId, page, search);
+        }}
+      />
+
+      {/* Stock Movement Audit Trail Drawer */}
+      <ItemHistoryDrawer
+        open={!!historyItem}
+        onOpenChange={(open) => !open && setHistoryItem(null)}
+        item={historyItem}
+        restaurantId={selectedRestaurantId}
       />
     </div>
   );

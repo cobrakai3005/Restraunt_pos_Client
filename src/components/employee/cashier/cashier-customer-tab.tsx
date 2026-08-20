@@ -34,6 +34,7 @@ interface CashierCustomerTabProps {
   onUnlinkCustomer: () => void;
   onApplyCustomerDiscount: (cust: Customer) => void;
   onOpenCreateCustomerDialog: () => void;
+  onBulkSettle?: (cust: Customer) => void;
 }
 
 export function CashierCustomerTab({
@@ -43,6 +44,7 @@ export function CashierCustomerTab({
   custName,
   setCustName,
   matchedCustomer,
+  setMatchedCustomer,
   isSearchingCustomer,
   isSavingCustomer,
   isSavingDiscount,
@@ -50,6 +52,7 @@ export function CashierCustomerTab({
   onUnlinkCustomer,
   onApplyCustomerDiscount,
   onOpenCreateCustomerDialog,
+  onBulkSettle,
 }: CashierCustomerTabProps) {
   const isCustomerLocked = selectedOrder.status === "BILLED" || selectedOrder.status === "PAID";
 
@@ -201,15 +204,27 @@ export function CashierCustomerTab({
                   </div>
                 </div>
 
-                {hasDues ? (
-                  <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full border border-amber-300 bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 shrink-0">
-                    {matchedCustomer.dueOrdersCount ? `${matchedCustomer.dueOrdersCount} Unpaid Orders` : "Dues Pending"}
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full border border-emerald-300 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 shrink-0 flex items-center gap-1">
-                    <Check className="w-3 h-3 text-emerald-600" /> No Dues
-                  </span>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {onBulkSettle && hasDues && (
+                    <Button
+                      size="sm"
+                      type="button"
+                      onClick={() => onBulkSettle(matchedCustomer)}
+                      className="h-7 px-2.5 text-[11px] font-black bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg shadow-xs flex items-center gap-1 active:scale-95"
+                    >
+                      <Sparkles className="w-3 h-3" /> Settle All
+                    </Button>
+                  )}
+                  {hasDues ? (
+                    <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full border border-amber-300 bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                      {matchedCustomer.dueOrdersCount ? `${matchedCustomer.dueOrdersCount} Unpaid Orders` : "Dues Pending"}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full border border-emerald-300 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-600" /> No Dues
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })()}

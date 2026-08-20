@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { OrderTakingPanel } from "./order-taking-panel";
 import { CashierPickupPanel } from "./cashier-pickup-panel";
@@ -21,12 +22,13 @@ import {
   CashierSplitPaymentDialog,
   CashierReceiveCreditDialog,
   CashierDueHistoryDialog,
-  ZReportDialog,
+  BulkSettleDialog,
 } from "./cashier";
 
 export type { DashboardProps, KotItem, Order, Mode };
 
 export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange }: DashboardProps) {
+  const router = useRouter();
   const {
     orders,
     tables,
@@ -94,6 +96,14 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
     creditPaymentNotes,
     setCreditPaymentNotes,
     isSubmittingCreditPayment,
+    // Bulk Settle
+    showBulkSettleDialog,
+    setShowBulkSettleDialog,
+    bulkSettleCustomer,
+    bulkSettleOrders,
+    isSubmittingBulkSettle,
+    handleOpenBulkSettle,
+    handleConfirmBulkSettle,
     // Discount Tab
     discountAmount,
     setDiscountAmount,
@@ -120,8 +130,6 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
     handleApplyCustomerDiscount,
     handleUpdateDiscount,
   } = useCashierDashboard();
-
-  const [showZReportDialog, setShowZReportDialog] = useState(false);
 
   const mode = currentMode !== undefined ? currentMode : internalMode;
   const setMode = (newMode: Mode) => {
@@ -158,7 +166,7 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
         readyItemCount={readyItemCount}
         pendingCount={pendingCount}
         onOpenDrawer={onOpenDrawer}
-        onOpenZReport={() => setShowZReportDialog(true)}
+        onOpenZReport={() => router.push("/pos/register/close")}
       />
 
       {/* Mode Content */}
@@ -175,6 +183,7 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
           <CashierReceivablesPanel
             onCollectPayment={handleOpenReceiveCredit}
             onViewHistory={(ord) => setSelectedOrderForHistory(ord)}
+            onBulkSettle={handleOpenBulkSettle}
           />
         </div>
       ) : mode === "reports" ? (
@@ -216,6 +225,7 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
             onUnlinkCustomer={handleUnlinkCustomer}
             onApplyCustomerDiscount={handleApplyCustomerDiscount}
             onOpenCreateCustomerDialog={() => setShowCreateCustomerDialog(true)}
+            onBulkSettle={handleOpenBulkSettle}
             discountAmount={discountAmount}
             setDiscountAmount={setDiscountAmount}
             isSavingDiscount={isSavingDiscount}
@@ -305,6 +315,16 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
         onCollectCreditPayment={handleCollectCreditPayment}
       />
 
+      {/* ── Bulk Settle All Dues Dialog ── */}
+      <BulkSettleDialog
+        isOpen={showBulkSettleDialog}
+        onOpenChange={setShowBulkSettleDialog}
+        customer={bulkSettleCustomer}
+        dueOrders={bulkSettleOrders}
+        isSubmitting={isSubmittingBulkSettle}
+        onConfirmBulkSettle={handleConfirmBulkSettle}
+      />
+
       {/* ── Credit Payment History Dialog ── */}
       <CashierDueHistoryDialog
         order={selectedOrderForHistory}
@@ -336,21 +356,6 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
         }}
         item={complimentaryItem}
         onConfirm={handleToggleComplimentary}
-      />
-
-      {/* ── Day-End / Z-Report Reconciliation Dialog ── */}
-      <ZReportDialog
-        open={showZReportDialog}
-        onOpenChange={setShowZReportDialog}
-        restaurantId={restaurantId}
-        userRole={user.role}
-        userName={user.contactName || user.username || "Cashier"}
-        restaurantName={
-          (typeof user.restaurantId === "object" ? (user.restaurantId as any)?.name : null) ||
-          (orders[0] as any)?.restaurant?.name ||
-          (orders[0] as any)?.restaurantId?.name ||
-          ""
-        }
       />
     </div>
   );

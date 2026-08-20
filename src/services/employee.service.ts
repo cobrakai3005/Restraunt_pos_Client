@@ -129,6 +129,17 @@ export const employeeService = {
     return response.data;
   },
 
+  async bulkSettleDues(data: {
+    customerId: string;
+    amount?: number;
+    method?: "CASH" | "UPI" | "CARD" | "OTHER";
+    payments?: Array<{ amount: number; method: "CASH" | "UPI" | "CARD" | "OTHER" }>;
+    notes?: string;
+  }) {
+    const response = await apiClient.post("/orders/bulk-settle-dues", data);
+    return response.data;
+  },
+
   async getEmployees() {
     try {
       const response = await apiClient.get("/client/employees");

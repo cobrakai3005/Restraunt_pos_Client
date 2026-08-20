@@ -3,6 +3,7 @@ import { apiClient } from "@/lib/api";
 export interface RecipeIngredient {
   inventoryItemId: any; // Can be string or populated object
   quantityUsed: number;
+  unit?: string;
 }
 
 export interface Recipe {

@@ -415,35 +415,11 @@ export function CreateTransactionModal({ isOpen, onClose, restaurantId, onSucces
         status: (isSimpleTransaction || formData.paidAmount >= totalAmount ? "PAID" : (formData.paidAmount > 0 ? "PARTIAL" : "UNPAID")) as "PAID" | "PARTIAL" | "UNPAID",
         isExpense: isJournal ? formData.isExpense : ["PURCHASE", "PAYMENT"].includes(normalizedType),
         transactionDate: formData.transactionDate,
-        items: items.filter(i => i.productId !== ""),
+        items: items.filter(i => i.productId !== "").map(i => ({
+          ...i,
+          productModel: normalizedType === "PURCHASE" ? "InventoryItem" : (isSalesType ? "MenuItem" : "InventoryItem"),
+        })),
       } as Partial<Transaction>;
-
-      /* Purchase uses the generic /transactions route so it records an entry without changing stock.
-      if (type === "PURCHASE" && !initialData) {
-        const selectedVendor = vendors.find(vendor => vendor._id === formData.companyId);
-        await purchaseService.createPurchase({
-          restaurantId: selectedPurchaseRestaurantId,
-          vendorName: selectedVendor?.name || formData.companyId,
-          invoiceNumber: formData.referenceNumber.trim(),
-          items: items.filter(item => item.productId).map(item => ({
-            inventoryItemId: item.productId,
-            quantity: Number(item.quantity),
-            ratePerUnit: Number(item.pricePerUnit),
-            totalAmount: Number(item.amount),
-          })),
-          subtotal: calculatedSubtotal,
-          taxAmount: Number(formData.taxAmount) || 0,
-          totalAmount,
-          paidAmount: Number(formData.paidAmount) || 0,
-          paymentMethod: formData.paymentMethod as "Cash" | "Credit" | "UPI" | "Bank Transfer" | "Cheque" | "Others",
-          invoiceDate: formData.transactionDate,
-        }, selectedPurchaseRestaurantId);
-        toast({ title: "Purchase created", description: "Purchase invoice created and inventory stock increased." });
-        onClose();
-        onSuccess();
-        return;
-      }
-      */
 
       if (initialData) {
         await transactionService.updateTransaction(initialData._id, payload, transactionRestaurantId || "");

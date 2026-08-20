@@ -641,7 +641,7 @@ function EmployeeLoginForm() {
                 Are you a Restaurant Owner or Franchise Admin?
               </p>
               <Link
-                href="/client-login"
+                href="/login"
                 className="inline-flex items-center justify-center gap-1.5 text-xs font-extrabold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:underline transition-colors"
               >
                 <ShieldCheck className="w-4 h-4" /> Go to Client &amp; Admin Portal <ArrowRight className="w-3.5 h-3.5" />
