@@ -9,7 +9,8 @@ import { Order } from "./types";
 export function useCashierCredit(
   selectedOrder: Order | null,
   setSelectedOrder: (order: Order | null) => void,
-  fetchOrders: () => Promise<void>
+  fetchOrders: () => Promise<void>,
+  onReceiptTrigger?: (order: Order) => void
 ) {
   const { toast } = useToast();
 
@@ -226,6 +227,16 @@ export function useCashierCredit(
       setIsSubmittingCreditPayment(true);
       const res = await employeeService.addDuePayment(creditPaymentOrder._id, payload);
 
+      const updatedOrder = res?.data?.order || {
+        ...creditPaymentOrder,
+        financials: {
+          ...creditPaymentOrder.financials,
+          paidAmount: (creditPaymentOrder.financials?.paidAmount || 0) + totalAmt,
+          dueAmount: Math.max(0, remainingDue - totalAmt),
+          dueStatus: remainingDue - totalAmt <= 0 ? "PAID" : "PARTIAL",
+        },
+      };
+
       toast({
         title: "Credit Payment Received! 💰",
         description: `Collected ₹${totalAmt.toFixed(2)}. Remaining credit: ₹${Math.max(
@@ -236,10 +247,14 @@ export function useCashierCredit(
 
       setShowReceiveCreditDialog(false);
       setCreditPaymentOrder(null);
-      if (selectedOrder && selectedOrder._id === creditPaymentOrder._id && res?.data?.order) {
-        setSelectedOrder(res.data.order);
+      if (selectedOrder && selectedOrder._id === creditPaymentOrder._id) {
+        setSelectedOrder(updatedOrder);
       }
       await fetchOrders();
+
+      if (onReceiptTrigger) {
+        onReceiptTrigger(updatedOrder);
+      }
     } catch (error: any) {
       toast({
         variant: "destructive",

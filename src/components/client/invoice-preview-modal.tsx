@@ -275,7 +275,13 @@ export function InvoicePreviewModal({
                 {restaurantDetails?.contact?.phone && <p className="text-[10px] text-slate-700">TEL: {restaurantDetails.contact.phone}</p>}
                 {restaurantDetails?.compliance?.gstNumber && <p className="text-[10px] text-slate-700">GSTIN: {restaurantDetails.compliance.gstNumber}</p>}
                 <div className="inline-block border border-black px-2 py-0.5 mt-1 font-extrabold text-[9px] tracking-wider uppercase bg-white text-black">
-                  *** CUSTOMER COPY (TAX INVOICE) ***
+                  {transaction.type === "RECEIPT"
+                    ? "*** PAYMENT RECEIPT VOUCHER ***"
+                    : transaction.type === "PAYMENT"
+                    ? "*** PAYMENT / EXPENSE VOUCHER ***"
+                    : transaction.type === "PURCHASE"
+                    ? "*** PURCHASE BILL ***"
+                    : "*** CUSTOMER COPY (TAX INVOICE) ***"}
                 </div>
               </div>
 
@@ -285,10 +291,14 @@ export function InvoicePreviewModal({
               <div className="text-[11px] space-y-0.5">
                 <div className="flex justify-between">
                   <span>DATE: {format(txDate, "dd/MM/yyyy HH:mm")}</span>
-                  <span className="font-bold">INVOICE: #{invoiceNumber}</span>
+                  <span className="font-bold">
+                    {transaction.type === "RECEIPT" ? "RECEIPT:" : transaction.type === "PURCHASE" ? "BILL:" : "INVOICE:"} #{invoiceNumber}
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="truncate pr-1">BILL TO: {customerName}</span>
+                  <span className="truncate pr-1">
+                    {transaction.type === "PURCHASE" || transaction.type === "PAYMENT" ? "PAID TO:" : "BILL TO:"} {customerName}
+                  </span>
                 </div>
                 {transaction.referenceNumber && (
                   <div className="flex justify-between">
@@ -304,15 +314,21 @@ export function InvoicePreviewModal({
               <div className="text-[11px]">
                 <div className="flex justify-between font-bold pb-1 border-b border-dotted border-black mb-1">
                   <span className="w-8">QTY</span>
-                  <span className="flex-1">ITEM</span>
+                  <span className="flex-1">{transaction.type === "RECEIPT" || transaction.type === "PAYMENT" ? "PARTICULARS" : "ITEM"}</span>
                   <span className="text-right">AMT</span>
                 </div>
                 <div className="space-y-1">
                   {items.length === 0 ? (
                     <div className="flex justify-between items-start">
-                      <span className="uppercase font-medium">Standard Billing Item</span>
+                      <span className="uppercase font-medium">
+                        {transaction.type === "RECEIPT"
+                          ? transaction.description || "Credit / Due Settlement Payment"
+                          : transaction.type === "PAYMENT"
+                          ? transaction.description || "Expense / Vendor Payment"
+                          : "Standard Billing Item"}
+                      </span>
                       <span className="font-medium">₹{totalAmount.toFixed(2)}</span>
-                    </div>
+                    </div> 
                   ) : (
                     items.map((item: any, idx: number) => {
                       const isComp = item.name?.includes("(COMPLIMENTARY)") || item.pricePerUnit === 0;

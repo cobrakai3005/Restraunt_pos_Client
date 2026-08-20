@@ -62,6 +62,14 @@ export function ReceiptModal({ isOpen, onClose, order, tables, restaurant }: Rec
   // Helper to extract clean human-readable table numbers and eliminate raw 24-hex Mongo ObjectIds
   const isMongoId = (val: any) => typeof val === "string" && /^[a-fA-F0-9]{24}$/.test(val.trim());
 
+  const tableList: any[] = Array.isArray(tables)
+    ? tables
+    : Array.isArray((tables as any)?.tables)
+    ? (tables as any).tables
+    : Array.isArray((tables as any)?.data)
+    ? (tables as any).data
+    : [];
+
   const getTableDisplay = (t: any): string => {
     if (!t) return "";
     if (typeof t === "object") {
@@ -69,7 +77,7 @@ export function ReceiptModal({ isOpen, onClose, order, tables, restaurant }: Rec
     }
     const str = String(t).trim();
     if (isMongoId(str)) {
-      const matched = tables?.find((tbl: any) => String(tbl._id || tbl.id) === str);
+      const matched = tableList.find((tbl: any) => String(tbl._id || tbl.id) === str);
       if (matched) return String(matched.tableNumber || matched.name || "").trim();
       return ""; // Never display raw 24-character hexadecimal ObjectId
     }
@@ -249,7 +257,13 @@ export function ReceiptModal({ isOpen, onClose, order, tables, restaurant }: Rec
                 <div className="flex justify-between font-bold pb-1 border-b border-dotted border-black mb-1"><span className="w-8">QTY</span><span className="flex-1">ITEM</span><span className="text-right">AMT</span></div>
                 <div className="space-y-1">
                   {allItems.map((item: any, idx: number) => {
-                    const itemName = item.menuItemId?.name || item.name || "Item";
+                    const itemName =
+                      (typeof item.menuItemId === "object" ? item.menuItemId?.name : null) ||
+                      item.name ||
+                      item.itemName ||
+                      item.title ||
+                      item.dishName ||
+                      (item.variantName && item.variantName !== "Standard" ? item.variantName : "Item");
                     const variant = item.variantName || item.selectedVariant?.name;
                     const isComp = Boolean(item.isComplimentary);
                     const modPrice = (item.selectedModifiers || []).reduce((sum: number, m: any) => sum + (Number(m.price) || 0), 0);
@@ -384,6 +398,13 @@ export function ReceiptModal({ isOpen, onClose, order, tables, restaurant }: Rec
               <div className="text-[11px] space-y-0.5">
                 <div className="font-bold text-[9px] uppercase text-slate-700 mb-0.5">Ordered Items Summary:</div>
                 {allItems.map((item: any, idx: number) => {
+                  const itemName =
+                    (typeof item.menuItemId === "object" ? item.menuItemId?.name : null) ||
+                    item.name ||
+                    item.itemName ||
+                    item.title ||
+                    item.dishName ||
+                    (item.variantName && item.variantName !== "Standard" ? item.variantName : "Item");
                   const isComp = Boolean(item.isComplimentary);
                   const modPrice = (item.selectedModifiers || []).reduce((sum: number, m: any) => sum + (Number(m.price) || 0), 0);
                   const unitPrice = Number(item.variantPrice || item.price || 0) + modPrice;
@@ -392,7 +413,7 @@ export function ReceiptModal({ isOpen, onClose, order, tables, restaurant }: Rec
                   return (
                     <div key={idx} className="flex justify-between">
                       <span className="truncate pr-2">
-                        {item.quantity}x {item.menuItemId?.name || item.name}
+                        {item.quantity}x {itemName}
                         {modStr && ` (${modStr})`}
                         {isComp && " (COMPLIMENTARY)"}
                       </span>

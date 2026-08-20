@@ -184,6 +184,10 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
             onCollectPayment={handleOpenReceiveCredit}
             onViewHistory={(ord) => setSelectedOrderForHistory(ord)}
             onBulkSettle={handleOpenBulkSettle}
+            onViewReceipt={(ord) => {
+              setCompletedReceiptOrder(ord);
+              setShowReceipt(true);
+            }}
           />
         </div>
       ) : mode === "reports" ? (
@@ -257,16 +261,17 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
             onReopenOrder={handleReopenOrder}
             onCheckout={handleCheckout}
           />
-
-          <ReceiptModal
-            isOpen={showReceipt}
-            onClose={() => setShowReceipt(false)}
-            order={completedReceiptOrder || selectedOrder}
-            tables={tables}
-            restaurant={(user as any)?.restaurant}
-          />
         </div>
       )}
+
+      {/* ── Global POS Receipt Modal (Available across all tabs) ── */}
+      <ReceiptModal
+        isOpen={showReceipt}
+        onClose={() => setShowReceipt(false)}
+        order={completedReceiptOrder || selectedOrder}
+        tables={tables}
+        restaurant={(user as any)?.restaurant}
+      />
 
       {/* ── Multi-Payment / Split Payment Dialog ── */}
       <CashierSplitPaymentDialog

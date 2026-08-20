@@ -58,8 +58,16 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
         employeeService.getTables(),
       ]);
 
-      if (resTables?.data) setTables(resTables.data);
-      else if (Array.isArray(resTables)) setTables(resTables);
+      const tablesList = Array.isArray(resTables)
+        ? resTables
+        : Array.isArray(resTables?.data?.tables)
+        ? resTables.data.tables
+        : Array.isArray(resTables?.data)
+        ? resTables.data
+        : Array.isArray(resTables?.tables)
+        ? resTables.tables
+        : [];
+      setTables(tablesList);
 
       const getList = (res: any) =>
         Array.isArray(res)

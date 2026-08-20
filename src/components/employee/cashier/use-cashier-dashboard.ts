@@ -22,6 +22,10 @@ export function useCashierDashboard() {
     ordersHook.setSelectedOrder,
     async () => {
       await ordersHook.fetchOrders();
+    },
+    (order: any) => {
+      ordersHook.setCompletedReceiptOrder(order);
+      ordersHook.setShowReceipt(true);
     }
   );
 

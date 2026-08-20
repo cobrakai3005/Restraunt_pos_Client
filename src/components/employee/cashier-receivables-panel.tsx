@@ -22,6 +22,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  Printer,
+  Receipt,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { connectSocket } from "@/lib/socket";
@@ -33,12 +35,14 @@ interface CashierReceivablesPanelProps {
   onCollectPayment: (order: Order) => void;
   onViewHistory: (order: Order) => void;
   onBulkSettle?: (customer: Customer, orders?: Order[]) => void;
+  onViewReceipt?: (order: Order) => void;
 }
 
 export function CashierReceivablesPanel({
   onCollectPayment,
   onViewHistory,
   onBulkSettle,
+  onViewReceipt,
 }: CashierReceivablesPanelProps) {
   const { toast } = useToast();
 
@@ -524,6 +528,19 @@ export function CashierReceivablesPanel({
 
                         <TableCell className="text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1.5">
+                            {onViewReceipt && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onViewReceipt(o)}
+                                className="h-8 text-xs font-bold px-2.5 rounded-lg border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                title="View & Print 80mm Receipt Slip"
+                              >
+                                <Printer className="w-3.5 h-3.5 mr-1 text-slate-500" />
+                                Receipt
+                              </Button>
+                            )}
+
                             {paymentCount > 0 && (
                               <Button
                                 size="sm"
