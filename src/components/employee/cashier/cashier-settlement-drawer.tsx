@@ -101,11 +101,10 @@ export function CashierSettlementDrawer({
                 Order #{selectedOrder._id?.slice(-4)}
               </h2>
               <span
-                className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
-                  selectedOrder.status === "BILLED"
+                className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${selectedOrder.status === "BILLED"
                     ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
                     : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
-                }`}
+                  }`}
               >
                 {selectedOrder.status === "BILLED" ? "Bill Generated" : "Unbilled"}
               </span>
@@ -146,31 +145,46 @@ export function CashierSettlementDrawer({
                 key={t.id}
                 onClick={() => {
                   setBillingTab(t.id);
+                  // if (t.id === "customer") {
+                  //   setCustPhone(selectedOrder.customerDetails?.phone || "");
+                  //   setCustName(selectedOrder.customerDetails?.name || "");
+                  // }
                   if (t.id === "customer") {
-                    setCustPhone(selectedOrder.customerDetails?.phone || "");
-                    setCustName(selectedOrder.customerDetails?.name || "");
+                    const customerDetails = selectedOrder.customerDetails;
+
+                    const linkedCustomer =
+                      customerDetails?.customerId &&
+                        typeof customerDetails.customerId === "object"
+                        ? customerDetails.customerId
+                        : null;
+
+                    setCustPhone(
+                      customerDetails?.phone || linkedCustomer?.phone || ""
+                    );
+
+                    setCustName(
+                      customerDetails?.name || linkedCustomer?.name || ""
+                    );
                   }
                   if (t.id === "discount") {
                     setDiscountAmount(String(selectedOrder.financials?.discount ?? ""));
                   }
                 }}
-                className={`px-4 py-2 text-[11px] font-extrabold uppercase tracking-wider border-b-2 transition-all ${
-                  isActive
+                className={`px-4 py-2 text-[11px] font-extrabold uppercase tracking-wider border-b-2 transition-all ${isActive
                     ? t.id === "customer"
                       ? "border-violet-500 text-violet-600 dark:text-violet-400"
                       : t.id === "discount"
-                      ? "border-emerald-500 text-emerald-600 dark:text-emerald-400"
-                      : "border-blue-500 text-blue-600 dark:text-blue-400"
+                        ? "border-emerald-500 text-emerald-600 dark:text-emerald-400"
+                        : "border-blue-500 text-blue-600 dark:text-blue-400"
                     : "border-transparent text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                }`}
+                  }`}
               >
                 <span className="flex items-center gap-1.5">
                   <Icon className={`h-3.5 w-3.5 ${isLockedTab ? "text-amber-500" : ""}`} /> {t.label}
                   {t.dot && (
                     <span
-                      className={`ml-0.5 w-1.5 h-1.5 rounded-full inline-block ${
-                        t.id === "discount" ? "bg-emerald-500" : "bg-violet-500"
-                      }`}
+                      className={`ml-0.5 w-1.5 h-1.5 rounded-full inline-block ${t.id === "discount" ? "bg-emerald-500" : "bg-violet-500"
+                        }`}
                     />
                   )}
                 </span>

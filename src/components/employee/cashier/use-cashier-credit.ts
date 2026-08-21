@@ -50,9 +50,19 @@ export function useCashierCredit(
   // Sync state on order change
   useEffect(() => {
     if (selectedOrder) {
+
+      // const cd = selectedOrder.customerDetails;
+      // setCustName(cd?.name || "");
+      // const ph = cd?.phone || "";
+      // setCustPhone(ph);
       const cd = selectedOrder.customerDetails;
-      setCustName(cd?.name || "");
-      const ph = cd?.phone || "";
+      const linkedCustomer =
+        cd?.customerId && typeof cd.customerId === "object"
+          ? cd.customerId
+          : null;
+      setCustName(cd?.name || linkedCustomer?.name || "");
+
+      const ph = cd?.phone || linkedCustomer?.phone || "";
       setCustPhone(ph);
       if (cd?.customerId && typeof cd.customerId === "object") {
         setMatchedCustomer(cd.customerId as any);
@@ -60,9 +70,13 @@ export function useCashierCredit(
         customerService
           .searchCustomerByPhone(ph.trim())
           .then((res) => {
-            if (res?.data) setMatchedCustomer(res.data);
+            if (res?.data) {
+              setMatchedCustomer(res.data);
+              setCustPhone(res.data.phone || "");
+              setCustName(res.data.name || cd?.name || "");
+            }
           })
-          .catch(() => {});
+          .catch(() => { });
       } else if (matchedCustomer && (!ph || ph.trim().length < 4)) {
         setMatchedCustomer(null);
       }
@@ -131,6 +145,7 @@ export function useCashierCredit(
         const res = await customerService.searchCustomerByPhone(custPhone.trim());
         if (res?.data) {
           setMatchedCustomer(res.data);
+          setCustPhone(res.data.phone || "");
           if (!custName.trim() || custName === "Walk-in Guest") {
             setCustName(res.data.name);
           }
@@ -415,11 +430,10 @@ export function useCashierCredit(
 
     try {
       setIsSavingDiscount(true);
-      const reason = `${customer.tags || "Customer"} Discount (${
-        customer.discountType === "PERCENTAGE"
-          ? `${customer.discountValue}%`
-          : `₹${customer.discountValue}`
-      })`;
+      const reason = `${customer.tags || "Customer"} Discount (${customer.discountType === "PERCENTAGE"
+        ? `${customer.discountValue}%`
+        : `₹${customer.discountValue}`
+        })`;
       const response = await employeeService.updateCustomer(selectedOrder._id, {
         customerId: customer._id,
         name: customer.name,

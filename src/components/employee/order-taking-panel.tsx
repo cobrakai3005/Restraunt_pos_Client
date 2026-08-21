@@ -481,6 +481,17 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
       if (existingOrder) {
         orderId = existingOrder._id;
+
+        // Reusing an open table order must also persist the customer selected
+        // in the order-taking panel. Otherwise the cashier only receives the
+        // old customer name and has no phone/customer id to restore.
+        if (matchedCustomer || customerName.trim() || customerPhone.trim()) {
+          await employeeService.updateCustomer(orderId, {
+            name: matchedCustomer?.name || customerName.trim() || "Walk-in",
+            phone: matchedCustomer?.phone || customerPhone.trim() || "",
+            customerId: matchedCustomer?._id || null,
+          });
+        }
       } else {
         const payload: any = {
           orderType,
@@ -577,6 +588,16 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
       if (existingOrder) {
         orderId = existingOrder._id;
+
+        // Keep customer details in sync when Quick Receipt reuses an existing
+        // open table order.
+        if (matchedCustomer || customerName.trim() || customerPhone.trim()) {
+          await employeeService.updateCustomer(orderId, {
+            name: matchedCustomer?.name || customerName.trim() || "Walk-in",
+            phone: matchedCustomer?.phone || customerPhone.trim() || "",
+            customerId: matchedCustomer?._id || null,
+          });
+        }
       } else {
         const payload: any = { orderType, guestCount: Math.max(1, guestCount) };
         if (orderType === "DINE_IN") payload.tableId = selectedTable;
