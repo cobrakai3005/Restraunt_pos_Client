@@ -123,64 +123,58 @@ export function TableFloorSidebar({
             const showHoverOverlay = isMergedParent || isMergedSecondary || (isOccupied && !!order);
 
             return (
+              
               <div
                 key={t._id}
                 onClick={() => onSelectTable(t._id)}
-                className={`p-3 rounded-2xl border cursor-pointer transition-all duration-200 flex flex-col justify-between min-h-[104px] relative overflow-hidden active:scale-95 group select-none ${
-                  isSelected
-                    ? "border-blue-500 bg-blue-500/10 ring-2 ring-blue-500/40 shadow-sm"
+                className={`p-3 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between min-h-[104px] relative overflow-hidden active:scale-95 group select-none ${isSelected
+                    ? "border-blue-500 bg-gradient-to-br from-blue-500 to-indigo-600 dark:from-blue-600 dark:to-indigo-800 ring-4 ring-blue-300/50 dark:ring-blue-500/30 shadow-lg shadow-blue-500/30 dark:shadow-blue-900/40 scale-[1.02]"
                     : isMergedSecondary
-                    ? "border-indigo-300/80 dark:border-indigo-800/80 bg-gradient-to-br from-indigo-50/70 via-white dark:via-slate-900 to-purple-50/50 dark:from-indigo-950/50 dark:to-purple-950/40 hover:border-indigo-400 shadow-xs"
-                    : isOccupied
-                    ? "border-amber-400/80 dark:border-amber-700/70 bg-gradient-to-br from-amber-50/80 via-amber-50/30 dark:via-slate-900 to-orange-50/30 dark:from-amber-950/40 dark:to-orange-950/30 hover:border-amber-500 shadow-xs"
-                    : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/60 shadow-xs"
-                }`}
+                      ? "border-purple-400 dark:border-purple-700 bg-gradient-to-br from-violet-500 to-purple-600 dark:from-violet-700 dark:to-purple-900 hover:shadow-lg hover:shadow-purple-500/30 dark:hover:shadow-purple-900/40 shadow-md"
+                      : isOccupied
+                        ? "border-orange-400 dark:border-orange-700 bg-gradient-to-br from-amber-400 to-orange-500 dark:from-amber-600 dark:to-orange-700 hover:shadow-lg hover:shadow-orange-500/30 dark:hover:shadow-orange-900/40 shadow-md"
+                        : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-md"
+                  }`}
               >
-                {/* Top Row: Table Name & Status Pill/Dot */}
+                {/* Top Row: Table Name & Status Dot */}
                 <div className="flex items-center justify-between gap-1">
                   <span
-                    className={`font-black text-xs leading-tight truncate ${
-                      isSelected
-                        ? "text-blue-600 dark:text-blue-400"
-                        : isMergedSecondary
-                        ? "text-indigo-950 dark:text-indigo-200"
+                    className={`font-black text-xs leading-tight truncate ${isSelected || isMergedSecondary || isOccupied
+                        ? "text-white drop-shadow-sm"
                         : "text-slate-900 dark:text-white"
-                    }`}
+                      }`}
                     title={t.tableNumber}
                   >
                     {t.tableNumber}
                   </span>
 
                   {hasReady ? (
-                    <span
-                      className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)] animate-ping shrink-0"
-                      title="Food Ready"
-                    />
+                    <span className="relative flex h-3 w-3 shrink-0" title="Food Ready">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime-300 opacity-90" />
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-lime-400 shadow-[0_0_10px_rgba(163,230,53,1)]" />
+                    </span>
                   ) : isMergedSecondary ? (
-                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-100/90 dark:bg-indigo-900/70 text-[9px] font-bold text-indigo-700 dark:text-indigo-300 shrink-0 border border-indigo-200/50 dark:border-indigo-800/50">
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/25 backdrop-blur-sm text-[9px] font-bold text-white shrink-0">
                       <Link2 className="h-2.5 w-2.5" />
                       <span>T-{parentTable?.tableNumber || "?"}</span>
                     </div>
                   ) : isOccupied ? (
-                    <span
-                      className="h-2.5 w-2.5 rounded-full bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.8)] shrink-0"
-                      title="Occupied"
-                    />
+                    <span className="h-2.5 w-2.5 rounded-full bg-white shadow-[0_0_6px_rgba(255,255,255,0.9)] shrink-0" title="Occupied" />
                   ) : (
-                    <span className="h-2 w-2 rounded-full bg-emerald-500/40 shrink-0" title="Available" />
+                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 dark:bg-emerald-500 shadow-[0_0_6px_rgba(52,211,153,0.7)] shrink-0" title="Available" />
                   )}
                 </div>
 
                 {/* Middle Content */}
                 {isMergedSecondary ? (
                   <div className="my-1 flex items-center justify-center">
-                    <div className="w-8 h-8 rounded-full bg-indigo-100/70 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/50 shadow-2xs">
+                    <div className="w-8 h-8 rounded-full bg-white/25 backdrop-blur-sm flex items-center justify-center text-white">
                       <GitMerge className="h-4 w-4" />
                     </div>
                   </div>
                 ) : isOccupied ? (
-                  <div className="my-1 flex items-center gap-1.5 text-[10px] font-bold text-amber-800/90 dark:text-amber-300">
-                    <Users className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <div className="my-1 flex items-center gap-1.5 text-[10px] font-bold text-white/95">
+                    <Users className="h-3 w-3 shrink-0" />
                     <span>Active</span>
                   </div>
                 ) : (
@@ -193,22 +187,22 @@ export function TableFloorSidebar({
                 {/* Bottom Row */}
                 <div className="flex items-center justify-between gap-1 mt-auto">
                   {isMergedSecondary ? (
-                    <span className="text-[9px] font-extrabold text-indigo-700 dark:text-indigo-300 bg-indigo-100/90 dark:bg-indigo-900/60 px-2 py-0.5 rounded-lg border border-indigo-200/50 dark:border-indigo-800/50">
+                    <span className="text-[9px] font-extrabold text-white bg-white/25 backdrop-blur-sm px-2 py-0.5 rounded-lg">
                       Merged
                     </span>
                   ) : isOccupied ? (
                     <>
-                      <span className="text-[11px] font-mono font-black text-amber-700 dark:text-amber-400 truncate">
+                      <span className="text-[11px] font-mono font-black text-white truncate">
                         {order ? `#${String(order.orderNumber || order._id || "").slice(-4)}` : "Occupied"}
                       </span>
                       {isMergedParent && (
-                        <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-lg bg-indigo-100/90 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
+                        <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded-lg bg-white/25 backdrop-blur-sm text-white shrink-0">
                           MERGED
                         </span>
                       )}
                     </>
                   ) : (
-                    <span className="text-[9px] font-extrabold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded-lg border border-emerald-200/40">
+                    <span className="text-[9px] font-extrabold text-white bg-gradient-to-r from-emerald-400 to-teal-500 dark:from-emerald-600 dark:to-teal-700 px-1.5 py-0.5 rounded-lg shadow-sm">
                       Available
                     </span>
                   )}
@@ -230,7 +224,7 @@ export function TableFloorSidebar({
                             {totalQty} item{totalQty !== 1 ? "s" : ""}
                           </span>
                           {totalAmt > 0 && (
-                            <span className="text-[11px] font-black text-emerald-400 block mt-0.5">
+                            <span className="text-[11px] font-black text-lime-400 block mt-0.5">
                               ₹{totalAmt.toFixed(0)}
                             </span>
                           )}
@@ -243,7 +237,7 @@ export function TableFloorSidebar({
                           e.stopPropagation();
                           onUnmergeOrder(order || null, t._id);
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold transition-all active:scale-95 shadow-md"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-[10px] font-bold transition-all active:scale-95 shadow-md"
                         title="Unmerge table"
                       >
                         <Split className="h-3 w-3" /> Unmerge

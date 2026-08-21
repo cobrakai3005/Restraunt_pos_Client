@@ -30,6 +30,7 @@ interface BulkSettleDialogProps {
   onOpenChange: (open: boolean) => void;
   customer: Customer | null;
   dueOrders: Order[];
+  isLoading: boolean;
   isSubmitting: boolean;
   onConfirmBulkSettle: (payload: {
     customerId: string;
@@ -45,6 +46,7 @@ export function BulkSettleDialog({
   onOpenChange,
   customer,
   dueOrders,
+  isLoading,
   isSubmitting,
   onConfirmBulkSettle,
 }: BulkSettleDialogProps) {
@@ -121,7 +123,7 @@ export function BulkSettleDialog({
   const partialSettledCount = distributionPreview.filter((d) => d.status === "PARTIAL").length;
 
   const isOverPaying = effectiveTotalAmount > totalOutstandingDue;
-  const isInvalidAmount = effectiveTotalAmount <= 0 || isOverPaying;
+  const isInvalidAmount = isLoading || effectiveTotalAmount <= 0 || isOverPaying;
 
   const handleSubmit = async () => {
     if (!customer?._id) return;
@@ -192,7 +194,7 @@ export function BulkSettleDialog({
                     </span>
                   )}
                   <span>•</span>
-                  <span>{sortedOrders.length} Outstanding Invoices</span>
+                  <span>{isLoading ? "Loading outstanding invoices..." : `${sortedOrders.length} Outstanding Invoices`}</span>
                 </div>
               </div>
             </div>
@@ -202,7 +204,11 @@ export function BulkSettleDialog({
                 Total Outstanding Due
               </div>
               <div className="text-xl font-black text-red-600 dark:text-red-400">
-                ₹{totalOutstandingDue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin ml-auto" />
+                ) : (
+                  `₹${totalOutstandingDue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+                )}
               </div>
             </div>
           </div>

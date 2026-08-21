@@ -48,6 +48,96 @@ import { CashierDashboard } from "@/components/employee/cashier-dashboard";
 import { ManagerDashboard } from "@/components/employee/manager-dashboard";
 import { posReportsService, ExecutiveSummaryData } from "@/services/posReports.service";
 
+function EmployeeTerminalSkeleton() {
+  const rows = ["w-3/4", "w-2/3", "w-4/5", "w-1/2", "w-3/4"];
+
+  return (
+    <div
+      className="h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-white"
+      role="status"
+      aria-label="Loading employee terminal"
+    >
+      <div className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 md:px-6 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-200 to-indigo-200 dark:from-blue-900 dark:to-indigo-950 animate-pulse" />
+          <div className="space-y-2">
+            <div className="h-3.5 w-36 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+            <div className="h-2.5 w-24 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          </div>
+        </div>
+        <div className="hidden sm:flex items-center gap-3">
+          <div className="h-8 w-28 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          <div className="h-9 w-9 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+          <div className="h-9 w-24 rounded-xl bg-blue-100 dark:bg-blue-950/60 animate-pulse" />
+        </div>
+      </div>
+
+      <div className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 px-4 md:px-6 flex items-center gap-2">
+        {["w-24", "w-28", "w-24", "w-32"].map((width, index) => (
+          <div
+            key={index}
+            className={`h-9 ${width} rounded-xl ${index === 0 ? "bg-blue-100 dark:bg-blue-950/70" : "bg-slate-100 dark:bg-slate-800"} animate-pulse`}
+          />
+        ))}
+      </div>
+
+      <div className="h-[calc(100vh-7.5rem)] p-3 md:p-5 grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_1fr] gap-4">
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="h-4 w-28 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+              <div className="h-6 w-14 rounded-full bg-emerald-100 dark:bg-emerald-950 animate-pulse" />
+            </div>
+            <div className="h-10 w-full rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+          </div>
+          <div className="p-3 space-y-2.5">
+            {rows.map((width, index) => (
+              <div key={index} className="p-3 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center gap-3">
+                <div className="h-10 w-10 shrink-0 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                <div className="flex-1 space-y-2">
+                  <div className={`h-3 ${width} rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse`} />
+                  <div className="h-2.5 w-1/2 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                </div>
+                <div className="h-5 w-12 rounded-full bg-amber-100 dark:bg-amber-950 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 md:p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <div className="space-y-2">
+              <div className="h-5 w-44 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+              <div className="h-3 w-64 max-w-full rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            </div>
+            <div className="h-10 w-28 rounded-xl bg-blue-100 dark:bg-blue-950/60 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-6">
+            {[0, 1, 2, 3].map((item) => (
+              <div key={item} className="h-24 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-800 animate-pulse" />
+            ))}
+          </div>
+          <div className="rounded-2xl border border-slate-100 dark:border-slate-800 p-4 space-y-4">
+            <div className="h-4 w-36 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+            {[0, 1, 2, 3].map((item) => (
+              <div key={item} className="grid grid-cols-[1fr_80px_80px] gap-4 items-center">
+                <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                <div className="h-8 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 flex items-center justify-center gap-2 text-xs font-semibold text-slate-400 dark:text-slate-500">
+            <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+            Preparing your secure employee workspace
+          </div>
+        </section>
+      </div>
+      <span className="sr-only">Loading your employee terminal</span>
+    </div>
+  );
+}
+
 export default function EmployeeDashboard() {
   const router = useRouter();
   const { toast } = useToast();
@@ -155,11 +245,7 @@ export default function EmployeeDashboard() {
   };
 
   if (!user) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-950">
-        <p className="text-slate-400 font-medium">Loading your terminal...</p>
-      </div>
-    );
+    return <EmployeeTerminalSkeleton />;
   }
 
   const restaurantName =
@@ -672,4 +758,3 @@ export default function EmployeeDashboard() {
     </div>
   );
 }
-

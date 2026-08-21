@@ -711,8 +711,78 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
 
   if (isLoading) {
     return (
-      <div className="flex h-full min-h-[300px] items-center justify-center bg-slate-50 dark:bg-slate-950 transition-colors">
-        <p className="text-slate-600 dark:text-slate-400">Syncing terminal data...</p>
+      <div
+        className="relative flex h-full min-h-[420px] overflow-hidden rounded-xl border border-slate-200/60 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950 shadow-xl"
+        role="status"
+        aria-label="Preparing order terminal"
+      >
+        {/* Table floor */}
+        <aside className="hidden md:flex w-52 shrink-0 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
+          <div className="flex items-center justify-between mb-4">
+            <div className="h-4 w-24 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+            <div className="h-7 w-7 rounded-lg bg-blue-100 dark:bg-blue-950 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-2 gap-2.5">
+            {Array.from({ length: 10 }).map((_, index) => (
+              <div
+                key={index}
+                className={`h-16 rounded-xl border animate-pulse ${
+                  index === 2 || index === 7
+                    ? "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
+                    : "border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/70"
+                }`}
+              />
+            ))}
+          </div>
+        </aside>
+
+        {/* Categories */}
+        <aside className="hidden lg:flex w-24 shrink-0 flex-col items-center gap-3 border-r border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 py-4 px-2">
+          {Array.from({ length: 7 }).map((_, index) => (
+            <div key={index} className="w-full flex flex-col items-center gap-1.5">
+              <div className={`h-10 w-10 rounded-xl animate-pulse ${index === 0 ? "bg-blue-100 dark:bg-blue-950" : "bg-slate-100 dark:bg-slate-800"}`} />
+              <div className="h-2 w-12 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            </div>
+          ))}
+        </aside>
+
+        {/* Menu catalog */}
+        <main className="min-w-0 flex-1 p-3 md:p-5">
+          <div className="mb-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+            <div className="h-11 flex-1 max-w-xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 animate-pulse" />
+            <div className="flex gap-2">
+              <div className="h-10 w-24 rounded-xl bg-blue-100 dark:bg-blue-950/60 animate-pulse" />
+              <div className="h-10 w-20 rounded-xl bg-white dark:bg-slate-900 animate-pulse" />
+            </div>
+          </div>
+          <div className="mb-4 flex items-center justify-between">
+            <div className="space-y-2">
+              <div className="h-4 w-36 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+              <div className="h-2.5 w-52 rounded-full bg-slate-200/70 dark:bg-slate-800 animate-pulse" />
+            </div>
+            <div className="h-8 w-20 rounded-lg bg-white dark:bg-slate-900 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+            {Array.from({ length: 15 }).map((_, index) => (
+              <div key={index} className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                <div className={`h-20 sm:h-24 animate-pulse ${index % 4 === 0 ? "bg-orange-100 dark:bg-orange-950/40" : "bg-slate-100 dark:bg-slate-800"}`} />
+                <div className="p-3 space-y-2">
+                  <div className="h-3 w-4/5 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                  <div className="flex items-center justify-between">
+                    <div className="h-3 w-12 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                    <div className="h-7 w-7 rounded-lg bg-blue-100 dark:bg-blue-950 animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </main>
+
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/90 px-4 py-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 shadow-lg backdrop-blur">
+          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          Syncing live menu and floor data
+        </div>
+        <span className="sr-only">Syncing terminal data</span>
       </div>
     );
   }

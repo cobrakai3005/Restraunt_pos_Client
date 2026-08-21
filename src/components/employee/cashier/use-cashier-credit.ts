@@ -40,6 +40,7 @@ export function useCashierCredit(
   const [showBulkSettleDialog, setShowBulkSettleDialog] = useState(false);
   const [bulkSettleCustomer, setBulkSettleCustomer] = useState<Customer | null>(null);
   const [bulkSettleOrders, setBulkSettleOrders] = useState<Order[]>([]);
+  const [isLoadingBulkSettle, setIsLoadingBulkSettle] = useState(false);
   const [isSubmittingBulkSettle, setIsSubmittingBulkSettle] = useState(false);
 
   // Discount Tab state
@@ -267,22 +268,28 @@ export function useCashierCredit(
     }
   };
 
-  const handleOpenBulkSettle = (customer: Customer, orders?: Order[]) => {
+  const handleOpenBulkSettle = async (customer: Customer) => {
     setBulkSettleCustomer(customer);
-    if (orders && orders.length > 0) {
-      setBulkSettleOrders(orders);
-    } else {
-      // If orders not directly provided, fetch customer due summary
-      employeeService
-        .getCustomerDueSummary(customer._id)
-        .then((res) => {
-          if (res?.data?.orders) {
-            setBulkSettleOrders(res.data.orders);
-          }
-        })
-        .catch(() => {});
-    }
+    setBulkSettleOrders([]);
+    setIsLoadingBulkSettle(true);
     setShowBulkSettleDialog(true);
+
+    try {
+      // Financial settlement must use the complete backend result, not the
+      // receivables table's current (paginated) page.
+      const res = await employeeService.getCustomerDueSummary(customer._id);
+      setBulkSettleOrders(Array.isArray(res?.data?.orders) ? res.data.orders : []);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Unable to load customer dues",
+        description: error.response?.data?.message || error.message || "Failed to load outstanding dues.",
+      });
+      setShowBulkSettleDialog(false);
+      setBulkSettleCustomer(null);
+    } finally {
+      setIsLoadingBulkSettle(false);
+    }
   };
 
   const handleConfirmBulkSettle = async (payload: {
@@ -521,6 +528,7 @@ export function useCashierCredit(
     setBulkSettleCustomer,
     bulkSettleOrders,
     setBulkSettleOrders,
+    isLoadingBulkSettle,
     isSubmittingBulkSettle,
     handleOpenBulkSettle,
     handleConfirmBulkSettle,

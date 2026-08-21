@@ -107,6 +107,7 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
     setShowBulkSettleDialog,
     bulkSettleCustomer,
     bulkSettleOrders,
+    isLoadingBulkSettle,
     isSubmittingBulkSettle,
     handleOpenBulkSettle,
     handleConfirmBulkSettle,
@@ -343,6 +344,7 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
         onOpenChange={setShowBulkSettleDialog}
         customer={bulkSettleCustomer}
         dueOrders={bulkSettleOrders}
+        isLoading={isLoadingBulkSettle}
         isSubmitting={isSubmittingBulkSettle}
         onConfirmBulkSettle={handleConfirmBulkSettle}
       />
@@ -392,4 +394,3 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
     </div>
   );
 }
-

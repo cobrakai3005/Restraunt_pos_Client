@@ -286,12 +286,7 @@ export function CashierReceivablesPanel({
             const selectedCustomerObj = customers.find(c => c._id === selectedCustomerId);
             const custTotalDue = (() => {
               const ordersSum = orders
-                .filter(
-                  (o) =>
-                    o.financials?.dueStatus === "PENDING" ||
-                    o.financials?.dueStatus === "PARTIAL" ||
-                    Number(o.financials?.dueAmount || 0) > 0
-                )
+                .filter((o) => Number(o.financials?.dueAmount || 0) > 0)
                 .reduce((sum, o) => sum + Number(o.financials?.dueAmount || 0), 0);
 
               // If orders have finished loading or returned records, ordersSum is the live accurate truth
@@ -358,18 +353,7 @@ export function CashierReceivablesPanel({
                   {onBulkSettle && selectedCustomerObj && custTotalDue > 0 && (
                     <Button
                       size="sm"
-                      onClick={() => {
-                        const customerDueOrders = orders.filter(
-                          (o) =>
-                            (o.financials?.dueStatus === "PENDING" ||
-                              o.financials?.dueStatus === "PARTIAL" ||
-                              Number(o.financials?.dueAmount || 0) > 0) &&
-                            ((typeof o.customerDetails?.customerId === "object"
-                              ? (o.customerDetails?.customerId as any)?._id
-                              : o.customerDetails?.customerId) === selectedCustomerId)
-                        );
-                        onBulkSettle(selectedCustomerObj, customerDueOrders);
-                      }}
+                      onClick={() => onBulkSettle(selectedCustomerObj)}
                       className="h-8 px-3 text-xs font-extrabold bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-lg shadow-xs flex items-center gap-1.5 active:scale-95"
                     >
                       <Sparkles className="w-3.5 h-3.5" /> Settle in One Go (₹{custTotalDue.toLocaleString("en-IN")})
@@ -576,7 +560,7 @@ export function CashierReceivablesPanel({
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => onBulkSettle(custObj, custDueList)}
+                                    onClick={() => onBulkSettle(custObj)}
                                     className="h-8 text-xs font-extrabold px-2.5 rounded-lg border-amber-400/80 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/50 shadow-2xs"
                                     title={`Settle all ${custDueList.length} credit orders for ${custObj.name}`}
                                   >
