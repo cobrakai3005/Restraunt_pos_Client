@@ -2,7 +2,8 @@
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Receipt, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Receipt, Search, Printer, Loader2, CheckCircle2 } from "lucide-react";
 import { Order, calculateOrderFinancials } from "./types";
 
 interface CashierBillingOrdersListProps {
@@ -13,6 +14,12 @@ interface CashierBillingOrdersListProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   pendingCount: number;
+  // Paid orders toggle
+  showPaidOrders: boolean;
+  onTogglePaidOrders: () => void;
+  paidOrders: Order[];
+  isFetchingPaid: boolean;
+  onViewReceipt: (order: Order) => void;
 }
 
 export function CashierBillingOrdersList({
@@ -22,7 +29,25 @@ export function CashierBillingOrdersList({
   searchQuery,
   setSearchQuery,
   pendingCount,
+  showPaidOrders,
+  onTogglePaidOrders,
+  paidOrders,
+  isFetchingPaid,
+  onViewReceipt,
 }: CashierBillingOrdersListProps) {
+  // Also filter paid orders by the same search query
+  const filteredPaid = searchQuery.trim()
+    ? paidOrders.filter((o) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          o._id?.toLowerCase().includes(q) ||
+          String(o.tableId?.tableNumber || "").includes(q) ||
+          o.customerDetails?.name?.toLowerCase().includes(q) ||
+          o.customerDetails?.phone?.includes(q)
+        );
+      })
+    : paidOrders;
+
   return (
     <div className="w-[260px] lg:w-[500px] shrink-0 flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
       <div className="p-4 border-b border-slate-200 dark:border-slate-800 space-y-3 shrink-0">
@@ -48,12 +73,35 @@ export function CashierBillingOrdersList({
             F2
           </kbd>
         </div>
+
+        {/* Paid Today Toggle */}
+        <button
+          onClick={onTogglePaidOrders}
+          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
+            showPaidOrders
+              ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400"
+              : "bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700"
+          }`}
+        >
+          <span className="flex items-center gap-1.5">
+            <CheckCircle2 className={`h-3.5 w-3.5 ${showPaidOrders ? "text-emerald-500" : "text-slate-400"}`} />
+            Show Paid Today
+          </span>
+          {showPaidOrders && isFetchingPaid ? (
+            <Loader2 className="h-3 w-3 animate-spin text-emerald-500" />
+          ) : showPaidOrders ? (
+            <span className="bg-emerald-600 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">
+              {paidOrders.length}
+            </span>
+          ) : null}
+        </button>
       </div>
 
       <ScrollArea className="flex-1">
-        <div className="p-3 grid grid-cols-4 gap-2 space-y-2">
+        <div className="p-3 space-y-2">
+          {/* Active Orders (OPEN + BILLED) */}
           {filteredOrders.length === 0 ? (
-            <div className="col-span-4 text-center text-slate-400 dark:text-slate-600 py-10 text-sm">
+            <div className="text-center text-slate-400 dark:text-slate-600 py-8 text-sm">
               No pending orders.
             </div>
           ) : (
@@ -98,10 +146,80 @@ export function CashierBillingOrdersList({
               );
             })
           )}
+
+          {/* Paid Today Section */}
+          {showPaidOrders && (
+            <>
+              <div className="flex items-center gap-2 pt-3 pb-1">
+                <div className="flex-1 h-px bg-emerald-200 dark:bg-emerald-900/40" />
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-500 flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Paid Today
+                </span>
+                <div className="flex-1 h-px bg-emerald-200 dark:bg-emerald-900/40" />
+              </div>
+
+              {isFetchingPaid ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
+                </div>
+              ) : filteredPaid.length === 0 ? (
+                <div className="text-center text-slate-400 dark:text-slate-600 py-6 text-xs">
+                  No paid orders today.
+                </div>
+              ) : (
+                filteredPaid.map((order) => {
+                  const grandTotal = calculateOrderFinancials(order).grandTotal;
+                  return (
+                    <div
+                      key={order._id}
+                      className="p-2 rounded-xl border bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40"
+                    >
+                      <div className="flex justify-between items-center mb-1.5">
+                        <span className="font-extrabold text-sm text-slate-700 dark:text-slate-300">
+                          #{order._id?.slice(-4)}
+                        </span>
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400">
+                          ✓ PAID
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
+                        {order.orderType === "DINE_IN"
+                          ? `Table ${order.tableId?.tableNumber || "?"}`
+                          : order.orderType}
+                        {order.customerDetails?.name &&
+                          order.customerDetails.name !== "Walk-in Guest" &&
+                          order.customerDetails.name !== "Walk-in Customer" && (
+                            <span className="ml-1 text-slate-400">· {order.customerDetails.name}</span>
+                          )}
+                      </div>
+                      <div className="flex items-center justify-between mt-1.5">
+                        <span className="text-sm font-extrabold text-emerald-700 dark:text-emerald-400">
+                          ₹{grandTotal.toFixed(2)}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2.5 text-[11px] font-bold border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onViewReceipt(order);
+                          }}
+                        >
+                          <Printer className="h-3 w-3 mr-1" />
+                          Receipt
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </>
+          )}
         </div>
       </ScrollArea>
 
-      {/* ── Bottom Pending Summary Strip ── */}
+      {/* Bottom Pending Summary Strip */}
       <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80 flex items-center justify-between text-xs font-bold shrink-0">
         <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
           <Receipt className="w-3.5 h-3.5 text-emerald-500" />

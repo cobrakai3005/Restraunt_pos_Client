@@ -10,6 +10,7 @@ import { CreateCustomerDialog } from "./create-customer-dialog";
 import { ReceiptModal } from "./ReceiptModal";
 import { CashierReceivablesPanel } from "./cashier-receivables-panel";
 import { PosReportsHub } from "@/components/client/reports/pos-reports-hub";
+import { CashierHistoryDrawer } from "./cashier/cashier-history-drawer";
 import {
   DashboardProps,
   KotItem,
@@ -51,6 +52,11 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
     setMode: internalSetMode,
     readyItemCount,
     pendingCount,
+    // Paid Orders toggle
+    showPaidOrders,
+    setShowPaidOrders,
+    paidOrders,
+    isFetchingPaid,
     // Split payment
     showSplitDialog,
     setShowSplitDialog,
@@ -131,6 +137,8 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
     handleUpdateDiscount,
   } = useCashierDashboard();
 
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
+
   const mode = currentMode !== undefined ? currentMode : internalMode;
   const setMode = (newMode: Mode) => {
     internalSetMode(newMode);
@@ -167,6 +175,7 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
         pendingCount={pendingCount}
         onOpenDrawer={onOpenDrawer}
         onOpenZReport={() => router.push("/pos/register/close")}
+        onOpenHistory={() => setShowHistoryDrawer(true)}
       />
 
       {/* Mode Content */}
@@ -210,6 +219,14 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             pendingCount={pendingCount}
+            showPaidOrders={showPaidOrders}
+            onTogglePaidOrders={() => setShowPaidOrders(!showPaidOrders)}
+            paidOrders={paidOrders}
+            isFetchingPaid={isFetchingPaid}
+            onViewReceipt={(ord) => {
+              setCompletedReceiptOrder(ord);
+              setShowReceipt(true);
+            }}
           />
 
           {/* Right: Bill & Settlement Drawer */}
@@ -362,6 +379,17 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
         item={complimentaryItem}
         onConfirm={handleToggleComplimentary}
       />
+
+      {/* ── Order History Drawer ── */}
+      <CashierHistoryDrawer
+        isOpen={showHistoryDrawer}
+        onClose={() => setShowHistoryDrawer(false)}
+        onViewReceipt={(ord) => {
+          setCompletedReceiptOrder(ord);
+          setShowReceipt(true);
+        }}
+      />
     </div>
   );
 }
+

@@ -61,7 +61,7 @@ export default function ClientManagementPage() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8678";
   
   const handleCopyUrl = () => {
-    navigator.clipboard.writeText(`${appUrl}/client-login`);
+    navigator.clipboard.writeText(`${appUrl}/login`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast({
@@ -96,7 +96,7 @@ export default function ClientManagementPage() {
       <div className="flex items-center justify-between rounded-xl border border-border bg-card text-card-foreground p-4 shadow-sm">
         <div className="flex flex-col">
           <span className="text-sm font-semibold text-foreground">Client Login URL</span>
-          <span className="text-sm text-slate-500">{appUrl}/client-login</span>
+          <span className="text-sm text-slate-500">{appUrl}/login</span>
         </div>
         <Button 
           variant="outline" 

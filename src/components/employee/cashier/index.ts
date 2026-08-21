@@ -11,3 +11,5 @@ export * from "./cashier-receive-credit-dialog";
 export * from "./cashier-due-history-dialog";
 export * from "./bulk-settle-dialog";
 export * from "./z-report-dialog";
+export * from "./cashier-history-drawer";
+

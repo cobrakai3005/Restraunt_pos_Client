@@ -557,13 +557,97 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     if (cart.length === 0) return;
     setIsQuickReceiptSubmitting(true);
     try {
-      const createdOrder = await placeOrder();
-      if (createdOrder) {
-        setReceiptOrder(createdOrder);
-        setShowReceiptModal(true);
+      // ── Step 1: Create order + fire KOT ──
+      if (orderType === "DINE_IN" && !selectedTable) {
+        toast({ variant: "destructive", title: "Table Required", description: "Please select a table before using Quick Receipt." });
+        return;
       }
+
+      let orderId: string | null = null;
+
+      // Reuse existing OPEN order for this table if one exists
+      const existingOrder = activeOrders.find((o) => {
+        if (!o || o.status !== "OPEN") return false;
+        const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
+        const linkedIds = Array.isArray(o.tableIds)
+          ? o.tableIds.map((t: any) => (typeof t === "object" ? t._id : t))
+          : [];
+        return String(tId) === String(selectedTable) || linkedIds.includes(String(selectedTable));
+      });
+
+      if (existingOrder) {
+        orderId = existingOrder._id;
+      } else {
+        const payload: any = { orderType, guestCount: Math.max(1, guestCount) };
+        if (orderType === "DINE_IN") payload.tableId = selectedTable;
+        if (customerName.trim() || customerPhone.trim()) {
+          payload.customerDetails = {
+            name: customerName.trim() || "Walk-in",
+            phone: customerPhone.trim() || "",
+            customerId: matchedCustomer?._id || null,
+          };
+        }
+        const createRes = await employeeService.createOrder(payload);
+        const createdData = createRes.data || createRes;
+        orderId = createdData._id || createdData.id || createdData.order?._id;
+      }
+
+      if (!orderId) throw new Error("Could not initialize order.");
+
+      // Add KOT (fires to kitchen display — fine if it shows there)
+      const kotPayload = {
+        station: cart[0]?.station || "KITCHEN",
+        items: cart.map((item) => ({
+          menuItemId: item._id,
+          variantName: item.selectedVariant.name,
+          quantity: item.quantity,
+          notes: item.notes || "",
+          selectedModifiers: (item.selectedModifiers || []).map((m) => ({
+            name: m.name,
+            price: m.price,
+            groupName: m.groupName,
+          })),
+        })),
+      };
+      await employeeService.addKot(orderId, kotPayload);
+
+      // ── Step 2: Generate bill → lock totals, status becomes BILLED ──
+      const billedOrder = await employeeService.generateBill(orderId);
+      const grandTotal =
+        billedOrder?.financials?.grandTotal ??
+        billedOrder?.data?.financials?.grandTotal ??
+        0;
+
+      // ── Step 3: Checkout with CASH → status PAID, SALES transaction created ──
+      const checkoutResult = await employeeService.checkoutOrder(orderId, {
+        payments: [{ method: "CASH", amount: grandTotal }],
+      });
+
+      const paidOrder =
+        checkoutResult?.order ??
+        checkoutResult?.data?.order ??
+        billedOrder;
+
+      // ── Step 4: Clear cart, refresh orders, show receipt ──
+      setCart([]);
+      setRecentlyAdded([]);
+      await fetchActiveOrders();
+      onOrderFired?.();
+
+      toast({
+        title: "Quick Receipt ⚡🧾",
+        description: `₹${grandTotal.toFixed(0)} collected. Order marked PAID.`,
+        className: "bg-emerald-50 border-emerald-500 text-emerald-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-100",
+      });
+
+      setReceiptOrder(paidOrder);
+      setShowReceiptModal(true);
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Receipt failed", description: err.message });
+      toast({
+        variant: "destructive",
+        title: "Quick Receipt Failed",
+        description: err?.response?.data?.message || err.message || "Something went wrong.",
+      });
     } finally {
       setIsQuickReceiptSubmitting(false);
     }

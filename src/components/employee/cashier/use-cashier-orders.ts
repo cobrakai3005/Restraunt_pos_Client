@@ -29,6 +29,38 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
   const [mode, setMode] = useState<Mode>("orders");
 
   // Multi-Payment state
+  // Paid Orders (toggle in billing tab)
+  const [showPaidOrders, setShowPaidOrdersRaw] = useState(false);
+  const [paidOrders, setPaidOrders] = useState<Order[]>([]);
+  const [isFetchingPaid, setIsFetchingPaid] = useState(false);
+
+  const fetchPaidOrders = useCallback(async () => {
+    setIsFetchingPaid(true);
+    try {
+      const res = await employeeService.getOrders({ status: "PAID", limit: 100 });
+      const getList = (r: any) =>
+        Array.isArray(r) ? r
+        : Array.isArray(r?.data) ? r.data
+        : Array.isArray(r?.data?.orders) ? r.data.orders
+        : Array.isArray(r?.orders) ? r.orders
+        : [];
+      setPaidOrders(getList(res));
+    } catch {
+      setPaidOrders([]);
+    } finally {
+      setIsFetchingPaid(false);
+    }
+  }, []);
+
+  const setShowPaidOrders = useCallback((val: boolean) => {
+    setShowPaidOrdersRaw(val);
+    if (val) {
+      fetchPaidOrders();
+    } else {
+      setPaidOrders([]);
+    }
+  }, [fetchPaidOrders]);
+
   const [showSplitDialog, setShowSplitDialog] = useState(false);
   const [splitCash, setSplitCash] = useState<string>("0");
   const [splitUpi, setSplitUpi] = useState<string>("0");
@@ -543,6 +575,11 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
     setMode,
     readyItemCount,
     pendingCount,
+    // Paid Orders toggle
+    showPaidOrders,
+    setShowPaidOrders,
+    paidOrders,
+    isFetchingPaid,
     showSplitDialog,
     setShowSplitDialog,
     splitCash,

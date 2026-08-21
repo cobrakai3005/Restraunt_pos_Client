@@ -28,6 +28,7 @@ import {
   FileText,
   Radio,
   BarChart3,
+  History,
 } from "lucide-react";
 import {
   Sheet,
@@ -258,6 +259,24 @@ export default function EmployeeDashboard() {
       badgeColor: "bg-indigo-500/10 text-indigo-600 font-extrabold",
       onSelect: () => setCashierMode("reports"),
     });
+    // 6. Paid Orders History
+    navLinks.push({
+      label: "Order History & Receipts",
+      desc: "View past paid orders & reprint receipts",
+      icon: History,
+      badge: "History",
+      badgeColor: "bg-blue-500/10 text-blue-600 font-extrabold",
+      onSelect: () => setCashierMode("billing"),
+    });
+    // 7. End Day / Z-Report Reconciliation
+    navLinks.push({
+      label: "End Day / Z-Report Reconciliation",
+      desc: "Cash drawer close & X/Z reconciliation",
+      icon: Calculator,
+      badge: "Z-Report",
+      badgeColor: "bg-amber-500/10 text-amber-600 font-extrabold",
+      onSelect: () => router.push("/pos/register/close"),
+    });
   } else if (isManager) {
     // 1. Floor & Table Maps
     navLinks.push({
@@ -313,39 +332,56 @@ export default function EmployeeDashboard() {
       badgeColor: "bg-blue-500/10 text-blue-600 font-extrabold",
       onSelect: () => setManagerTab("pos-reports"),
     });
+    // 7. Register & Day-End Z-Report
+    navLinks.push({
+      label: "Register & Day-End Z-Report",
+      desc: "Cash drawer balance & Z-Report reconciliation",
+      icon: Calculator,
+      badge: "Cash Drawer",
+      badgeColor: "bg-amber-500/10 text-amber-600 font-extrabold",
+      onSelect: () => router.push("/pos/register/close"),
+    });
   } else if (isWaiter) {
     navLinks.push({
-      label: "Take Orders & Cart",
-      desc: "Interactive POS menu & table orders",
+      label: "Take Orders & Tables",
+      desc: "Interactive POS menu, punch items & fire KOTs",
       icon: UtensilsCrossed,
       badge: "POS Core",
       badgeColor: "bg-blue-500/10 text-blue-600",
-      onSelect: () => {},
+      onSelect: () => setDrawerOpen(false),
     });
     navLinks.push({
-      label: "Kitchen KOT Queue",
-      desc: "Live order prep & station tickets",
-      icon: Flame,
-      badge: "Live Queue",
-      badgeColor: "bg-orange-500/10 text-orange-600",
-      onSelect: () => {},
+      label: "Food Ready for Pickup",
+      desc: "Live food pickup alerts from kitchen stations",
+      icon: CheckCircle2,
+      badge: "Pickup",
+      badgeColor: "bg-emerald-500/10 text-emerald-600",
+      onSelect: () => setDrawerOpen(false),
     });
     navLinks.push({
-      label: "Floor & Table Map",
-      desc: "Table occupancy, active pax & timers",
+      label: "Floor & Table Layout",
+      desc: "Table occupancy, active guest count & merged tables",
       icon: Users,
       badge: "Floor",
       badgeColor: "bg-blue-500/10 text-blue-600",
-      onSelect: () => {},
+      onSelect: () => setDrawerOpen(false),
     });
   } else if (isChef) {
     navLinks.push({
-      label: "Kitchen KOT Queue",
-      desc: "Live order prep & station tickets",
+      label: "Kitchen KOT Live Queue",
+      desc: "Live order preparation tickets & timers",
       icon: Flame,
       badge: "Live Queue",
       badgeColor: "bg-orange-500/10 text-orange-600",
-      onSelect: () => {},
+      onSelect: () => setDrawerOpen(false),
+    });
+    navLinks.push({
+      label: "Cooking Stations & Prep",
+      desc: "Station tickets, items status & food ready marks",
+      icon: ChefHat,
+      badge: "Stations",
+      badgeColor: "bg-purple-500/10 text-purple-600",
+      onSelect: () => setDrawerOpen(false),
     });
   }
 
