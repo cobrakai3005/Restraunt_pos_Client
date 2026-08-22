@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { clientService } from "@/services/client.service";
-import { useToast } from "@/components/ui/use-toast";
 import {
   Select,
   SelectContent,
@@ -20,40 +18,25 @@ import {
   useCustomerReceivables,
   useVendorLedgers,
 } from "@/components/client/ledgers";
+import { useClientRestaurants } from "@/hooks/queries/use-portal-queries";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setClientSelectedRestaurantId } from "@/store/portal-ui-slice";
 
 export default function LedgersPage() {
-  const { toast } = useToast();
+  const dispatch = useAppDispatch();
 
   // Active Tab: "receivables" (Customer Credit) vs "vendors" (Vendor Payables)
   const [activeTab, setActiveTab] = useState<"receivables" | "vendors">("receivables");
 
   // Restaurant Selector
-  const [restaurants, setRestaurants] = useState<any[]>([]);
-  const [currentRestaurantId, setCurrentRestaurantId] = useState<string>("");
-  const [isRestaurantsLoading, setIsRestaurantsLoading] = useState(false);
+  const currentRestaurantId = useAppSelector((state) => state.portalUi.clientSelectedRestaurantId);
+  const { data: restaurants = [], isLoading: isRestaurantsLoading } = useClientRestaurants();
 
-  // Load Restaurants on mount
   useEffect(() => {
-    setIsRestaurantsLoading(true);
-    clientService
-      .getRestaurants()
-      .then((res) => {
-        const list = res.data?.restaurants || res.restaurants || res.data || res;
-        setRestaurants(list);
-        if (list.length > 0) setCurrentRestaurantId(list[0]._id);
-      })
-      .catch((err) => {
-        console.error(err);
-        toast({
-          variant: "destructive",
-          title: "Failed to load restaurants",
-          description: err.message,
-        });
-      })
-      .finally(() => {
-        setIsRestaurantsLoading(false);
-      });
-  }, [toast]);
+    if (restaurants.length && !restaurants.some((restaurant: any) => restaurant._id === currentRestaurantId)) {
+      dispatch(setClientSelectedRestaurantId(restaurants[0]._id));
+    }
+  }, [currentRestaurantId, dispatch, restaurants]);
 
   // Customer Receivables State & Handlers
   const receivables = useCustomerReceivables(currentRestaurantId, activeTab);
@@ -79,7 +62,7 @@ export default function LedgersPage() {
           <Select
             value={currentRestaurantId}
             onValueChange={(val) => {
-              setCurrentRestaurantId(val);
+              dispatch(setClientSelectedRestaurantId(val));
               vendorLedgers.setSelectedVendorId("");
               vendorLedgers.setLedgerData(null);
               receivables.setDuePage(1);

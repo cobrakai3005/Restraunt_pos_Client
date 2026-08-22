@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Settings, Users, Box, FileText, Store, Trash2, Shield, Bell, Settings2, Receipt, PackageOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { User } from "lucide-react";
-import { clientService } from "@/services/client.service";
 import { vendorService, Vendor } from "@/services/vendor.service";
 import { AddVendorDialog } from "@/components/client/add-vendor-dialog";
 import { PermissionsTab } from "@/components/client/permissions-tab";
@@ -31,6 +30,9 @@ import { BanksTab } from "@/components/client/banks-tab";
 import { CustomersTab } from "@/components/client/customers-tab";
 import { toast } from "@/components/ui/use-toast";
 import { Landmark, Users2 } from "lucide-react";
+import { useClientRestaurants, useClientVendors } from "@/hooks/queries/use-portal-queries";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setClientSelectedRestaurantId } from "@/store/portal-ui-slice";
 
 interface Restaurant {
   _id: string;
@@ -38,53 +40,20 @@ interface Restaurant {
 }
 
 export default function SettingsPage() {
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string>("");
-  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const dispatch = useAppDispatch();
+  const selectedRestaurantId = useAppSelector((state) => state.portalUi.clientSelectedRestaurantId);
+  const { data: restaurants = [] } = useClientRestaurants();
+  const vendorsQuery = useClientVendors(selectedRestaurantId);
+  const vendors = (vendorsQuery.data ?? []) as Vendor[];
 
   useEffect(() => {
-    fetchRestaurants();
-  }, []);
-
-  useEffect(() => {
-    if (selectedRestaurantId) {
-      fetchVendors(selectedRestaurantId);
-    } else {
-      setVendors([]);
+    if (restaurants.length && !restaurants.some((restaurant: Restaurant) => restaurant._id === selectedRestaurantId)) {
+      dispatch(setClientSelectedRestaurantId(restaurants[0]._id));
     }
-  }, [selectedRestaurantId]);
+  }, [dispatch, restaurants, selectedRestaurantId]);
 
-  const fetchRestaurants = async () => {
-    try {
-      const res = await clientService.getRestaurants();
-      let restaurantList = [];
-      if (Array.isArray(res)) restaurantList = res;
-      else if (res.data && Array.isArray(res.data)) restaurantList = res.data;
-      else if (res.data && res.data.restaurants && Array.isArray(res.data.restaurants)) restaurantList = res.data.restaurants;
-      else if (res.restaurants && Array.isArray(res.restaurants)) restaurantList = res.restaurants;
-
-      setRestaurants(restaurantList);
-      if (restaurantList.length > 0) {
-        setSelectedRestaurantId(restaurantList[0]._id);
-      }
-    } catch (error) {
-      console.error("Failed to fetch restaurants:", error);
-    }
-  };
-
-  const fetchVendors = async (restaurantId: string) => {
-    try {
-      const res = await vendorService.getVendors(restaurantId);
-      let list = [];
-      if (Array.isArray(res)) list = res;
-      else if (res.data && Array.isArray(res.data)) list = res.data;
-      else if (res.data && res.data.vendors && Array.isArray(res.data.vendors)) list = res.data.vendors;
-      else if (res.vendors && Array.isArray(res.vendors)) list = res.vendors;
-
-      setVendors(list);
-    } catch (error) {
-      console.error("Failed to fetch vendors:", error);
-    }
+  const fetchVendors = async (_restaurantId: string) => {
+    await vendorsQuery.refetch();
   };
 
   const handleDeleteVendor = async (id: string) => {
@@ -116,7 +85,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="w-full sm:w-72">
-          <Select value={selectedRestaurantId} onValueChange={setSelectedRestaurantId}>
+          <Select value={selectedRestaurantId} onValueChange={(restaurantId) => dispatch(setClientSelectedRestaurantId(restaurantId))}>
             <SelectTrigger className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
               <SelectValue placeholder="Select Restaurant" />
             </SelectTrigger>

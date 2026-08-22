@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Plus, Store, MapPin, Building2, Pencil, Trash2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,39 +9,20 @@ import { useToast } from "@/components/ui/use-toast";
 import { AddAdminRestaurantDialog } from "@/components/admin/add-restaurant-dialog";
 import { EditAdminRestaurantDialog } from "@/components/admin/edit-restaurant-dialog";
 import { Input } from "@/components/ui/input";
+import { useAdminRestaurants } from "@/hooks/queries/use-portal-queries";
 
 export default function AdminRestaurantsPage() {
   const { toast } = useToast();
-  const [restaurants, setRestaurants] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
   const [search, setSearch] = useState("");
 
-  const fetchRestaurants = async () => {
-    try {
-      setIsLoading(true);
-      const res = await adminService.getAllRestaurants();
-      if (res.success) {
-        setRestaurants(res.data.restaurants || []);
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load restaurants.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const restaurantsQuery = useAdminRestaurants();
+  const restaurants = restaurantsQuery.data?.data?.restaurants || [];
+  const isLoading = restaurantsQuery.isLoading || restaurantsQuery.isFetching;
 
-  useEffect(() => {
-    fetchRestaurants();
-  }, []);
-
-  const filteredRestaurants = restaurants.filter(r => 
+  const filteredRestaurants = restaurants.filter((r: any) =>
     r.name?.toLowerCase().includes(search.toLowerCase()) || 
     r.clientId?.contactName?.toLowerCase().includes(search.toLowerCase())
   );
@@ -51,7 +32,7 @@ export default function AdminRestaurantsPage() {
     try {
       await adminService.deleteRestaurant(id);
       toast({ title: "Success", description: "Restaurant deleted." });
-      fetchRestaurants();
+      restaurantsQuery.refetch();
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete restaurant." });
     }
@@ -97,7 +78,7 @@ export default function AdminRestaurantsPage() {
         </div>
       ) : filteredRestaurants.length > 0 ? (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredRestaurants.map((rest) => (
+          {filteredRestaurants.map((rest: any) => (
             <div key={rest._id} className="flex flex-col justify-between rounded-3xl border border-border bg-card text-card-foreground p-6 shadow-sm transition-all hover:shadow-md hover:border-blue-300">
               <div>
                 <div className="flex items-start gap-4">
@@ -158,14 +139,14 @@ export default function AdminRestaurantsPage() {
       <AddAdminRestaurantDialog 
         open={isAddOpen} 
         onOpenChange={setIsAddOpen} 
-        onSuccess={fetchRestaurants}
+        onSuccess={() => restaurantsQuery.refetch()}
       />
 
       <EditAdminRestaurantDialog
         open={isEditOpen}
         onOpenChange={setIsEditOpen}
         restaurant={selectedRestaurant}
-        onSuccess={fetchRestaurants}
+        onSuccess={() => restaurantsQuery.refetch()}
       />
     </div>
   );

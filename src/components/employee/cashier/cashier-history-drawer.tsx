@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Sheet,
   SheetContent,
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 import { employeeService } from "@/services/employee.service";
 import { Order, calculateOrderFinancials } from "./types";
+import { cashierKeys } from "@/hooks/queries/cashier-keys";
 
 interface CashierHistoryDrawerProps {
   isOpen: boolean;
@@ -54,46 +56,26 @@ export function CashierHistoryDrawer({
   onClose,
   onViewReceipt,
 }: CashierHistoryDrawerProps) {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("today");
   const [customDate, setCustomDate] = useState(getISTDateString());
 
-  const fetchOrders = useCallback(async (date: string) => {
-    setIsLoading(true);
-    try {
-      const res = await employeeService.getOrders({
+  const date = dateFilter === "today" ? getISTDateString(0) : dateFilter === "yesterday" ? getISTDateString(-1) : customDate;
+  const historyQuery = useQuery({
+    queryKey: [...cashierKeys.orders("PAID"), "history", date],
+    queryFn: async () => employeeService.getOrders({
         status: "PAID",
         startDate: date,
         endDate: date,
         limit: 200,
-      });
-      const getList = (r: any): Order[] =>
-        Array.isArray(r) ? r
-        : Array.isArray(r?.data) ? r.data
-        : Array.isArray(r?.data?.orders) ? r.data.orders
-        : Array.isArray(r?.orders) ? r.orders
-        : [];
-      setOrders(getList(res));
-    } catch {
-      setOrders([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Fetch when drawer opens or date filter changes
-  useEffect(() => {
-    if (!isOpen) return;
-    const date =
-      dateFilter === "today"
-        ? getISTDateString(0)
-        : dateFilter === "yesterday"
-        ? getISTDateString(-1)
-        : customDate;
-    fetchOrders(date);
-  }, [isOpen, dateFilter, customDate, fetchOrders]);
+      }),
+    enabled: isOpen,
+  });
+  const orders = useMemo(() => {
+      const r: any = historyQuery.data;
+      return (Array.isArray(r) ? r : Array.isArray(r?.data) ? r.data : Array.isArray(r?.data?.orders) ? r.data.orders : Array.isArray(r?.orders) ? r.orders : []) as Order[];
+  }, [historyQuery.data]);
+  const isLoading = historyQuery.isLoading || historyQuery.isFetching;
 
   // Filtered orders by search
   const filtered = searchQuery.trim()

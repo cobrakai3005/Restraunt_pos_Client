@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { lazy, Suspense, useState } from "react";
 import { 
   Flame, 
   Users, 
@@ -13,19 +13,27 @@ import {
 import { User } from "@/services/auth.service";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { InventoryTab } from "./inventory/inventory-tab";
-import { ManagerOverview } from "./manager-overview";
-import { ManagerFloorView } from "./manager-floor-view";
-import { ManagerAuditTab } from "./manager-audit-tab";
-import { ManagerStaffTab } from "./manager-staff-tab";
-import { AnalyticsDashboard } from "@/components/client/AnalyticsDashboard";
-import { PosReportsHub } from "@/components/client/reports/pos-reports-hub";
+
+const InventoryTab = lazy(() => import("./inventory/inventory-tab").then((module) => ({ default: module.InventoryTab })));
+const ManagerFloorView = lazy(() => import("./manager-floor-view").then((module) => ({ default: module.ManagerFloorView })));
+const ManagerAuditTab = lazy(() => import("./manager-audit-tab").then((module) => ({ default: module.ManagerAuditTab })));
+const ManagerStaffTab = lazy(() => import("./manager-staff-tab").then((module) => ({ default: module.ManagerStaffTab })));
+const AnalyticsDashboard = lazy(() => import("@/components/client/AnalyticsDashboard").then((module) => ({ default: module.AnalyticsDashboard })));
+const PosReportsHub = lazy(() => import("@/components/client/reports/pos-reports-hub").then((module) => ({ default: module.PosReportsHub })));
 
 interface DashboardProps {
   user: User;
   onOpenDrawer?: () => void;
   currentTab?: string;
   onTabChange?: (tab: string) => void;
+}
+
+function ManagerTabFallback() {
+  return (
+    <div className="flex min-h-[280px] items-center justify-center text-sm font-medium text-slate-500 dark:text-slate-400">
+      Loading workspace…
+    </div>
+  );
 }
 
 export function ManagerDashboard({ user, onOpenDrawer, currentTab, onTabChange }: DashboardProps) {
@@ -99,27 +107,39 @@ export function ManagerDashboard({ user, onOpenDrawer, currentTab, onTabChange }
         </div>
 
         <TabsContent value="floor" className="mt-6 focus-visible:outline-none focus-visible:ring-0">
-          <ManagerFloorView />
+          <Suspense fallback={<ManagerTabFallback />}>
+            <ManagerFloorView />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="inventory" className="mt-6 focus-visible:outline-none focus-visible:ring-0">
-          <InventoryTab />
+          <Suspense fallback={<ManagerTabFallback />}>
+            <InventoryTab />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="audit" className="mt-6 focus-visible:outline-none focus-visible:ring-0">
-          <ManagerAuditTab />
+          <Suspense fallback={<ManagerTabFallback />}>
+            <ManagerAuditTab />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="staff" className="mt-6 focus-visible:outline-none focus-visible:ring-0">
-          <ManagerStaffTab />
+          <Suspense fallback={<ManagerTabFallback />}>
+            <ManagerStaffTab />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="analytics" className="mt-6 focus-visible:outline-none focus-visible:ring-0">
-          <AnalyticsDashboard initialRestaurantId={restaurantId} hideRestaurantSelector={true} />
+          <Suspense fallback={<ManagerTabFallback />}>
+            <AnalyticsDashboard initialRestaurantId={restaurantId} hideRestaurantSelector={true} />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="pos-reports" className="mt-6 focus-visible:outline-none focus-visible:ring-0">
-          <PosReportsHub initialRestaurantId={restaurantId} hideRestaurantSelector={true} defaultTab="executive" />
+          <Suspense fallback={<ManagerTabFallback />}>
+            <PosReportsHub initialRestaurantId={restaurantId} hideRestaurantSelector={true} defaultTab="executive" />
+          </Suspense>
         </TabsContent>
       </Tabs>
     </div>

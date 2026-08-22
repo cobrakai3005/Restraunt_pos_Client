@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Plus, Users, Search, LayoutGrid, List, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,9 @@ import { MasterUserTable } from "@/components/admin/master-user-table";
 import { MasterUserCard } from "@/components/admin/master-user-card";
 import { adminService } from "@/services/admin.service";
 import { useToast } from "@/components/ui/use-toast";
+import { useAdminMasterUsers } from "@/hooks/queries/use-portal-queries";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setAdminUsersView } from "@/store/portal-ui-slice";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,17 +24,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type ViewMode = "grid" | "table";
-
 export default function MasterUsersPage() {
   const { toast } = useToast();
+  const dispatch = useAppDispatch();
   
   // View State
-  const [viewMode, setViewMode] = useState<ViewMode>("table");
-  
+  const viewMode = useAppSelector((state) => state.portalUi.adminUsersView);
+  const usersQuery = useAdminMasterUsers();
+  const users = usersQuery.data?.data?.users || [];
+  const isLoading = usersQuery.isLoading || usersQuery.isFetching;
+
   // Data State
-  const [users, setUsers] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   
   // Dialog States
@@ -56,29 +59,6 @@ export default function MasterUsersPage() {
     });
   };
 
-  const fetchUsers = async () => {
-    try {
-      setIsLoading(true);
-      const res = await adminService.getAllMasterUsers();
-      if (res.success) {
-        setUsers(res.data.users || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch master users", error);
-      toast({
-        title: "Error",
-        description: "Failed to load master users.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
   // Actions
   const handleEditClick = (user: any) => {
     setUserToEdit(user);
@@ -101,7 +81,7 @@ export default function MasterUsersPage() {
       });
       setIsDeleteDialogOpen(false);
       setUserToDelete(null);
-      fetchUsers();
+      usersQuery.refetch();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -114,7 +94,7 @@ export default function MasterUsersPage() {
   };
 
   // Local filtering
-  const filteredUsers = users.filter(u => 
+  const filteredUsers = users.filter((u: any) =>
     u.contactName?.toLowerCase().includes(search.toLowerCase()) || 
     u.username?.toLowerCase().includes(search.toLowerCase()) ||
     u.email?.toLowerCase().includes(search.toLowerCase())
@@ -186,7 +166,7 @@ export default function MasterUsersPage() {
             <Button
               variant={viewMode === "grid" ? "secondary" : "ghost"}
               size="sm"
-              onClick={() => setViewMode("grid")}
+              onClick={() => dispatch(setAdminUsersView("grid"))}
               className={`px-3 py-1.5 transition-all ${
                 viewMode === "grid" ? "bg-slate-100 text-foreground shadow-sm" : "text-slate-500 hover:text-foreground"
               }`}
@@ -197,7 +177,7 @@ export default function MasterUsersPage() {
             <Button
               variant={viewMode === "table" ? "secondary" : "ghost"}
               size="sm"
-              onClick={() => setViewMode("table")}
+              onClick={() => dispatch(setAdminUsersView("table"))}
               className={`px-3 py-1.5 transition-all ${
                 viewMode === "table" ? "bg-slate-100 text-foreground shadow-sm" : "text-slate-500 hover:text-foreground"
               }`}
@@ -229,7 +209,7 @@ export default function MasterUsersPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredUsers.map((user) => (
+            {filteredUsers.map((user: any) => (
               <MasterUserCard 
                 key={user._id} 
                 user={user} 
@@ -244,14 +224,14 @@ export default function MasterUsersPage() {
       <AddMasterUserDialog 
         open={isAddUserOpen} 
         onOpenChange={setIsAddUserOpen} 
-        onSuccess={fetchUsers}
+        onSuccess={() => usersQuery.refetch()}
       />
 
       <EditMasterUserDialog
         open={isEditUserOpen}
         onOpenChange={setIsEditUserOpen}
         user={userToEdit}
-        onSuccess={fetchUsers}
+        onSuccess={() => usersQuery.refetch()}
       />
 
       {/* Delete Confirmation Dialog */}

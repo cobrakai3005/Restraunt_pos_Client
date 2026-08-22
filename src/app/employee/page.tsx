@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { lazy, Suspense, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { authService, User } from "@/services/auth.service";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,12 +41,15 @@ import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { useToast } from "@/components/ui/use-toast";
 import { connectSocket } from "@/lib/socket";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { CashierTerminalMode, setCashierMode, setManagerTab, setNavigationDrawerOpen } from "@/store/employee-terminal-slice";
 
-import { WaiterDashboard } from "@/components/employee/waiter-dashboard";
-import { ChefDashboard } from "@/components/employee/chef-dashboard";
-import { CashierDashboard } from "@/components/employee/cashier-dashboard";
-import { ManagerDashboard } from "@/components/employee/manager-dashboard";
 import { posReportsService, ExecutiveSummaryData } from "@/services/posReports.service";
+
+const WaiterDashboard = lazy(() => import("@/components/employee/waiter-dashboard").then((module) => ({ default: module.WaiterDashboard })));
+const ChefDashboard = lazy(() => import("@/components/employee/chef-dashboard").then((module) => ({ default: module.ChefDashboard })));
+const CashierDashboard = lazy(() => import("@/components/employee/cashier-dashboard").then((module) => ({ default: module.CashierDashboard })));
+const ManagerDashboard = lazy(() => import("@/components/employee/manager-dashboard").then((module) => ({ default: module.ManagerDashboard })));
 
 function EmployeeTerminalSkeleton() {
   const rows = ["w-3/4", "w-2/3", "w-4/5", "w-1/2", "w-3/4"];
@@ -138,19 +141,49 @@ function EmployeeTerminalSkeleton() {
   );
 }
 
+function EmployeePanelFallback() {
+  return (
+    <div className="flex h-full min-h-[320px] items-center justify-center bg-slate-50 dark:bg-slate-950">
+      <div className="flex flex-col items-center gap-3 text-sm font-medium text-slate-500 dark:text-slate-400">
+        <span className="h-8 w-8 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin" />
+        Loading terminal workspace…
+      </div>
+    </div>
+  );
+}
+
 export default function EmployeeDashboard() {
+  const dispatch = useAppDispatch();
   const router = useRouter();
+  const pathname = usePathname();
   const { toast } = useToast();
   const [user, setUser] = useState<User | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [time, setTime] = useState<string>("");
   const [dateStr, setDateStr] = useState<string>("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [shiftSummary, setShiftSummary] = useState<ExecutiveSummaryData | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
-  const [cashierMode, setCashierMode] = useState<"orders" | "kitchen" | "billing" | "receivables" | "reports">("orders");
-  const [managerTab, setManagerTab] = useState<string>("floor");
+  const cashierMode = useAppSelector((state) => state.employeeTerminal.cashierMode);
+  const managerTab = useAppSelector((state) => state.employeeTerminal.managerTab);
+  const drawerOpen = useAppSelector((state) => state.employeeTerminal.navigationDrawerOpen);
+  const updateCashierMode = (mode: CashierTerminalMode) => {
+    dispatch(setCashierMode(mode));
+    const nextParams = new URLSearchParams(window.location.search);
+    nextParams.set("tab", mode);
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+  };
+  const updateManagerTab = (tab: string) => dispatch(setManagerTab(tab));
+  const updateDrawerOpen = (open: boolean) => dispatch(setNavigationDrawerOpen(open));
+
+  useEffect(() => {
+    if (user?.role !== "CASHIER") return;
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    const validCashierTabs: CashierTerminalMode[] = ["orders", "kitchen", "billing", "receivables", "reports"];
+    if (tab && validCashierTabs.includes(tab as CashierTerminalMode)) {
+      dispatch(setCashierMode(tab as CashierTerminalMode));
+    }
+  }, [dispatch, user?.role]);
 
   useEffect(() => {
     const updateTime = () => {
@@ -307,7 +340,7 @@ export default function EmployeeDashboard() {
       icon: UtensilsCrossed,
       badge: "POS Core",
       badgeColor: "bg-blue-500/10 text-blue-600",
-      onSelect: () => setCashierMode("orders"),
+      onSelect: () => updateCashierMode("orders"),
     });
     // 2. Kitchen KOT Queue
     navLinks.push({
@@ -316,7 +349,7 @@ export default function EmployeeDashboard() {
       icon: Flame,
       badge: "Live Queue",
       badgeColor: "bg-orange-500/10 text-orange-600",
-      onSelect: () => setCashierMode("kitchen"),
+      onSelect: () => updateCashierMode("kitchen"),
     });
     // 3. Billing & Settlements
     navLinks.push({
@@ -325,7 +358,7 @@ export default function EmployeeDashboard() {
       icon: Calculator,
       badge: "Billing",
       badgeColor: "bg-emerald-500/10 text-emerald-600",
-      onSelect: () => setCashierMode("billing"),
+      onSelect: () => updateCashierMode("billing"),
     });
     // 4. Credit / Khata Dues
     navLinks.push({
@@ -334,7 +367,7 @@ export default function EmployeeDashboard() {
       icon: FileText,
       badge: "Khata",
       badgeColor: "bg-amber-500/10 text-amber-600",
-      onSelect: () => setCashierMode("receivables"),
+      onSelect: () => updateCashierMode("receivables"),
     });
     // 5. POS Reports Hub (8 Reports)
     navLinks.push({
@@ -343,7 +376,7 @@ export default function EmployeeDashboard() {
       icon: FileSpreadsheet,
       badge: "Reports",
       badgeColor: "bg-indigo-500/10 text-indigo-600 font-extrabold",
-      onSelect: () => setCashierMode("reports"),
+      onSelect: () => updateCashierMode("reports"),
     });
     // 6. Paid Orders History
     navLinks.push({
@@ -352,7 +385,7 @@ export default function EmployeeDashboard() {
       icon: History,
       badge: "History",
       badgeColor: "bg-blue-500/10 text-blue-600 font-extrabold",
-      onSelect: () => setCashierMode("billing"),
+      onSelect: () => updateCashierMode("billing"),
     });
     // 7. End Day / Z-Report Reconciliation
     navLinks.push({
@@ -371,7 +404,7 @@ export default function EmployeeDashboard() {
       icon: Users,
       badge: "Floor",
       badgeColor: "bg-blue-500/10 text-blue-600",
-      onSelect: () => setManagerTab("floor"),
+      onSelect: () => updateManagerTab("floor"),
     });
     // 2. Stock & Inventory
     navLinks.push({
@@ -380,7 +413,7 @@ export default function EmployeeDashboard() {
       icon: Package,
       badge: "Stock",
       badgeColor: "bg-teal-500/10 text-teal-600",
-      onSelect: () => setManagerTab("inventory"),
+      onSelect: () => updateManagerTab("inventory"),
     });
     // 3. Voids & Security Alerts
     navLinks.push({
@@ -389,7 +422,7 @@ export default function EmployeeDashboard() {
       icon: ShieldCheck,
       badge: "Security",
       badgeColor: "bg-purple-500/10 text-purple-600",
-      onSelect: () => setManagerTab("audit"),
+      onSelect: () => updateManagerTab("audit"),
     });
     // 4. Staff Roster
     navLinks.push({
@@ -398,7 +431,7 @@ export default function EmployeeDashboard() {
       icon: UserCheck,
       badge: "Staff",
       badgeColor: "bg-slate-500/10 text-slate-600",
-      onSelect: () => setManagerTab("staff"),
+      onSelect: () => updateManagerTab("staff"),
     });
     // 5. Analytics & Graphs
     navLinks.push({
@@ -407,7 +440,7 @@ export default function EmployeeDashboard() {
       icon: BarChart3,
       badge: "Analytics",
       badgeColor: "bg-indigo-500/10 text-indigo-600 font-extrabold",
-      onSelect: () => setManagerTab("analytics"),
+      onSelect: () => updateManagerTab("analytics"),
     });
     // 6. POS Reports Hub (8 Reports)
     navLinks.push({
@@ -416,7 +449,7 @@ export default function EmployeeDashboard() {
       icon: FileSpreadsheet,
       badge: "Reports",
       badgeColor: "bg-blue-500/10 text-blue-600 font-extrabold",
-      onSelect: () => setManagerTab("pos-reports"),
+      onSelect: () => updateManagerTab("pos-reports"),
     });
     // 7. Register & Day-End Z-Report
     navLinks.push({
@@ -434,7 +467,7 @@ export default function EmployeeDashboard() {
       icon: UtensilsCrossed,
       badge: "POS Core",
       badgeColor: "bg-blue-500/10 text-blue-600",
-      onSelect: () => setDrawerOpen(false),
+      onSelect: () => updateDrawerOpen(false),
     });
     navLinks.push({
       label: "Food Ready for Pickup",
@@ -442,7 +475,7 @@ export default function EmployeeDashboard() {
       icon: CheckCircle2,
       badge: "Pickup",
       badgeColor: "bg-emerald-500/10 text-emerald-600",
-      onSelect: () => setDrawerOpen(false),
+      onSelect: () => updateDrawerOpen(false),
     });
     navLinks.push({
       label: "Floor & Table Layout",
@@ -450,7 +483,7 @@ export default function EmployeeDashboard() {
       icon: Users,
       badge: "Floor",
       badgeColor: "bg-blue-500/10 text-blue-600",
-      onSelect: () => setDrawerOpen(false),
+      onSelect: () => updateDrawerOpen(false),
     });
   } else if (isChef) {
     navLinks.push({
@@ -459,7 +492,7 @@ export default function EmployeeDashboard() {
       icon: Flame,
       badge: "Live Queue",
       badgeColor: "bg-orange-500/10 text-orange-600",
-      onSelect: () => setDrawerOpen(false),
+      onSelect: () => updateDrawerOpen(false),
     });
     navLinks.push({
       label: "Cooking Stations & Prep",
@@ -467,7 +500,7 @@ export default function EmployeeDashboard() {
       icon: ChefHat,
       badge: "Stations",
       badgeColor: "bg-purple-500/10 text-purple-600",
-      onSelect: () => setDrawerOpen(false),
+      onSelect: () => updateDrawerOpen(false),
     });
   }
 
@@ -475,18 +508,18 @@ export default function EmployeeDashboard() {
   let DashboardComponent;
   switch (user.role) {
     case "WAITER":
-      DashboardComponent = <WaiterDashboard user={user} onOpenDrawer={() => setDrawerOpen(true)} />;
+      DashboardComponent = <WaiterDashboard user={user} onOpenDrawer={() => updateDrawerOpen(true)} />;
       break;
     case "CHEF":
-      DashboardComponent = <ChefDashboard user={user} onOpenDrawer={() => setDrawerOpen(true)} />;
+      DashboardComponent = <ChefDashboard user={user} onOpenDrawer={() => updateDrawerOpen(true)} />;
       break;
     case "CASHIER":
       DashboardComponent = (
         <CashierDashboard
           user={user}
-          onOpenDrawer={() => setDrawerOpen(true)}
+          onOpenDrawer={() => updateDrawerOpen(true)}
           currentMode={cashierMode}
-          onModeChange={setCashierMode}
+          onModeChange={updateCashierMode}
         />
       );
       break;
@@ -495,9 +528,9 @@ export default function EmployeeDashboard() {
       DashboardComponent = (
         <ManagerDashboard
           user={user}
-          onOpenDrawer={() => setDrawerOpen(true)}
+          onOpenDrawer={() => updateDrawerOpen(true)}
           currentTab={managerTab}
-          onTabChange={setManagerTab}
+          onTabChange={updateManagerTab}
         />
       );
       break;
@@ -514,7 +547,7 @@ export default function EmployeeDashboard() {
   return (
     <div className="h-screen w-screen overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-200 transition-colors">
       {/* ── Slide-out Collapsible Drawer / Sidebar ── */}
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+      <Sheet open={drawerOpen} onOpenChange={updateDrawerOpen}>
         <SheetContent
           side="left"
           className="w-84 sm:w-[380px] bg-slate-50 dark:bg-slate-900/95 border-r border-slate-200/80 dark:border-slate-800 p-0 flex flex-col justify-between shadow-2xl z-50 backdrop-blur-xl"
@@ -596,9 +629,9 @@ export default function EmployeeDashboard() {
                     variant="ghost"
                     size="sm"
                     onClick={() => {
-                      if (isCashier) setCashierMode("reports");
-                      else if (isManager) setManagerTab("pos-reports");
-                      setDrawerOpen(false);
+                      if (isCashier) updateCashierMode("reports");
+                      else if (isManager) updateManagerTab("pos-reports");
+                      updateDrawerOpen(false);
                     }}
                     className="h-6 px-2 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 rounded-md"
                   >
@@ -609,9 +642,9 @@ export default function EmployeeDashboard() {
                 <div className="grid grid-cols-2 gap-2">
                   <div
                     onClick={() => {
-                      if (isCashier) setCashierMode("reports");
-                      else if (isManager) setManagerTab("pos-reports");
-                      setDrawerOpen(false);
+                      if (isCashier) updateCashierMode("reports");
+                      else if (isManager) updateManagerTab("pos-reports");
+                      updateDrawerOpen(false);
                     }}
                     className="p-2 rounded-xl bg-white/80 dark:bg-slate-950/80 border border-border/40 cursor-pointer hover:border-blue-400 transition-colors"
                   >
@@ -622,9 +655,9 @@ export default function EmployeeDashboard() {
                   </div>
                   <div
                     onClick={() => {
-                      if (isCashier) setCashierMode("reports");
-                      else if (isManager) setManagerTab("pos-reports");
-                      setDrawerOpen(false);
+                      if (isCashier) updateCashierMode("reports");
+                      else if (isManager) updateManagerTab("pos-reports");
+                      updateDrawerOpen(false);
                     }}
                     className="p-2 rounded-xl bg-white/80 dark:bg-slate-950/80 border border-border/40 cursor-pointer hover:border-blue-400 transition-colors"
                   >
@@ -662,7 +695,7 @@ export default function EmployeeDashboard() {
                     key={idx}
                     onClick={() => {
                       item.onSelect();
-                      setDrawerOpen(false);
+                      updateDrawerOpen(false);
                       toast({
                         title: `📌 Switched to ${item.label}`,
                         description: item.desc,
@@ -753,7 +786,7 @@ export default function EmployeeDashboard() {
 
       {/* Main Terminal View */}
       <main className="h-full w-full overflow-hidden">
-        {DashboardComponent}
+        <Suspense fallback={<EmployeePanelFallback />}>{DashboardComponent}</Suspense>
       </main>
     </div>
   );

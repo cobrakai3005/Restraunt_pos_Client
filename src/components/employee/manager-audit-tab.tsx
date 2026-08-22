@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { 
   ShieldCheck, 
   Search, 
@@ -91,6 +92,7 @@ function AuditSkeleton() {
 const toInputDate = (d: Date) => d.toISOString().slice(0, 10);
 
 export function ManagerAuditTab() {
+  const queryClient = useQueryClient();
   const today = toInputDate(new Date());
 
   const [loading, setLoading] = useState(true);
@@ -114,12 +116,12 @@ export function ManagerAuditTab() {
   const fetchAuditOrders = useCallback(async (from = dateFrom, to = dateTo) => {
     setLoading(true);
     try {
-      const res = await employeeService.getOrders({
+      const res = await queryClient.fetchQuery({ queryKey: ["manager", "audit-orders", from, to], queryFn: () => employeeService.getOrders({
         limit: 500,
         page: 1,
         startDate: from,
         endDate: to,
-      });
+      }) });
       const extracted = extractArray(res, "orders");
       setOrders(extracted);
       setTotalOrders(res?.meta?.totalRecords ?? res?.meta?.total ?? extracted.length);

@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { 
   Users, 
   Search, 
@@ -73,6 +74,7 @@ function FloorSkeleton() {
 }
 
 export function ManagerFloorView() {
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [tables, setTables] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
@@ -100,9 +102,9 @@ export function ManagerFloorView() {
   const fetchFloorData = useCallback(async () => {
     try {
       const [tablesRes, ordersRes, empRes] = await Promise.allSettled([
-        employeeService.getTables(),
-        employeeService.getOrders({ limit: 100 }),
-        employeeService.getEmployees()
+        queryClient.fetchQuery({ queryKey: ["manager", "floor", "tables"], queryFn: employeeService.getTables }),
+        queryClient.fetchQuery({ queryKey: ["manager", "floor", "orders"], queryFn: () => employeeService.getOrders({ limit: 100 }) }),
+        queryClient.fetchQuery({ queryKey: ["manager", "floor", "employees"], queryFn: employeeService.getEmployees })
       ]);
 
       if (tablesRes.status === "fulfilled") {
@@ -528,4 +530,3 @@ export function ManagerFloorView() {
     </div>
   );
 }
-

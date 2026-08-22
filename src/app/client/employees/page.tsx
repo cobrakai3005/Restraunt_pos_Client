@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, UserSquare2, Mail, Phone, Pencil, Trash2, Copy, Check, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,8 @@ import { clientService } from "@/services/client.service";
 import { useToast } from "@/components/ui/use-toast";
 import { AddEmployeeDialog } from "@/components/client/add-employee-dialog";
 import { EditEmployeeDialog } from "@/components/client/edit-employee-dialog";
+import { useDebounce } from "@/hooks/use-debounce";
+import { portalKeys, useClientEmployees } from "@/hooks/queries/use-portal-queries";
 
 const PAGE_SIZE = 10;
 
@@ -30,8 +33,7 @@ const ROLE_FILTERS = [
 
 export default function EmployeesPage() {
   const { toast } = useToast();
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -43,8 +45,18 @@ export default function EmployeesPage() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
   const [page, setPage] = useState(1);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  const debouncedSearch = useDebounce(search, 350);
+  const employeesQuery = useClientEmployees({
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedSearch || undefined,
+    role: roleFilter !== "ALL" ? roleFilter : undefined,
+  });
+  const employees = employeesQuery.data?.data?.employees || [];
+  const meta = employeesQuery.data?.meta;
+  const totalRecords = meta?.totalRecords ?? employees.length;
+  const totalPages = meta?.totalPages ?? 1;
+  const isLoading = employeesQuery.isLoading || employeesQuery.isFetching;
 
   const handleCopyUrl = () => {
     navigator.clipboard.writeText(`${appUrl}/employee-login`);
@@ -56,51 +68,18 @@ export default function EmployeesPage() {
     });
   };
 
-  const fetchEmployees = async (currentPage = page, searchTerm = search, role = roleFilter) => {
-    try {
-      setIsLoading(true);
-      const res = await clientService.getEmployees({
-        page: currentPage,
-        limit: PAGE_SIZE,
-        search: searchTerm || undefined,
-        role: role !== "ALL" ? role : undefined,
-      });
-      if (res.success) {
-        setEmployees(res.data.employees || []);
-        const meta = res.meta;
-        setTotalRecords(meta?.totalRecords ?? res.data.employees?.length ?? 0);
-        setTotalPages(meta?.totalPages ?? 1);
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load employees.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchEmployees(1, "", "ALL");
-  }, []);
-
   const handleSearchChange = (value: string) => {
     setSearch(value);
     setPage(1);
-    fetchEmployees(1, value, roleFilter);
   };
 
   const handleRoleChange = (value: string) => {
     setRoleFilter(value);
     setPage(1);
-    fetchEmployees(1, search, value);
   };
 
   const handlePageChange = (p: number) => {
     setPage(p);
-    fetchEmployees(p, search, roleFilter);
   };
 
   const handleDelete = async (id: string) => {
@@ -108,7 +87,7 @@ export default function EmployeesPage() {
     try {
       await clientService.deleteEmployee(id);
       toast({ title: "Success", description: "Employee deleted." });
-      fetchEmployees();
+      await queryClient.invalidateQueries({ queryKey: portalKeys.root });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.response?.data?.message || "Failed to delete employee" });
     }
@@ -194,7 +173,7 @@ export default function EmployeesPage() {
                 </tr>
               </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {employees.map((emp) => {
+              {employees.map((emp: any) => {
                 const initials = emp.contactName?.substring(0, 2).toUpperCase() || "EM";
                 return (
                   <tr key={emp._id} className={`group transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50 ${!emp.isActive ? "opacity-60" : ""}`}>
@@ -270,14 +249,14 @@ export default function EmployeesPage() {
       <AddEmployeeDialog 
         open={isAddOpen} 
         onOpenChange={setIsAddOpen} 
-        onSuccess={fetchEmployees}
+        onSuccess={() => employeesQuery.refetch()}
       />
 
       <EditEmployeeDialog
         open={isEditOpen}
         onOpenChange={setIsEditOpen}
         employee={selectedEmployee}
-        onSuccess={fetchEmployees}
+        onSuccess={() => employeesQuery.refetch()}
       />
     </div>
   );

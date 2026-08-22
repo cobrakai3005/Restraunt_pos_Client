@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Plus, Store, MapPin, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,43 +8,22 @@ import { clientService } from "@/services/client.service";
 import { useToast } from "@/components/ui/use-toast";
 import { AddRestaurantDialog } from "@/components/client/add-restaurant-dialog";
 import { EditRestaurantDialog } from "@/components/client/edit-restaurant-dialog";
+import { useClientRestaurants } from "@/hooks/queries/use-portal-queries";
 
 export default function RestaurantsPage() {
   const { toast } = useToast();
-  const [restaurants, setRestaurants] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedRestaurant, setSelectedRestaurant] = useState<any>(null);
 
-  const fetchRestaurants = async () => {
-    try {
-      setIsLoading(true);
-      const res = await clientService.getRestaurants();
-      if (res.success) {
-        setRestaurants(res.data.restaurants || []);
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load restaurants.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchRestaurants();
-  }, []);
+  const { data: restaurants = [], isLoading, refetch: refetchRestaurants } = useClientRestaurants();
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this restaurant? This cannot be undone.")) return;
     try {
       await clientService.deleteRestaurant(id);
       toast({ title: "Success", description: "Restaurant deleted." });
-      fetchRestaurants();
+      refetchRestaurants();
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "Failed to delete restaurant." });
     }
@@ -121,14 +100,14 @@ export default function RestaurantsPage() {
       <AddRestaurantDialog 
         open={isAddOpen} 
         onOpenChange={setIsAddOpen} 
-        onSuccess={fetchRestaurants}
+        onSuccess={() => refetchRestaurants()}
       />
 
       <EditRestaurantDialog
         open={isEditOpen}
         onOpenChange={setIsEditOpen}
         restaurant={selectedRestaurant}
-        onSuccess={fetchRestaurants}
+        onSuccess={() => refetchRestaurants()}
       />
     </div>
   );

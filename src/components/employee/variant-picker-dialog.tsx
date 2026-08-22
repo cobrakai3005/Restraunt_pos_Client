@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import Image from "next/image";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -176,7 +177,7 @@ export function VariantPickerDialog({
             <DialogHeader className="p-0">
               <DialogTitle className="text-lg text-slate-900 dark:text-white flex items-start gap-3">
                 {itemImage && (
-                  <img src={itemImage} alt={itemName} className="h-12 w-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700" />
+                  <Image src={itemImage} alt={itemName} width={48} height={48} sizes="48px" loading="lazy" className="h-12 w-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700" />
                 )}
                 <span className="leading-snug">{itemName}</span>
               </DialogTitle>
@@ -221,7 +222,7 @@ export function VariantPickerDialog({
           <DialogHeader className="p-0">
             <DialogTitle className="text-lg text-slate-900 dark:text-white flex items-center gap-3">
               {itemImage && (
-                <img src={itemImage} alt={itemName} className="h-12 w-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0" />
+                <Image src={itemImage} alt={itemName} width={48} height={48} sizes="48px" loading="lazy" className="h-12 w-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0" />
               )}
               <div>
                 <span className="leading-snug block font-black">{itemName}</span>
@@ -365,4 +366,3 @@ export function VariantPickerDialog({
     </Dialog>
   );
 }
-

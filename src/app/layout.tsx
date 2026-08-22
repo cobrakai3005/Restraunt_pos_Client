@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/layout/theme-provider";
 import { AuthProvider } from "@/context/auth-context";
+import { AppDataProviders } from "@/lib/providers";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -26,10 +27,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         style={{ fontFamily: "var(--font-inter)" }}
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AuthProvider>
-            {children}
-            <Toaster />
-          </AuthProvider>
+          <AppDataProviders><AuthProvider>
+            {children}<Toaster />
+          </AuthProvider></AppDataProviders>
         </ThemeProvider>
       </body>
     </html>

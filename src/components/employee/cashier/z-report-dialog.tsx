@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -44,6 +45,7 @@ import {
   DenominationCounts,
   ZReportData,
 } from "@/services/posReports.service";
+import { cashierKeys } from "@/hooks/queries/cashier-keys";
 
 interface ZReportDialogProps {
   open: boolean;
@@ -62,6 +64,7 @@ export function ZReportDialog({
   userName = "Cashier",
   restaurantName = "",
 }: ZReportDialogProps) {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"reconciliation" | "financials" | "payouts" | "print">("reconciliation");
   const [isLoading, setIsLoading] = useState(false);
@@ -102,7 +105,10 @@ export function ZReportDialog({
     if (!restaurantId) return;
     try {
       setIsLoading(true);
-      const res = await posReportsService.getCurrentCashDrawer(restaurantId);
+      const res = await queryClient.fetchQuery({
+        queryKey: cashierKeys.register(restaurantId),
+        queryFn: () => posReportsService.getCurrentCashDrawer(restaurantId),
+      });
       if (res.data) {
         setDrawerData(res.data);
         const closedZ = (res.data as any).lastClosedDrawer?.zReportData || res.data.drawer?.zReportData;
@@ -158,6 +164,7 @@ export function ZReportDialog({
         title: "🔓 Register Session Opened",
         description: `Opening float of ₹${Number(openingFloatInput).toLocaleString("en-IN")} recorded.`,
       });
+      await queryClient.invalidateQueries({ queryKey: cashierKeys.register(restaurantId) });
       await fetchCurrentDrawer();
     } catch (err: any) {
       toast({
@@ -193,6 +200,7 @@ export function ZReportDialog({
       });
       setPayoutAmount("");
       setPayoutReason("");
+      await queryClient.invalidateQueries({ queryKey: cashierKeys.register(restaurantId) });
       await fetchCurrentDrawer();
     } catch (err: any) {
       toast({
@@ -241,6 +249,7 @@ export function ZReportDialog({
       if (res.data?.zReportData) {
         setLatestClosedZReport(res.data.zReportData);
       }
+      await queryClient.invalidateQueries({ queryKey: cashierKeys.register(restaurantId) });
       await fetchCurrentDrawer();
       setActiveTab("print");
     } catch (err: any) {

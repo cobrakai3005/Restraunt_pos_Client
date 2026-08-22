@@ -1,6 +1,7 @@
 "use client";
 
 import { Layers, UtensilsCrossed } from "lucide-react";
+import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface MenuItemCardProps {
@@ -137,10 +138,11 @@ export function MenuItemCard({
   {/* ================= IMAGE ================= */}
   <div className="relative h-12 shrink-0 overflow-hidden bg-slate-100 dark:bg-slate-900">
     {imageUrl ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
+      <Image
         src={imageUrl}
         alt={name}
+        fill
+        sizes="(max-width: 640px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
         loading="lazy"
         className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.06] motion-reduce:transform-none ${
           isSoldOut ? "grayscale" : ""

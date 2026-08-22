@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { 
   Users, 
   ChefHat, 
@@ -65,6 +66,7 @@ function StaffSkeleton() {
 }
 
 export function ManagerStaffTab() {
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<any[]>([]);
   const [roleFilter, setRoleFilter] = useState("ALL");
@@ -82,7 +84,7 @@ export function ManagerStaffTab() {
   const fetchStaff = async () => {
     setLoading(true);
     try {
-      const res = await employeeService.getEmployees();
+      const res = await queryClient.fetchQuery({ queryKey: ["manager", "staff"], queryFn: employeeService.getEmployees });
       setEmployees(extractArray(res, "employees"));
     } catch (err) {
       console.error("Failed to load employees:", err);

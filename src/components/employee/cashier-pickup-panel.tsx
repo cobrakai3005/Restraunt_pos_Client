@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
@@ -24,6 +25,7 @@ import { connectSocket, disconnectSocket } from "@/lib/socket";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { cashierKeys } from "@/hooks/queries/cashier-keys";
 
 interface DashboardProps {
   user: User;
@@ -78,16 +80,21 @@ interface Order {
 type FilterType = "ALL" | "DINE_IN" | "TAKEAWAY" | "URGENT";
 
 export function CashierPickupPanel({ user, embedded }: DashboardProps) {
+  const queryClient = useQueryClient();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterType>("ALL");
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
-  const fetchOrders = async () => {
-    try {
-      const res = await employeeService.getOrders({ status: "OPEN,BILLED", kitchen: "true" });
+  const kitchenOrdersQuery = useQuery({
+    queryKey: [...cashierKeys.root(), "orders", "kitchen"],
+    queryFn: () => employeeService.getOrders({ status: "OPEN,BILLED", kitchen: "true" }),
+  });
+
+  useEffect(() => {
+    const res: any = kitchenOrdersQuery.data;
+    if (res) {
       const activeList: Order[] = res.data || [];
       // Keep orders that have at least one unserved item
       setOrders(
@@ -95,15 +102,13 @@ export function CashierPickupPanel({ user, embedded }: DashboardProps) {
           o.kots?.some((k) => k.items?.some((i) => i.itemStatus !== "SERVED"))
         )
       );
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Failed to fetch orders", description: error.message });
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [kitchenOrdersQuery.data]);
+
+  const fetchOrders = useCallback(() => kitchenOrdersQuery.refetch(), [kitchenOrdersQuery.refetch]);
+  const isLoading = kitchenOrdersQuery.isLoading;
 
   useEffect(() => {
-    fetchOrders();
     const socket = connectSocket();
     if (!socket) return;
 
@@ -139,13 +144,14 @@ export function CashierPickupPanel({ user, embedded }: DashboardProps) {
       socket.off("order_billed", fetchOrders);
       socket.off("order_settled", fetchOrders);
     };
-  }, []);
+  }, [fetchOrders]);
 
   const markServed = async (orderId: string, itemId: string) => {
     const key = `${orderId}_${itemId}`;
     setUpdating((prev) => ({ ...prev, [key]: true }));
     try {
       await employeeService.updateKotItemStatus(orderId, itemId, "SERVED");
+      await queryClient.invalidateQueries({ queryKey: [...cashierKeys.root(), "orders", "kitchen"] });
       toast({ title: "Item handed over & marked served" });
       fetchOrders();
     } catch (error: any) {

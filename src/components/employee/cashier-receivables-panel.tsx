@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { employeeService } from "@/services/employee.service";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ import { connectSocket } from "@/lib/socket";
 import { customerService, Customer } from "@/services/customer.service";
 import { CustomerSearchSelect } from "@/components/ui/customer-search-select";
 import type { Order } from "./cashier-dashboard";
+import { cashierKeys } from "@/hooks/queries/cashier-keys";
 
 interface CashierReceivablesPanelProps {
   onCollectPayment: (order: Order) => void;
@@ -44,6 +46,7 @@ export function CashierReceivablesPanel({
   onBulkSettle,
   onViewReceipt,
 }: CashierReceivablesPanelProps) {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -64,20 +67,40 @@ export function CashierReceivablesPanel({
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
+  const customersQuery = useQuery({ queryKey: [...cashierKeys.root(), "customers"], queryFn: () => customerService.getCustomers(undefined, { isActive: true }) });
+  const dueQuery = useQuery({
+    queryKey: [...cashierKeys.dues(), { page, limit, status: statusFilter, customerId: selectedCustomerId }],
+    queryFn: async () => {
+      const params: any = { page, limit };
+      if (statusFilter !== "ALL") params.status = statusFilter;
+      if (selectedCustomerId !== "ALL") params.customerId = selectedCustomerId;
+      return (await (await import("@/lib/api")).apiClient.get("/orders/dues", { params })).data;
+    },
+  });
+
+  // Keep existing panel state/props stable while React Query owns requests.
+  useEffect(() => {
+    const res: any = customersQuery.data;
+    if (res) setCustomers(res?.data?.customers || res?.data || res?.customers || []);
+  }, [customersQuery.data]);
+  useEffect(() => {
+    const res: any = dueQuery.data;
+    if (!res?.success) return;
+    const orderList = res.data || [];
+    setOrders(orderList); setTotalItems(res.meta?.totalRecords ?? res.meta?.total ?? orderList.length); setTotalPages(res.meta?.totalPages ?? res.meta?.pages ?? 1); if (res.summary) setSummary(res.summary);
+    setIsLoading(false);
+  }, [dueQuery.data]);
+
   // Fetch customers list for filter dropdown & balance sync
   const fetchCustomers = useCallback(async () => {
     try {
-      const res = await customerService.getCustomers(undefined, { isActive: true });
+      const res = await queryClient.fetchQuery({ queryKey: [...cashierKeys.root(), "customers"], queryFn: () => customerService.getCustomers(undefined, { isActive: true }) });
       const list = res?.data?.customers || res?.data || res?.customers || [];
       setCustomers(Array.isArray(list) ? list : []);
     } catch (err) {
       console.error("Failed to load customer list for credit filter", err);
     }
-  }, []);
-
-  useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
+  }, [queryClient]);
 
   // Map of customerId -> outstanding due orders in current view
   const customerDueOrdersMap = useMemo(() => {
@@ -98,48 +121,10 @@ export function CashierReceivablesPanel({
   }, [orders]);
 
   const fetchDueOrders = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const params: any = {
-        page,
-        limit,
-      };
-      if (statusFilter !== "ALL") params.status = statusFilter;
-      if (selectedCustomerId && selectedCustomerId !== "ALL") params.customerId = selectedCustomerId;
-
-      // Note: apiClient in employeeService sends auth JWT token with cashier's restaurantId automatically
-      const res = await (await import("@/lib/api")).apiClient.get("/orders/dues", { params });
-
-      if (res.data?.success) {
-        const orderList = res.data.data || [];
-        const totalCount = res.data.meta?.totalRecords ?? res.data.meta?.total ?? orderList.length;
-        const pageCount = res.data.meta?.totalPages ?? res.data.meta?.pages ?? 1;
-
-        setOrders(orderList);
-        setTotalItems(totalCount);
-        setTotalPages(pageCount);
-        if (res.data.summary) {
-          setSummary(res.data.summary);
-        }
-      } else {
-        setOrders([]);
-      }
-    } catch (err: any) {
-      console.error(err);
-      toast({
-        variant: "destructive",
-        title: "Error fetching credit accounts",
-        description: err.response?.data?.message || err.message,
-      });
-      setOrders([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [page, limit, statusFilter, selectedCustomerId, toast]);
+    await dueQuery.refetch();
+  }, [dueQuery.refetch]);
 
   useEffect(() => {
-    fetchDueOrders();
-
     const handleUpdate = () => {
       fetchDueOrders();
       fetchCustomers();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, Menu, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ interface ReadyItem {
 }
 
 export function WaiterDashboard({ user, onOpenDrawer }: DashboardProps) {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [readyItems, setReadyItems] = useState<ReadyItem[]>([]);
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
@@ -31,8 +33,8 @@ export function WaiterDashboard({ user, onOpenDrawer }: DashboardProps) {
   const fetchReadyItems = useCallback(async () => {
     try {
       const [resOpen, resBilled] = await Promise.all([
-        employeeService.getOrders({ status: "OPEN" }),
-        employeeService.getOrders({ status: "BILLED" }),
+        queryClient.fetchQuery({ queryKey: ["orders", "OPEN", "waiter"], queryFn: () => employeeService.getOrders({ status: "OPEN" }) }),
+        queryClient.fetchQuery({ queryKey: ["orders", "BILLED", "waiter"], queryFn: () => employeeService.getOrders({ status: "BILLED" }) }),
       ]);
       const orders = [...(resOpen.data || []), ...(resBilled.data || [])];
 
@@ -62,34 +64,30 @@ export function WaiterDashboard({ user, onOpenDrawer }: DashboardProps) {
     } catch (err) {
       console.error("Failed to fetch ready items", err);
     }
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     fetchReadyItems();
+    const refreshReadyItems = () => { queryClient.invalidateQueries({ queryKey: ["orders"] }); fetchReadyItems(); };
 
     const socket = connectSocket();
     if (socket) {
-      socket.on("item_status_update", fetchReadyItems);
-      socket.on("new_kot", fetchReadyItems);
-      socket.on("table_status_change", fetchReadyItems);
-      socket.on("order_billed", fetchReadyItems);
+      socket.on("item_status_update", refreshReadyItems); socket.on("new_kot", refreshReadyItems); socket.on("table_status_change", refreshReadyItems); socket.on("order_billed", refreshReadyItems);
     }
 
     return () => {
       if (socket) {
-        socket.off("item_status_update", fetchReadyItems);
-        socket.off("new_kot", fetchReadyItems);
-        socket.off("table_status_change", fetchReadyItems);
-        socket.off("order_billed", fetchReadyItems);
+        socket.off("item_status_update", refreshReadyItems); socket.off("new_kot", refreshReadyItems); socket.off("table_status_change", refreshReadyItems); socket.off("order_billed", refreshReadyItems);
       }
     };
-  }, [fetchReadyItems]);
+  }, [fetchReadyItems, queryClient]);
 
   const markItemServed = async (orderId: string, itemId: string) => {
     const key = `${orderId}_${itemId}`;
     setUpdating(prev => ({ ...prev, [key]: true }));
     try {
       await employeeService.updateKotItemStatus(orderId, itemId, "SERVED");
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
       fetchReadyItems();
       toast({ title: "✅ Marked as served!" });
     } catch (error: any) {

@@ -1,30 +1,41 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
-import { employeeService } from "@/services/employee.service";
-import { customerService, Customer } from "@/services/customer.service";
 import { connectSocket, disconnectSocket } from "@/lib/socket";
-import { VariantPickerDialog, SelectedModifier } from "./variant-picker-dialog";
+import { VariantPickerDialog } from "./variant-picker-dialog";
 import { ReceiptModal } from "./ReceiptModal";
 import { MergeTablesDialog } from "./merge-tables-dialog";
 import { UnmergeTablesDialog } from "./unmerge-tables-dialog";
-import { Menu, Table, CartItem, Order, PRESET_COOKING_NOTES } from "./order-taking/types";
+import { Menu, Table, Order, PRESET_COOKING_NOTES } from "./order-taking/types";
 import { TableFloorSidebar } from "./order-taking/table-floor-sidebar";
 import { CategorySidebar } from "./order-taking/category-sidebar";
 import { MenuCatalogSection } from "./order-taking/menu-catalog-section";
 import { FloatingActionButtons } from "./order-taking/floating-action-buttons";
 import { CartDrawer } from "./order-taking/cart-drawer";
+import { useAppDispatch } from "@/store/hooks";
+import { setOrderType as setPosOrderType, setSelectedTableId } from "@/store/pos-slice";
+import { useOrderTerminalData, useOrderTerminalMutations } from "@/hooks/queries/use-order-queries";
+import { cashierKeys } from "@/hooks/queries/cashier-keys";
+import { useOrderCart } from "./order-taking/use-order-cart";
+import { useOrderCustomer } from "./order-taking/use-order-customer";
+import { useOrderTable } from "./order-taking/use-order-table";
+import { useOrderSubmission } from "./order-taking/use-order-submission";
 
 interface OrderTakingPanelProps {
   onOrderFired?: () => void;
 }
 
 export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
-  const [menus, setMenus] = useState<Menu[]>([]);
-  const [tables, setTables] = useState<Table[]>([]);
-  const [categories, setCategories] = useState<{ _id: string; name: string }[]>([]);
-  const [activeOrders, setActiveOrders] = useState<Order[]>([]);
+  const dispatch = useAppDispatch();
+  const queryClient = useQueryClient();
+  const terminalData = useOrderTerminalData();
+  const terminalMutations = useOrderTerminalMutations();
+  const menus = (terminalData.menuItems as Menu[]).filter((menu: any) => menu.isActive);
+  const tables = terminalData.tables as Table[];
+  const categories = (terminalData.categories as { _id: string; name: string; isActive?: boolean }[]).filter((category) => category.isActive !== false);
+  const activeOrders = terminalData.activeOrders as Order[];
 
   const [activeCategoryId, setActiveCategoryId] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -38,41 +49,9 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [selectedTable, setSelectedTable] = useState("");
-  const [guestCount, setGuestCount] = useState<number>(2);
-  const [orderType, setOrderType] = useState<"DINE_IN" | "TAKEAWAY">("DINE_IN");
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [matchedCustomer, setMatchedCustomer] = useState<Customer | null>(null);
+  const { customerName, setCustomerName, customerPhone, setCustomerPhone, matchedCustomer, resetCustomer } = useOrderCustomer();
 
-  // Debounced phone search for customer tagging
-  useEffect(() => {
-    if (!customerPhone || customerPhone.trim().length < 4) {
-      setMatchedCustomer(null);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await customerService.searchCustomerByPhone(customerPhone.trim());
-        if (res?.data) {
-          setMatchedCustomer(res.data);
-          if (!customerName.trim()) {
-            setCustomerName(res.data.name);
-          }
-        } else {
-          setMatchedCustomer(null);
-        }
-      } catch {
-        setMatchedCustomer(null);
-      }
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [customerPhone, customerName]);
-
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isQuickReceiptSubmitting, setIsQuickReceiptSubmitting] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const isLoading = terminalData.isLoading;
   const [pickerMenu, setPickerMenu] = useState<Menu | null>(null);
   const [receiptOrder, setReceiptOrder] = useState<any | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -81,6 +60,47 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   const [unmergeTargetOrder, setUnmergeTargetOrder] = useState<any | null>(null);
   const [unmergeTargetTableId, setUnmergeTargetTableId] = useState<string>("");
   const { toast } = useToast();
+  const { selectedTable, guestCount, setGuestCount, orderType, setOrderType, selectTable, resetTableContext, clearSelectedTable } = useOrderTable(toast, tables, activeOrders);
+  const {
+    cart,
+    cartFlash,
+    recentlyAdded,
+    addToCart,
+    updateQuantity,
+    updateNotes,
+    togglePresetNote,
+    removeFromCart,
+    getItemUnitPrice,
+    subtotal,
+    taxes,
+    total,
+    effectiveTaxPct,
+    clearCart,
+  } = useOrderCart(toast);
+  const { isSubmitting, isQuickReceiptSubmitting, placeOrder, handleQuickReceipt } = useOrderSubmission({
+    cart,
+    selectedTable,
+    orderType,
+    guestCount,
+    customerName,
+    customerPhone,
+    matchedCustomer,
+    activeOrders,
+    tables,
+    mutations: terminalMutations,
+    queryClient,
+    clearCart,
+    onOrderFired,
+    onReceiptReady: (order) => {
+      setReceiptOrder(order);
+      setShowReceiptModal(true);
+    },
+  });
+
+  // Redux holds the cross-screen POS session fields; detailed cart editing
+  // remains local to this terminal until it is deliberately shared elsewhere.
+  useEffect(() => { dispatch(setSelectedTableId(selectedTable || null)); }, [dispatch, selectedTable]);
+  useEffect(() => { dispatch(setPosOrderType(orderType)); }, [dispatch, orderType]);
 
   const isFirstLoadRef = useRef(true);
   const toastedItemsRef = useRef<Set<string>>(new Set());
@@ -92,11 +112,9 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
   const pickerQtyRef = useRef<number>(1);
 
   // UX: cart flash animation — pulses the FAB when a new item is added
-  const [cartFlash, setCartFlash] = useState(false);
   // UX: cart drawer open/close
   const [cartOpen, setCartOpen] = useState(false);
   // UX: recently added strip — last 4 unique items added to cart for quick re-add
-  const [recentlyAdded, setRecentlyAdded] = useState<Menu[]>([]);
 
   // Close cart drawer on Escape key
   useEffect(() => {
@@ -123,15 +141,9 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const fetchActiveOrders = useCallback(async () => {
-    try {
-      const [resOpen, resBilled] = await Promise.all([
-        employeeService.getOrders({ status: "OPEN" }),
-        employeeService.getOrders({ status: "BILLED" }),
-      ]);
-      const newOrders = [...(resOpen.data || []), ...(resBilled.data || [])];
-
-      newOrders.forEach((newOrder: any) => {
+  useEffect(() => {
+      if (activeOrders.length === 0) return;
+      activeOrders.forEach((newOrder: any) => {
         newOrder.kots?.forEach((newKot: any) => {
           newKot.items?.forEach((newItem: any) => {
             if (newItem.itemStatus === "READY") {
@@ -153,124 +165,24 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
           });
         });
       });
-
       isFirstLoadRef.current = false;
-      setActiveOrders(newOrders);
-    } catch (error) {
-      console.error("Failed to fetch active orders", error);
-    }
-  }, [toast]);
+  }, [activeOrders, toast]);
 
   const refreshFloorAndOrders = useCallback(async () => {
-    fetchActiveOrders();
-    try {
-      const tabRes = await employeeService.getTables();
-      setTables(tabRes.data?.tables || []);
-    } catch {
-      // ignore
-    }
-  }, [fetchActiveOrders]);
+    await Promise.all([terminalData.refetchOrders(), terminalData.refetchTables()]);
+  }, [terminalData]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [menRes, tabRes, catRes] = await Promise.all([
-          employeeService.getMenuItems(),
-          employeeService.getTables(),
-          employeeService.getCategories(),
-        ]);
-
-        setMenus(menRes.data?.menuItems?.filter((m: any) => m.isActive) || []);
-        setTables(tabRes.data?.tables || []);
-        setCategories(catRes.data?.categories?.filter((c: any) => c.isActive) || []);
-      } catch (error: any) {
-        toast({ variant: "destructive", title: "Failed to load POS data", description: error.message });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchData();
-    fetchActiveOrders();
-
     const socket = connectSocket();
     if (socket) {
-      socket.on("table_status_change", refreshFloorAndOrders);
-      socket.on("tables_merged", refreshFloorAndOrders);
-      socket.on("tables_unmerged", refreshFloorAndOrders);
-      socket.on("item_status_update", fetchActiveOrders);
-      socket.on("order_billed", fetchActiveOrders);
-      socket.on("new_kot", fetchActiveOrders);
+      const refreshOrders = () => queryClient.invalidateQueries({ queryKey: cashierKeys.orders("OPEN") });
+      const refreshFloor = () => { queryClient.invalidateQueries({ queryKey: cashierKeys.orders("OPEN") }); queryClient.invalidateQueries({ queryKey: cashierKeys.tables() }); };
+      socket.on("table_status_change", refreshFloor); socket.on("tables_merged", refreshFloor); socket.on("tables_unmerged", refreshFloor);
+      socket.on("item_status_update", refreshOrders); socket.on("order_billed", refreshOrders); socket.on("new_kot", refreshOrders);
+      return () => { socket.off("table_status_change", refreshFloor); socket.off("tables_merged", refreshFloor); socket.off("tables_unmerged", refreshFloor); socket.off("item_status_update", refreshOrders); socket.off("order_billed", refreshOrders); socket.off("new_kot", refreshOrders); };
     }
-
-    return () => {
-      if (socket) {
-        socket.off("table_status_change", refreshFloorAndOrders);
-        socket.off("tables_merged", refreshFloorAndOrders);
-        socket.off("tables_unmerged", refreshFloorAndOrders);
-        socket.off("item_status_update", fetchActiveOrders);
-        socket.off("order_billed", fetchActiveOrders);
-        socket.off("new_kot", fetchActiveOrders);
-      }
-    };
-  }, [toast, fetchActiveOrders, refreshFloorAndOrders]);
-
-  const addToCart = (
-    menu: Menu,
-    chosenVariant?: { name: string; price: number },
-    selectedModifiers: SelectedModifier[] = [],
-    itemNotes: string = "",
-    addedQty: number = 1
-  ) => {
-    if (!menu.isAvailable) {
-      toast({
-        variant: "destructive",
-        title: "Item Unavailable",
-        description: "This item is currently marked as unavailable.",
-      });
-      return;
-    }
-
-    const selectedVariant = chosenVariant || menu.variants?.[0] || { name: "Standard", price: 0 };
-    const modifiersKey = (selectedModifiers || [])
-      .map((m) => `${m.groupName}:${m.name}`)
-      .sort()
-      .join("|");
-    const cartId = `${menu._id}_${selectedVariant.name}_${modifiersKey}`;
-
-    setCart((prev) => {
-      const existing = prev.find((item) => item.cartId === cartId);
-      if (existing) {
-        return prev.map((item) =>
-          item.cartId === cartId ? { ...item, quantity: item.quantity + addedQty } : item
-        );
-      }
-      return [
-        ...prev,
-        {
-          ...menu,
-          cartId,
-          quantity: addedQty,
-          notes: itemNotes,
-          selectedVariant,
-          selectedModifiers,
-        },
-      ];
-    });
-
-    setRecentlyAdded((prev) => {
-      const filtered = prev.filter((m) => m._id !== menu._id);
-      return [menu, ...filtered].slice(0, 4);
-    });
-
-    setCartFlash(true);
-    setTimeout(() => setCartFlash(false), 400);
-
-    toast({
-      title: `Added to Cart 🛒`,
-      description: `${addedQty > 1 ? `${addedQty}x ` : ""}${menu.name} (${selectedVariant.name})`,
-      duration: 1500,
-    });
-  };
+    return undefined;
+  }, [queryClient]);
 
   const handleMenuClick = (menu: Menu) => {
     const hasMultipleVariants = menu.variants && menu.variants.length > 1;
@@ -359,70 +271,6 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     }
   };
 
-  const updateQuantity = (cartId: string, delta: number) => {
-    setCart((prev) =>
-      prev
-        .map((item) => {
-          if (item.cartId === cartId) {
-            const newQty = item.quantity + delta;
-            return newQty > 0 ? { ...item, quantity: newQty } : null;
-          }
-          return item;
-        })
-        .filter(Boolean) as CartItem[]
-    );
-  };
-
-  const updateNotes = (cartId: string, notes: string) => {
-    setCart((prev) =>
-      prev.map((item) => (item.cartId === cartId ? { ...item, notes } : item))
-    );
-  };
-
-  const togglePresetNote = (cartId: string, preset: string) => {
-    setCart((prev) =>
-      prev.map((item) => {
-        if (item.cartId !== cartId) return item;
-        const current = item.notes ? item.notes.trim() : "";
-        const parts = current ? current.split(",").map((s) => s.trim()) : [];
-        let updated: string[];
-        if (parts.includes(preset)) {
-          updated = parts.filter((p) => p !== preset);
-        } else {
-          updated = [...parts, preset];
-        }
-        return { ...item, notes: updated.join(", ") };
-      })
-    );
-  };
-
-  const removeFromCart = (cartId: string) => {
-    setCart((prev) => prev.filter((item) => item.cartId !== cartId));
-  };
-
-  const getItemUnitPrice = (item: CartItem): number => {
-    const variantP = item.selectedVariant?.price || 0;
-    const modifiersP = (item.selectedModifiers || []).reduce(
-      (sum, m) => sum + (Number(m.price) || 0),
-      0
-    );
-    return variantP + modifiersP;
-  };
-
-  const subtotal = cart.reduce((sum, item) => sum + getItemUnitPrice(item) * item.quantity, 0);
-
-  const calculateTotalTaxes = () => {
-    return cart.reduce((sum, item) => {
-      const itemSubtotal = getItemUnitPrice(item) * item.quantity;
-      const rate = ((item.variants?.[0] as any)?.taxPercentage ?? 5) / 100;
-      return sum + itemSubtotal * rate;
-    }, 0);
-  };
-
-  const taxes = calculateTotalTaxes();
-  const total = subtotal + taxes;
-  const effectiveTaxPct = subtotal > 0 ? ((taxes / subtotal) * 100).toFixed(0) : "5";
-
   const categoryCountMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const menu of menus) {
@@ -454,281 +302,25 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
     return result;
   }, [menus, activeCategoryId, debouncedSearchQuery]);
 
-  const placeOrder = async (): Promise<any> => {
-    if (cart.length === 0) return null;
-    if (orderType === "DINE_IN" && !selectedTable) {
-      toast({
-        variant: "destructive",
-        title: "Table Required",
-        description: "Please select a table from the floor layout.",
-      });
-      return null;
-    }
-
-    setIsSubmitting(true);
-    try {
-      let orderId: string | null = null;
-
-      // Check if table already has an active OPEN order (including merged primary order)
-      const existingOrder = activeOrders.find((o) => {
-        if (!o || o.status !== "OPEN") return false;
-        const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
-        const linkedIds = Array.isArray(o.tableIds)
-          ? o.tableIds.map((t: any) => (typeof t === "object" ? t._id : t))
-          : [];
-        return String(tId) === String(selectedTable) || linkedIds.includes(String(selectedTable));
-      });
-
-      if (existingOrder) {
-        orderId = existingOrder._id;
-
-        // Reusing an open table order must also persist the customer selected
-        // in the order-taking panel. Otherwise the cashier only receives the
-        // old customer name and has no phone/customer id to restore.
-        if (matchedCustomer || customerName.trim() || customerPhone.trim()) {
-          await employeeService.updateCustomer(orderId, {
-            name: matchedCustomer?.name || customerName.trim() || "Walk-in",
-            phone: matchedCustomer?.phone || customerPhone.trim() || "",
-            customerId: matchedCustomer?._id || null,
-          });
-        }
-      } else {
-        const payload: any = {
-          orderType,
-          guestCount: Math.max(1, guestCount),
-        };
-
-        if (orderType === "DINE_IN") {
-          payload.tableId = selectedTable;
-        }
-
-        if (customerName.trim() || customerPhone.trim()) {
-          payload.customerDetails = {
-            name: customerName.trim() || "Walk-in",
-            phone: customerPhone.trim() || "",
-            customerId: matchedCustomer?._id || null,
-          };
-        }
-
-        const createRes = await employeeService.createOrder(payload);
-        const createdData = createRes.data || createRes;
-        orderId = createdData._id || createdData.id || createdData.order?._id;
-      }
-
-      if (!orderId) {
-        throw new Error("Could not initialize order for this table.");
-      }
-
-      // Add KOT to the order
-      const kotPayload = {
-        station: cart[0]?.station || "KITCHEN",
-        items: cart.map((item) => ({
-          menuItemId: item._id,
-          variantName: item.selectedVariant.name,
-          quantity: item.quantity,
-          notes: item.notes || "",
-          selectedModifiers: (item.selectedModifiers || []).map((m) => ({
-            name: m.name,
-            price: m.price,
-            groupName: m.groupName,
-          })),
-        })),
-      };
-
-      const kotRes = await employeeService.addKot(orderId, kotPayload);
-
-      toast({
-        title: "Order Fired! 🔥",
-        description: `Successfully fired to kitchen stations${
-          orderType === "DINE_IN"
-            ? ` for Table ${tables.find((t) => t._id === selectedTable)?.tableNumber || selectedTable}`
-            : ""
-        }.`,
-        className: "bg-emerald-50 border-emerald-500 text-emerald-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-100",
-      });
-
-      setCart([]);
-      setRecentlyAdded([]);
-      await fetchActiveOrders();
-      onOrderFired?.();
-      return kotRes?.data || kotRes;
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Order Failed",
-        description: error.response?.data?.message || error.message || "Failed to fire order.",
-      });
-      return null;
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleQuickReceipt = async () => {
-    if (cart.length === 0) return;
-    setIsQuickReceiptSubmitting(true);
-    try {
-      // ── Step 1: Create order + fire KOT ──
-      if (orderType === "DINE_IN" && !selectedTable) {
-        toast({ variant: "destructive", title: "Table Required", description: "Please select a table before using Quick Receipt." });
-        return;
-      }
-
-      let orderId: string | null = null;
-
-      // Reuse existing OPEN order for this table if one exists
-      const existingOrder = activeOrders.find((o) => {
-        if (!o || o.status !== "OPEN") return false;
-        const tId = typeof o.tableId === "object" ? o.tableId?._id : o.tableId;
-        const linkedIds = Array.isArray(o.tableIds)
-          ? o.tableIds.map((t: any) => (typeof t === "object" ? t._id : t))
-          : [];
-        return String(tId) === String(selectedTable) || linkedIds.includes(String(selectedTable));
-      });
-
-      if (existingOrder) {
-        orderId = existingOrder._id;
-
-        // Keep customer details in sync when Quick Receipt reuses an existing
-        // open table order.
-        if (matchedCustomer || customerName.trim() || customerPhone.trim()) {
-          await employeeService.updateCustomer(orderId, {
-            name: matchedCustomer?.name || customerName.trim() || "Walk-in",
-            phone: matchedCustomer?.phone || customerPhone.trim() || "",
-            customerId: matchedCustomer?._id || null,
-          });
-        }
-      } else {
-        const payload: any = { orderType, guestCount: Math.max(1, guestCount) };
-        if (orderType === "DINE_IN") payload.tableId = selectedTable;
-        if (customerName.trim() || customerPhone.trim()) {
-          payload.customerDetails = {
-            name: customerName.trim() || "Walk-in",
-            phone: customerPhone.trim() || "",
-            customerId: matchedCustomer?._id || null,
-          };
-        }
-        const createRes = await employeeService.createOrder(payload);
-        const createdData = createRes.data || createRes;
-        orderId = createdData._id || createdData.id || createdData.order?._id;
-      }
-
-      if (!orderId) throw new Error("Could not initialize order.");
-
-      // Add KOT (fires to kitchen display — fine if it shows there)
-      const kotPayload = {
-        station: cart[0]?.station || "KITCHEN",
-        items: cart.map((item) => ({
-          menuItemId: item._id,
-          variantName: item.selectedVariant.name,
-          quantity: item.quantity,
-          notes: item.notes || "",
-          selectedModifiers: (item.selectedModifiers || []).map((m) => ({
-            name: m.name,
-            price: m.price,
-            groupName: m.groupName,
-          })),
-        })),
-      };
-      await employeeService.addKot(orderId, kotPayload);
-
-      // ── Step 2: Generate bill → lock totals, status becomes BILLED ──
-      const billedOrder = await employeeService.generateBill(orderId);
-      const grandTotal =
-        billedOrder?.financials?.grandTotal ??
-        billedOrder?.data?.financials?.grandTotal ??
-        0;
-
-      // ── Step 3: Checkout with CASH → status PAID, SALES transaction created ──
-      const checkoutResult = await employeeService.checkoutOrder(orderId, {
-        payments: [{ method: "CASH", amount: grandTotal }],
-      });
-
-      const paidOrder =
-        checkoutResult?.order ??
-        checkoutResult?.data?.order ??
-        billedOrder;
-
-      // ── Step 4: Clear cart, refresh orders, show receipt ──
-      setCart([]);
-      setRecentlyAdded([]);
-      await fetchActiveOrders();
-      onOrderFired?.();
-
-      toast({
-        title: "Quick Receipt ⚡🧾",
-        description: `₹${grandTotal.toFixed(0)} collected. Order marked PAID.`,
-        className: "bg-emerald-50 border-emerald-500 text-emerald-900 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-100",
-      });
-
-      setReceiptOrder(paidOrder);
-      setShowReceiptModal(true);
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Quick Receipt Failed",
-        description: err?.response?.data?.message || err.message || "Something went wrong.",
-      });
-    } finally {
-      setIsQuickReceiptSubmitting(false);
-    }
-  };
-
   const handleResetAll = () => {
-    setCart([]);
-    setSelectedTable("");
-    setCustomerName("");
-    setCustomerPhone("");
+    clearCart();
+    resetTableContext();
+    resetCustomer();
     setSearchQuery("");
-    setOrderType("DINE_IN");
     toast({
       title: "Order Reset 🧹",
       description: "Cart, selected table, and customer details cleared.",
     });
   };
 
-  const handleTableSelection = (tableId: string) => {
-    const t = tables.find((tab) => tab._id === tableId);
-    const isMergedSecondary = t?.status === "MERGED" || Boolean(t?.mergedIntoTableId);
-    const parentTableId = isMergedSecondary
-      ? typeof t?.mergedIntoTableId === "object"
-        ? t?.mergedIntoTableId?._id
-        : t?.mergedIntoTableId
-      : null;
-    const parentTable = parentTableId ? tables.find((pt) => String(pt._id) === String(parentTableId)) : null;
-
-    if (isMergedSecondary && parentTableId) {
-      setSelectedTable(parentTableId);
-      setOrderType("DINE_IN");
-      toast({
-        title: `🔗 Table ${t?.tableNumber} is Merged`,
-        description: `Switched to Primary Table ${parentTable?.tableNumber || ""}.`,
-      });
-      return;
-    }
-
-    setSelectedTable(tableId);
-    setOrderType("DINE_IN");
-    const order = activeOrders.find(
-      (o) =>
-        (o.tableId?._id === tableId || (o as any).tableId === tableId) &&
-        o.status === "OPEN"
-    );
-
-    if (order) {
-      if (order.guestCount) {
-        setGuestCount(order.guestCount);
-      }
-      if (order.customerDetails) {
-        setCustomerName(order.customerDetails.name || "");
-        setCustomerPhone(order.customerDetails.phone || "");
-      }
+  const handleTableSelection = (tableId: string) => selectTable(tableId, (name, phone) => {
+    if (name || phone) {
+      setCustomerName(name);
+      setCustomerPhone(phone);
     } else {
-      setGuestCount(t?.capacity || 2);
-      setCustomerName("");
-      setCustomerPhone("");
+      resetCustomer();
     }
-  };
+  });
 
   if (isLoading) {
     return (
@@ -879,7 +471,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         onSwitchOrderType={setOrderType}
         selectedTable={selectedTable}
         tables={tables}
-        onUnselectTable={() => setSelectedTable("")}
+        onUnselectTable={clearSelectedTable}
         guestCount={guestCount}
         onUpdateGuestCount={(delta) => setGuestCount((g) => Math.max(1, g + delta))}
         recentlyAdded={recentlyAdded}
@@ -916,7 +508,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         orderType={orderType}
         onSetOrderType={(type) => {
           setOrderType(type);
-          if (type === "TAKEAWAY") setSelectedTable("");
+          if (type === "TAKEAWAY") clearSelectedTable();
         }}
         tables={tables}
         activeOrders={activeOrders}
@@ -929,9 +521,7 @@ export function OrderTakingPanel({ onOrderFired }: OrderTakingPanelProps) {
         onCustomerPhoneChange={setCustomerPhone}
         matchedCustomer={matchedCustomer}
         onClearCustomer={() => {
-          setCustomerName("");
-          setCustomerPhone("");
-          setMatchedCustomer(null);
+          resetCustomer();
         }}
         getItemUnitPrice={getItemUnitPrice}
         updateNotes={updateNotes}

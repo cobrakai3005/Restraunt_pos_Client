@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Tags, Store } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -10,8 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { clientService } from "@/services/client.service";
 import { CategoriesTab } from "@/components/client/restaurant/categories-tab";
+import { useClientRestaurants } from "@/hooks/queries/use-portal-queries";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setClientSelectedRestaurantId } from "@/store/portal-ui-slice";
 
 interface Restaurant {
   _id: string;
@@ -19,30 +21,15 @@ interface Restaurant {
 }
 
 export default function ClientCategoriesPage() {
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(true);
+  const dispatch = useAppDispatch();
+  const selectedRestaurantId = useAppSelector((state) => state.portalUi.clientSelectedRestaurantId);
+  const { data: restaurants = [], isLoading } = useClientRestaurants();
 
   useEffect(() => {
-    fetchRestaurants();
-  }, []);
-
-  const fetchRestaurants = async () => {
-    try {
-      setIsLoading(true);
-      const res = await clientService.getRestaurants();
-      if (res.success && res.data.restaurants) {
-        setRestaurants(res.data.restaurants);
-        if (res.data.restaurants.length > 0) {
-          setSelectedRestaurantId(res.data.restaurants[0]._id);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch restaurants", err);
-    } finally {
-      setIsLoading(false);
+    if (restaurants.length && !restaurants.some((restaurant: Restaurant) => restaurant._id === selectedRestaurantId)) {
+      dispatch(setClientSelectedRestaurantId(restaurants[0]._id));
     }
-  };
+  }, [dispatch, restaurants, selectedRestaurantId]);
 
   return (
     <div className="space-y-6 pb-10">
@@ -57,7 +44,7 @@ export default function ClientCategoriesPage() {
             <span className="text-sm font-medium text-slate-500 whitespace-nowrap">Restaurant:</span>
             <Select
               value={selectedRestaurantId}
-              onValueChange={setSelectedRestaurantId}
+              onValueChange={(restaurantId) => dispatch(setClientSelectedRestaurantId(restaurantId))}
             >
               <SelectTrigger className="w-[200px] bg-background">
                 <SelectValue placeholder="Select Restaurant" />

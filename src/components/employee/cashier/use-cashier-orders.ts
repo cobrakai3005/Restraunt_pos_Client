@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
 import { employeeService } from "@/services/employee.service";
 import { connectSocket } from "@/lib/socket";
 import { Order, KotItem, Mode, calculateOrderFinancials } from "./types";
 import { Customer } from "@/services/customer.service";
+import { cashierKeys } from "@/hooks/queries/cashier-keys";
 
 export interface CustomerContextData {
   matchedCustomer: Customer | null;
@@ -15,11 +17,11 @@ export interface CustomerContextData {
   setBillingTab: (tab: "bill" | "customer" | "discount") => void;
 }
 
-export function useCashierOrders(getCustomerContext?: () => CustomerContextData) {
+export function useCashierOrders(getCustomerContext?: () => CustomerContextData, activeMode?: Mode) {
+  const queryClient = useQueryClient();
   const [orders, setOrders] = useState<Order[]>([]);
   const [tables, setTables] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedOrderForHistory, setSelectedOrderForHistory] = useState<Order | null>(null);
   const [completedReceiptOrder, setCompletedReceiptOrder] = useState<Order | null>(null);
@@ -33,11 +35,18 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
   const [showPaidOrders, setShowPaidOrdersRaw] = useState(false);
   const [paidOrders, setPaidOrders] = useState<Order[]>([]);
   const [isFetchingPaid, setIsFetchingPaid] = useState(false);
+  const shouldLoadBillingData = activeMode === undefined || activeMode === "billing";
+  const activeOrdersQuery = useQuery({ queryKey: cashierKeys.orders("OPEN"), queryFn: () => employeeService.getOrders({ status: "OPEN", limit: 100 }), enabled: shouldLoadBillingData });
+  const billedOrdersQuery = useQuery({ queryKey: cashierKeys.orders("BILLED"), queryFn: () => employeeService.getOrders({ status: "BILLED", limit: 100 }), enabled: shouldLoadBillingData });
+  const tablesQuery = useQuery({ queryKey: cashierKeys.tables(), queryFn: employeeService.getTables, enabled: shouldLoadBillingData });
 
   const fetchPaidOrders = useCallback(async () => {
     setIsFetchingPaid(true);
     try {
-      const res = await employeeService.getOrders({ status: "PAID", limit: 100 });
+      const res = await queryClient.fetchQuery({
+        queryKey: cashierKeys.orders("PAID"),
+        queryFn: () => employeeService.getOrders({ status: "PAID", limit: 100 }),
+      });
       const getList = (r: any) =>
         Array.isArray(r) ? r
         : Array.isArray(r?.data) ? r.data
@@ -50,7 +59,7 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
     } finally {
       setIsFetchingPaid(false);
     }
-  }, []);
+  }, [queryClient]);
 
   const setShowPaidOrders = useCallback((val: boolean) => {
     setShowPaidOrdersRaw(val);
@@ -73,81 +82,56 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
 
   const { toast } = useToast();
   const fetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const hasLoadedOnce = useRef(false);
 
   const getOrderGrandTotal = (order: Order | null) => {
     return calculateOrderFinancials(order).grandTotal;
   };
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      if (!hasLoadedOnce.current) {
-        setIsLoading(true);
-      }
-      const [resActive, resBilled, resTables] = await Promise.all([
-        employeeService.getOrders({ status: "OPEN", limit: 100 }),
-        employeeService.getOrders({ status: "BILLED", limit: 100 }),
-        employeeService.getTables(),
-      ]);
-
-      const tablesList = Array.isArray(resTables)
-        ? resTables
-        : Array.isArray(resTables?.data?.tables)
-        ? resTables.data.tables
-        : Array.isArray(resTables?.data)
-        ? resTables.data
-        : Array.isArray(resTables?.tables)
-        ? resTables.tables
-        : [];
-      setTables(tablesList);
-
-      const getList = (res: any) =>
-        Array.isArray(res)
-          ? res
-          : Array.isArray(res?.data)
-          ? res.data
-          : Array.isArray(res?.data?.orders)
-          ? res.data.orders
-          : Array.isArray(res?.orders)
-          ? res.orders
-          : [];
-
-      const activeList = getList(resActive);
-      const billedList = getList(resBilled);
-      const allActiveOrders: Order[] = [...activeList, ...billedList].filter(
-        (o) =>
-          o.status !== "PAID" &&
-          o.status !== "CANCELLED" &&
-          o.status !== "MERGED" &&
-          Array.isArray(o.kots) &&
-          o.kots.some((k: any) => Array.isArray(k?.items) && k.items.length > 0)
-      );
-
-      setOrders(allActiveOrders);
-
-      setSelectedOrder((prev) => {
-        if (!prev) return null;
-        const updated = allActiveOrders.find((o) => String(o._id) === String(prev._id));
-        return updated || null;
+  // React Query owns the initial request and shared cache. Local state remains
+  // only for cashier selection/UI behaviour, not for fetching responsibility.
+  useEffect(() => {
+    if (!activeOrdersQuery.data || !billedOrdersQuery.data || !tablesQuery.data) return;
+    const getList = (res: any) => Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : Array.isArray(res?.data?.orders) ? res.data.orders : Array.isArray(res?.orders) ? res.orders : [];
+    const ordersById = new Map<string, Order>();
+    [...getList(activeOrdersQuery.data), ...getList(billedOrdersQuery.data)]
+      .filter((order: Order) => order.status !== "PAID" && order.status !== "CANCELLED" && order.status !== "MERGED" && Array.isArray(order.kots) && order.kots.some((kot: any) => Array.isArray(kot?.items) && kot.items.length > 0))
+      .forEach((order: Order) => {
+        const existing = ordersById.get(String(order._id));
+        // A BILLED copy is newer than an OPEN copy during a status transition.
+        if (!existing || order.status === "BILLED") ordersById.set(String(order._id), order);
       });
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Failed to fetch orders", description: error.message });
-    } finally {
-      setIsLoading(false);
-      hasLoadedOnce.current = true;
-    }
-  }, [toast]);
+    const allActiveOrders = Array.from(ordersById.values());
+    const tableResponse: any = tablesQuery.data;
+    setTables(Array.isArray(tableResponse) ? tableResponse : tableResponse?.data?.tables || tableResponse?.data || tableResponse?.tables || []);
+    setOrders(allActiveOrders);
+    setSelectedOrder((previous) => previous ? allActiveOrders.find((order: Order) => String(order._id) === String(previous._id)) || null : null);
+  }, [activeOrdersQuery.data, billedOrdersQuery.data, tablesQuery.data]);
+
+  const isLoading = shouldLoadBillingData && (activeOrdersQuery.isLoading || billedOrdersQuery.isLoading || tablesQuery.isLoading);
+
+  const fetchOrders = useCallback(async () => {
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: cashierKeys.orders("OPEN"), type: "active" }),
+      queryClient.refetchQueries({ queryKey: cashierKeys.orders("BILLED"), type: "active" }),
+      queryClient.refetchQueries({ queryKey: cashierKeys.tables(), type: "active" }),
+    ]);
+  }, [queryClient]);
 
   const debouncedFetchOrders = useCallback(() => {
     if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
     fetchTimeoutRef.current = setTimeout(() => {
-      fetchOrders();
+      queryClient.invalidateQueries({ queryKey: cashierKeys.orders("OPEN") });
+      queryClient.invalidateQueries({ queryKey: cashierKeys.orders("BILLED") });
+      queryClient.invalidateQueries({ queryKey: cashierKeys.tables() });
     }, 150);
-  }, [fetchOrders]);
+  }, [queryClient]);
+
+  const invalidateCashierData = useCallback(() => {
+    debouncedFetchOrders();
+  }, [debouncedFetchOrders]);
 
   // Real-time sockets with instantaneous local state updates + background sync
   useEffect(() => {
-    fetchOrders();
     const socket = connectSocket();
     if (!socket) return;
 
@@ -234,9 +218,9 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
       debouncedFetchOrders();
     };
 
-    socket.on("table_status_change", debouncedFetchOrders);
-    socket.on("tables_merged", debouncedFetchOrders);
-    socket.on("tables_unmerged", debouncedFetchOrders);
+    socket.on("table_status_change", invalidateCashierData);
+    socket.on("tables_merged", invalidateCashierData);
+    socket.on("tables_unmerged", invalidateCashierData);
     socket.on("new_kot", handleNewKot);
     socket.on("order_billed", handleOrderBilled);
     socket.on("order_settled", handleOrderSettled);
@@ -245,9 +229,9 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
     socket.on("order_due_updated", debouncedFetchOrders);
 
     return () => {
-      socket.off("table_status_change", debouncedFetchOrders);
-      socket.off("tables_merged", debouncedFetchOrders);
-      socket.off("tables_unmerged", debouncedFetchOrders);
+      socket.off("table_status_change", invalidateCashierData);
+      socket.off("tables_merged", invalidateCashierData);
+      socket.off("tables_unmerged", invalidateCashierData);
       socket.off("new_kot", handleNewKot);
       socket.off("order_billed", handleOrderBilled);
       socket.off("order_settled", handleOrderSettled);
@@ -257,7 +241,7 @@ export function useCashierOrders(getCustomerContext?: () => CustomerContextData)
 
       if (fetchTimeoutRef.current) clearTimeout(fetchTimeoutRef.current);
     };
-  }, [fetchOrders, debouncedFetchOrders]);
+  }, [fetchOrders, debouncedFetchOrders, invalidateCashierData]);
 
   // Global Keydown Listeners for Pos Terminal Shortcuts
   useEffect(() => {

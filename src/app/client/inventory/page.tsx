@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/ui/pagination";
-import { clientService } from "@/services/client.service";
 import { inventoryService, InventoryItem } from "@/services/inventory.service";
 import { AddInventoryDialog } from "@/components/client/add-inventory-dialog";
 import { EditInventoryDialog } from "@/components/client/edit-inventory-dialog";
@@ -35,6 +34,10 @@ import { ItemHistoryDrawer } from "@/components/client/item-history-drawer";
 import { inventoryBulkImportConfig } from "@/lib/bulk-import-configs";
 import { toast } from "@/components/ui/use-toast";
 import { History, Sliders } from "lucide-react";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useClientInventory, useClientRestaurants } from "@/hooks/queries/use-portal-queries";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setClientSelectedRestaurantId } from "@/store/portal-ui-slice";
 
 interface Restaurant {
   _id: string;
@@ -44,9 +47,9 @@ interface Restaurant {
 const PAGE_SIZE = 10;
 
 export default function ClientInventoryPage() {
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string>("");
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const dispatch = useAppDispatch();
+  const selectedRestaurantId = useAppSelector((state) => state.portalUi.clientSelectedRestaurantId);
+  const { data: restaurants = [] } = useClientRestaurants();
   
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -63,76 +66,40 @@ export default function ClientInventoryPage() {
   // Search + Pagination State
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  const debouncedSearch = useDebounce(search, 350);
+  const inventoryQuery = useClientInventory({
+    restaurantId: selectedRestaurantId,
+    page,
+    limit: PAGE_SIZE,
+    search: debouncedSearch || undefined,
+  });
+  const inventoryItems = (inventoryQuery.data?.data || []) as InventoryItem[];
+  const totalRecords = inventoryQuery.data?.meta?.totalRecords ?? inventoryItems.length;
+  const totalPages = inventoryQuery.data?.meta?.totalPages ?? 1;
 
   useEffect(() => {
-    fetchRestaurants();
-  }, []);
+    if (restaurants.length && !restaurants.some((restaurant: Restaurant) => restaurant._id === selectedRestaurantId)) {
+      dispatch(setClientSelectedRestaurantId(restaurants[0]._id));
+    }
+  }, [dispatch, restaurants, selectedRestaurantId]);
 
   useEffect(() => {
     if (selectedRestaurantId) {
       setPage(1);
-      fetchInventory(selectedRestaurantId, 1, "");
-    } else {
-      setInventoryItems([]);
     }
   }, [selectedRestaurantId]);
 
-  const fetchRestaurants = async () => {
-    try {
-      const res = await clientService.getRestaurants();
-      
-      // Handle different possible backend response structures
-      let restaurantList = [];
-      if (Array.isArray(res)) {
-        restaurantList = res;
-      } else if (res.data && Array.isArray(res.data)) {
-        restaurantList = res.data;
-      } else if (res.data && res.data.restaurants && Array.isArray(res.data.restaurants)) {
-        restaurantList = res.data.restaurants;
-      } else if (res.restaurants && Array.isArray(res.restaurants)) {
-        restaurantList = res.restaurants;
-      }
-      
-      if (restaurantList.length > 0) {
-        setRestaurants(restaurantList);
-        setSelectedRestaurantId(restaurantList[0]._id);
-      }
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to fetch restaurants.",
-      });
-    }
-  };
-
-  const fetchInventory = async (restaurantId: string, currentPage = page, searchTerm = search) => {
-    try {
-      const res = await inventoryService.getInventoryItems(restaurantId, {
-        page: currentPage,
-        limit: PAGE_SIZE,
-        search: searchTerm || undefined,
-      });
-      setInventoryItems(res.data || []);
-      const meta = res.meta;
-      setTotalRecords(meta?.totalRecords ?? res.data?.length ?? 0);
-      setTotalPages(meta?.totalPages ?? 1);
-    } catch (error) {
-      console.error("Failed to fetch inventory", error);
-    }
+  const fetchInventory = async (_restaurantId: string, _currentPage = page, _searchTerm = search) => {
+    await inventoryQuery.refetch();
   };
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
     setPage(1);
-    fetchInventory(selectedRestaurantId, 1, value);
   };
 
   const handlePageChange = (p: number) => {
     setPage(p);
-    fetchInventory(selectedRestaurantId, p, search);
   };
 
   const handleEdit = (item: InventoryItem) => {
@@ -314,7 +281,7 @@ export default function ClientInventoryPage() {
         <div className="flex items-center gap-3">
           <Select 
             value={selectedRestaurantId} 
-            onValueChange={setSelectedRestaurantId}
+            onValueChange={(restaurantId) => dispatch(setClientSelectedRestaurantId(restaurantId))}
           >
             <SelectTrigger className="w-full sm:w-[240px] bg-white dark:bg-slate-900 font-medium">
               <SelectValue placeholder="Select a restaurant" />

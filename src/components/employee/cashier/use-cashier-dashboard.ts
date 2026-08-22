@@ -3,8 +3,9 @@
 import { useCashierOrders } from "./use-cashier-orders";
 import { useCashierCredit } from "./use-cashier-credit";
 import { useRef } from "react";
+import { Mode } from "./types";
 
-export function useCashierDashboard() {
+export function useCashierDashboard(activeMode?: Mode) {
   const creditRef = useRef<any>(null);
 
   // Orders hook owns selectedOrder state
@@ -14,7 +15,7 @@ export function useCashierDashboard() {
     custName: creditRef.current?.custName || "",
     isCustomerLinked: creditRef.current?.isCustomerLinked || (() => false),
     setBillingTab: creditRef.current?.setBillingTab || (() => {}),
-  }));
+  }), activeMode);
 
   // Credit hook syncs with ordersHook.selectedOrder directly
   const credit = useCashierCredit(

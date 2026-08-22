@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -20,14 +20,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { authService, User } from "@/services/auth.service";
-import {
-  posReportsService,
-  CurrentDrawerResponse,
-  CashDrawerSession,
-  DenominationCounts,
-  ZReportData,
-} from "@/services/posReports.service";
+import { CashDrawerSession } from "@/services/posReports.service";
+import { useRegisterCloseState } from "./use-register-close-state";
 import {
   Calculator,
   Printer,
@@ -53,124 +47,59 @@ import {
 export default function CloseRegisterPage() {
   const router = useRouter();
   const { toast } = useToast();
-
-  const [user, setUser] = useState<User | null>(null);
-  const [restaurantId, setRestaurantId] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<"reconciliation" | "financials" | "payouts" | "print" | "history">("reconciliation");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [drawerData, setDrawerData] = useState<CurrentDrawerResponse | null>(null);
-  const [latestClosedZReport, setLatestClosedZReport] = useState<ZReportData | null>(null);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-
-  // Shift History State
-  const [zReportsList, setZReportsList] = useState<CashDrawerSession[]>([]);
-  const [selectedHistoryReport, setSelectedHistoryReport] = useState<CashDrawerSession | null>(null);
-  const [historyStartDate, setHistoryStartDate] = useState<string>("");
-  const [historyEndDate, setHistoryEndDate] = useState<string>("");
-
-  // Opening drawer state
-  const [openingFloatInput, setOpeningFloatInput] = useState<string>("0");
-  const [openingShiftName, setOpeningShiftName] = useState<"MORNING" | "EVENING" | "NIGHT" | "FULL_DAY">("FULL_DAY");
-
-  // Denominations counter
-  const [d500, setD500] = useState<string>("");
-  const [d200, setD200] = useState<string>("");
-  const [d100, setD100] = useState<string>("");
-  const [d50, setD50] = useState<string>("");
-  const [d20, setD20] = useState<string>("");
-  const [d10, setD10] = useState<string>("");
-  const [coins, setCoins] = useState<string>("");
-  const [notes, setNotes] = useState<string>("");
-
-  // Payout form
-  const [payoutAmount, setPayoutAmount] = useState<string>("");
-  const [payoutReason, setPayoutReason] = useState<string>("");
-
-  // Print slip ref
   const printRef = useRef<HTMLDivElement>(null);
-
-  // Authenticate user & resolve restaurant
-  useEffect(() => {
-    authService.getMe().then((u) => {
-      if (!u || !u.restaurantId) {
-        router.push("/employee-login");
-        return;
-      }
-      setUser(u);
-      const rId = typeof u.restaurantId === "object" ? (u.restaurantId as any)._id : u.restaurantId;
-      setRestaurantId(rId);
-    }).catch(() => {
-      router.push("/employee-login");
-    });
-  }, [router]);
-
-  // Fetch current drawer state
-  const fetchDrawerData = async () => {
-    if (!restaurantId) return;
-    try {
-      setIsLoading(true);
-      const res = await posReportsService.getCurrentCashDrawer(restaurantId);
-      if (res && res.data) {
-        setDrawerData(res.data);
-        if (res.data.drawer?.status === "CLOSED" && res.data.drawer?.zReportData) {
-          setLatestClosedZReport(res.data.drawer.zReportData);
-        } else if (res.data.lastClosedDrawer?.zReportData) {
-          setLatestClosedZReport(res.data.lastClosedDrawer.zReportData);
-        }
-      }
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Failed to load cash drawer",
-        description: error.response?.data?.message || error.message || "Please check connection",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Fetch historical shift Z-Reports
-  const fetchZReports = async () => {
-    if (!restaurantId) return;
-    try {
-      const res = await posReportsService.getZReports(
-        restaurantId,
-        historyStartDate || undefined,
-        historyEndDate || undefined
-      );
-      if (res && res.data) {
-        setZReportsList(res.data);
-      }
-    } catch (error: any) {
-      console.error("Failed to load Z-Reports", error);
-    }
-  };
-
-  useEffect(() => {
-    if (restaurantId) {
-      fetchDrawerData();
-      fetchZReports();
-    }
-  }, [restaurantId, historyStartDate, historyEndDate]);
-
-  const isDrawerOpen = drawerData?.drawer?.status === "OPEN";
-
-  // Calculate counted denominations sum
-  const countedDenominationsTotal = useMemo(() => {
-    const v500 = (parseInt(d500) || 0) * 500;
-    const v200 = (parseInt(d200) || 0) * 200;
-    const v100 = (parseInt(d100) || 0) * 100;
-    const v50 = (parseInt(d50) || 0) * 50;
-    const v20 = (parseInt(d20) || 0) * 20;
-    const v10 = (parseInt(d10) || 0) * 10;
-    const vCoins = parseFloat(coins) || 0;
-    return v500 + v200 + v100 + v50 + v20 + v10 + vCoins;
-  }, [d500, d200, d100, d50, d20, d10, coins]);
-
-  // Expected vs actual difference
-  const expectedCash = drawerData?.liveMetrics?.expectedCash || 0;
-  const cashDifference = countedDenominationsTotal - expectedCash;
+  const {
+    user,
+    activeTab,
+    setActiveTab,
+    isLoading,
+    isSubmitting,
+    drawerData,
+    showConfirmModal,
+    setShowConfirmModal,
+    zReportsList,
+    selectedHistoryReport,
+    setSelectedHistoryReport,
+    historyStartDate,
+    setHistoryStartDate,
+    historyEndDate,
+    setHistoryEndDate,
+    openingFloatInput,
+    setOpeningFloatInput,
+    openingShiftName,
+    setOpeningShiftName,
+    d500,
+    setD500,
+    d200,
+    setD200,
+    d100,
+    setD100,
+    d50,
+    setD50,
+    d20,
+    setD20,
+    d10,
+    setD10,
+    coins,
+    setCoins,
+    notes,
+    setNotes,
+    payoutAmount,
+    setPayoutAmount,
+    payoutReason,
+    setPayoutReason,
+    isDrawerOpen,
+    countedDenominationsTotal,
+    expectedCash,
+    cashDifference,
+    effectiveCafeName,
+    activeZData,
+    fetchDrawerData,
+    fetchZReports,
+    handleOpenDrawer,
+    handleAddPayout,
+    handleConfirmClose,
+  } = useRegisterCloseState();
 
   // Address formatter helper
   const formatAddress = (addr: any): string => {
@@ -180,109 +109,6 @@ export default function CloseRegisterPage() {
       return [addr.street, addr.city, addr.state, addr.zipCode, addr.country].filter(Boolean).join(", ");
     }
     return "";
-  };
-
-  // Handle Open Register Action
-  const handleOpenDrawer = async () => {
-    if (!restaurantId) return;
-    const floatVal = parseFloat(openingFloatInput) || 0;
-    if (floatVal < 0) {
-      return toast({ variant: "destructive", title: "Invalid Float", description: "Opening float cannot be negative" });
-    }
-
-    try {
-      setIsSubmitting(true);
-      await posReportsService.openCashDrawer(restaurantId, {
-        openingCash: floatVal,
-        shiftName: openingShiftName,
-        notes: `Shift opened by ${user?.contactName || user?.username || "Cashier"} with ₹${floatVal} float`,
-      });
-      toast({
-        title: "🟢 Register Opened Successfully",
-        description: `Starting cash float of ₹${floatVal.toFixed(2)} recorded.`,
-      });
-      await fetchDrawerData();
-      fetchZReports();
-      setActiveTab("reconciliation");
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Failed to open register", description: error.response?.data?.message || error.message });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Handle Add Petty Cash Payout
-  const handleAddPayout = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!restaurantId) return;
-    const amount = parseFloat(payoutAmount);
-    if (!amount || amount <= 0) {
-      return toast({ variant: "destructive", title: "Invalid Amount", description: "Please enter a valid payout amount." });
-    }
-    if (!payoutReason.trim()) {
-      return toast({ variant: "destructive", title: "Reason Required", description: "Please enter a description/reason." });
-    }
-
-    try {
-      setIsSubmitting(true);
-      await posReportsService.addCashPayout(restaurantId, {
-        amount,
-        reason: payoutReason.trim(),
-      });
-      toast({
-        title: "Cash Payout Logged",
-        description: `₹${amount.toFixed(2)} deducted from drawer for ${payoutReason}.`,
-      });
-      setPayoutAmount("");
-      setPayoutReason("");
-      await fetchDrawerData();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Payout Failed", description: error.response?.data?.message || error.message });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Handle Close Drawer & Generate Z-Report
-  const handleConfirmClose = async () => {
-    if (!restaurantId) return;
-    try {
-      setIsSubmitting(true);
-      const denominations: DenominationCounts = {
-        d500: parseInt(d500) || 0,
-        d200: parseInt(d200) || 0,
-        d100: parseInt(d100) || 0,
-        d50: parseInt(d50) || 0,
-        d20: parseInt(d20) || 0,
-        d10: parseInt(d10) || 0,
-        coins: parseFloat(coins) || 0,
-      };
-
-      const res = await posReportsService.closeCashDrawer(restaurantId, {
-        actualCashCounted: countedDenominationsTotal,
-        denominations,
-        notes: notes.trim(),
-        shiftName: drawerData?.drawer?.shiftName || "FULL_DAY",
-      });
-
-      setShowConfirmModal(false);
-      toast({
-        title: "🎉 Register Closed & Z-Report Generated",
-        description: `Sequential Z-Report ${res.data?.reportNumber || ""} created.`,
-      });
-
-      if (res.data?.zReportData) {
-        setLatestClosedZReport(res.data.zReportData);
-      }
-
-      await fetchDrawerData();
-      fetchZReports();
-      setActiveTab("print");
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Failed to close register", description: error.response?.data?.message || error.message });
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   // Direct Browser Print for Current Active Slip
@@ -409,57 +235,6 @@ export default function CloseRegisterPage() {
     `);
     printWindow.document.close();
   };
-
-  const effectiveCafeName =
-    latestClosedZReport?.restaurant?.name ||
-    drawerData?.drawer?.zReportData?.restaurant?.name ||
-    (drawerData as any)?.restaurant?.name ||
-    "Vinimay Cafe & Restaurant";
-
-  const effectiveCafeAddress = formatAddress(
-    latestClosedZReport?.restaurant?.address ||
-    drawerData?.drawer?.zReportData?.restaurant?.address ||
-    drawerData?.restaurant?.address
-  );
-
-  const activeZData = isDrawerOpen
-    ? {
-        reportNumber: "LIVE DRAFT",
-        restaurant: {
-          name: effectiveCafeName,
-          address: effectiveCafeAddress,
-          phone: drawerData?.restaurant?.phone || "",
-          gstin: drawerData?.restaurant?.gstin || "",
-        },
-        shift: {
-          name: drawerData?.drawer?.shiftName || "FULL_DAY",
-          openedAt: drawerData?.drawer?.openedAt || new Date().toISOString(),
-          closedAt: new Date().toISOString(),
-          shiftDate: drawerData?.drawer?.shiftDate || new Date().toISOString(),
-        },
-        cashReconciliation: {
-          openingCash: drawerData?.liveMetrics?.openingCash || 0,
-          cashSales: drawerData?.liveMetrics?.cashSales || 0,
-          cashPayouts: drawerData?.liveMetrics?.cashPayouts || 0,
-          payoutsList: drawerData?.drawer?.payouts || [],
-          expectedCash,
-          actualCashCounted: countedDenominationsTotal,
-          difference: cashDifference,
-          denominations: {
-            d500: parseInt(d500) || 0,
-            d200: parseInt(d200) || 0,
-            d100: parseInt(d100) || 0,
-            d50: parseInt(d50) || 0,
-            d20: parseInt(d20) || 0,
-            d10: parseInt(d10) || 0,
-            coins: parseFloat(coins) || 0,
-          },
-        },
-        salesSummary: null,
-        paymentBreakdown: [],
-        notes: notes || "",
-      }
-    : latestClosedZReport || drawerData?.drawer?.zReportData;
 
   // Render Full Page Skeleton while loading initial drawer state
   if (isLoading && !drawerData) {

@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { 
   DollarSign, 
   ShoppingBag, 
@@ -106,6 +107,7 @@ interface ManagerOverviewProps {
 }
 
 export function ManagerOverview({ onNavigateToFloor, onNavigateToAudit }: ManagerOverviewProps) {
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
@@ -123,8 +125,8 @@ export function ManagerOverview({ onNavigateToFloor, onNavigateToAudit }: Manage
     setLoading(true);
     try {
       const [ordersRes, analyticsRes] = await Promise.allSettled([
-        employeeService.getOrders({ limit: 100 }),
-        employeeService.getAnalytics()
+        queryClient.fetchQuery({ queryKey: ["manager", "overview", "orders"], queryFn: () => employeeService.getOrders({ limit: 100 }) }),
+        queryClient.fetchQuery({ queryKey: ["manager", "overview", "analytics"], queryFn: employeeService.getAnalytics })
       ]);
 
       if (ordersRes.status === "fulfilled") {

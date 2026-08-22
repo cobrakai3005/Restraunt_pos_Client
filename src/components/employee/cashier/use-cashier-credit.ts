@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
 import { employeeService } from "@/services/employee.service";
 import { customerService, Customer } from "@/services/customer.service";
 import { Order } from "./types";
+import { cashierKeys } from "@/hooks/queries/cashier-keys";
+import { useDebounce } from "@/hooks/use-debounce";
 
 export function useCashierCredit(
   selectedOrder: Order | null,
@@ -12,6 +15,7 @@ export function useCashierCredit(
   fetchOrders: () => Promise<void>,
   onReceiptTrigger?: (order: Order) => void
 ) {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
 
   // Customer tab state
@@ -19,7 +23,6 @@ export function useCashierCredit(
   const [custPhone, setCustPhone] = useState("");
   const [custName, setCustName] = useState("");
   const [matchedCustomer, setMatchedCustomer] = useState<Customer | null>(null);
-  const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
   const [showCreateCustomerDialog, setShowCreateCustomerDialog] = useState(false);
   const [isSavingCustomer, setIsSavingCustomer] = useState(false);
 
@@ -46,6 +49,13 @@ export function useCashierCredit(
   // Discount Tab state
   const [discountAmount, setDiscountAmount] = useState("");
   const [isSavingDiscount, setIsSavingDiscount] = useState(false);
+  const debouncedCustomerPhone = useDebounce(custPhone.trim(), 250);
+  const customerSearchQuery = useQuery({
+    queryKey: [...cashierKeys.root(), "customer-search", debouncedCustomerPhone],
+    queryFn: () => customerService.searchCustomerByPhone(debouncedCustomerPhone),
+    enabled: debouncedCustomerPhone.length >= 3,
+  });
+  const isSearchingCustomer = customerSearchQuery.isFetching;
 
   // Sync state on order change
   useEffect(() => {
@@ -66,17 +76,6 @@ export function useCashierCredit(
       setCustPhone(ph);
       if (cd?.customerId && typeof cd.customerId === "object") {
         setMatchedCustomer(cd.customerId as any);
-      } else if (ph.trim().length >= 4) {
-        customerService
-          .searchCustomerByPhone(ph.trim())
-          .then((res) => {
-            if (res?.data) {
-              setMatchedCustomer(res.data);
-              setCustPhone(res.data.phone || "");
-              setCustName(res.data.name || cd?.name || "");
-            }
-          })
-          .catch(() => { });
       } else if (matchedCustomer && (!ph || ph.trim().length < 4)) {
         setMatchedCustomer(null);
       }
@@ -131,35 +130,22 @@ export function useCashierCredit(
     return false;
   };
 
-  // Debounced phone search
   useEffect(() => {
-    if (!custPhone || custPhone.trim().length < 3) {
+    if (debouncedCustomerPhone.length < 3) {
       if (!selectedOrder?.customerDetails?.customerId) {
         setMatchedCustomer(null);
       }
       return;
     }
-    const timer = setTimeout(async () => {
-      try {
-        setIsSearchingCustomer(true);
-        const res = await customerService.searchCustomerByPhone(custPhone.trim());
-        if (res?.data) {
-          setMatchedCustomer(res.data);
-          setCustPhone(res.data.phone || "");
-          if (!custName.trim() || custName === "Walk-in Guest") {
-            setCustName(res.data.name);
-          }
-        } else {
-          setMatchedCustomer(null);
-        }
-      } catch {
-        setMatchedCustomer(null);
-      } finally {
-        setIsSearchingCustomer(false);
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [custPhone]);
+    const response: any = customerSearchQuery.data;
+    if (response?.data) {
+      setMatchedCustomer(response.data);
+      if (response.data.phone && response.data.phone !== custPhone) setCustPhone(response.data.phone);
+      if (!custName.trim() || custName === "Walk-in Guest") setCustName(response.data.name);
+    } else if (!customerSearchQuery.isFetching && !customerSearchQuery.isError) {
+      setMatchedCustomer(null);
+    }
+  }, [customerSearchQuery.data, customerSearchQuery.isError, customerSearchQuery.isFetching, custName, custPhone, debouncedCustomerPhone, selectedOrder?.customerDetails?.customerId]);
 
   const handleOpenReceiveCredit = (order: Order) => {
     setCreditPaymentOrder(order);
@@ -242,6 +228,7 @@ export function useCashierCredit(
     try {
       setIsSubmittingCreditPayment(true);
       const res = await employeeService.addDuePayment(creditPaymentOrder._id, payload);
+      await queryClient.invalidateQueries({ queryKey: cashierKeys.root() });
 
       const updatedOrder = res?.data?.order || {
         ...creditPaymentOrder,
@@ -292,7 +279,10 @@ export function useCashierCredit(
     try {
       // Financial settlement must use the complete backend result, not the
       // receivables table's current (paginated) page.
-      const res = await employeeService.getCustomerDueSummary(customer._id);
+      const res = await queryClient.fetchQuery({
+        queryKey: cashierKeys.customerDue(customer._id),
+        queryFn: () => employeeService.getCustomerDueSummary(customer._id),
+      });
       setBulkSettleOrders(Array.isArray(res?.data?.orders) ? res.data.orders : []);
     } catch (error: any) {
       toast({
@@ -317,6 +307,7 @@ export function useCashierCredit(
     try {
       setIsSubmittingBulkSettle(true);
       const res = await employeeService.bulkSettleDues(payload);
+      await queryClient.invalidateQueries({ queryKey: cashierKeys.root() });
 
       const totalSettled = res?.data?.totalSettled || payload.amount || 0;
       const remainingDue = res?.data?.remainingDue ?? 0;

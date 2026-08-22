@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Plus, LayoutGrid, List as ListIcon, Search, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,16 +9,17 @@ import { AddClientDialog } from "@/components/admin/add-client-dialog";
 import { EditClientDialog } from "@/components/admin/edit-client-dialog";
 import { ClientCard } from "@/components/admin/client-card";
 import { ClientTable } from "@/components/admin/client-table";
-import { adminService } from "@/services/admin.service";
 import { useToast } from "@/components/ui/use-toast";
+import { useDebounce } from "@/hooks/use-debounce";
+import { useAdminClients } from "@/hooks/queries/use-portal-queries";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setAdminClientsView } from "@/store/portal-ui-slice";
 
 export default function ClientManagementPage() {
   const { toast } = useToast();
+  const dispatch = useAppDispatch();
   const [isAddClientOpen, setIsAddClientOpen] = useState(false);
-  const [clients, setClients] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [copied, setCopied] = useState(false);
   const [isEditClientOpen, setIsEditClientOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
@@ -28,35 +29,11 @@ export default function ClientManagementPage() {
     setIsEditClientOpen(true);
   };
 
-  const fetchClients = async (searchQuery?: string) => {
-    try {
-      setIsLoading(true);
-      const res = await adminService.getAllClients(searchQuery);
-      if (res.success) {
-        setClients(res.data.clients || []);
-      }
-    } catch (error) {
-      console.error("Failed to fetch clients", error);
-      toast({
-        title: "Error",
-        description: "Failed to load clients.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 400); // 400ms debounce
-    return () => clearTimeout(handler);
-  }, [search]);
-
-  useEffect(() => {
-    fetchClients(debouncedSearch);
-  }, [debouncedSearch]);
+  const debouncedSearch = useDebounce(search, 400);
+  const clientsQuery = useAdminClients(debouncedSearch);
+  const clients = clientsQuery.data?.data?.clients || [];
+  const isLoading = clientsQuery.isLoading || clientsQuery.isFetching;
+  const view = useAppSelector((state) => state.portalUi.adminClientsView);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8678";
   
@@ -108,7 +85,7 @@ export default function ClientManagementPage() {
         </Button>
       </div>
 
-      <Tabs defaultValue="cards" className="space-y-6">
+      <Tabs value={view} onValueChange={(value) => dispatch(setAdminClientsView(value as "cards" | "list"))} className="space-y-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-1 items-center gap-4">
             <div className="relative w-full max-w-sm">
@@ -146,7 +123,7 @@ export default function ClientManagementPage() {
             </div>
           ) : clients.length > 0 ? (
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {clients.map(client => (
+              {clients.map((client: any) => (
                 <ClientCard key={client._id} client={client} onEdit={handleEdit} />
               ))}
             </div>
@@ -178,7 +155,7 @@ export default function ClientManagementPage() {
         open={isAddClientOpen} 
         onOpenChange={setIsAddClientOpen} 
         onSuccess={() => {
-          fetchClients(); // refresh after add
+          clientsQuery.refetch();
         }}
       />
 
@@ -188,7 +165,7 @@ export default function ClientManagementPage() {
         client={selectedClient}
         onSuccess={() => {
           setIsEditClientOpen(false);
-          fetchClients(); // refresh after update
+          clientsQuery.refetch();
         }}
       />
     </div>

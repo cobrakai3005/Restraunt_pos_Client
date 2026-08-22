@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,16 @@ export function CashierBillingOrdersList({
   isFetchingPaid,
   onViewReceipt,
 }: CashierBillingOrdersListProps) {
+  // A defensive guard for short-lived duplicate API/socket payloads.
+  const uniqueFilteredOrders = useMemo(() => {
+    const ordersById = new Map<string, Order>();
+    filteredOrders.forEach((order) => {
+      const existing = ordersById.get(String(order._id));
+      if (!existing || order.status === "BILLED") ordersById.set(String(order._id), order);
+    });
+    return Array.from(ordersById.values());
+  }, [filteredOrders]);
+
   // Also filter paid orders by the same search query
   const filteredPaid = searchQuery.trim()
     ? paidOrders.filter((o) => {
@@ -99,12 +110,12 @@ export function CashierBillingOrdersList({
       <ScrollArea className="flex-1">
         <div className="p-3 space-y-2">
           {/* Active Orders (OPEN + BILLED) */}
-          {filteredOrders.length === 0 ? (
+          {uniqueFilteredOrders.length === 0 ? (
             <div className="text-center text-slate-400 dark:text-slate-600 py-8 text-sm">
               No pending orders.
             </div>
           ) : (
-            filteredOrders.map((order) => {
+            uniqueFilteredOrders.map((order) => {
               const isSelected = selectedOrder?._id === order._id;
               const grandTotal = calculateOrderFinancials(order).grandTotal;
               return (

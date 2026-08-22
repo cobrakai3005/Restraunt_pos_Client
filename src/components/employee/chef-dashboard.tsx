@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,6 +73,7 @@ interface Order {
 }
 
 export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) {
+  const queryClient = useQueryClient();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updating, setUpdating] = useState<Record<string, boolean>>({});
@@ -88,7 +90,10 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
 
   const fetchActiveOrders = async () => {
     try {
-      const res = await employeeService.getOrders({ status: "OPEN,BILLED", kitchen: "true" });
+      const res = await queryClient.fetchQuery({
+        queryKey: ["orders", "kitchen"],
+        queryFn: () => employeeService.getOrders({ status: "OPEN,BILLED", kitchen: "true" }),
+      });
       setOrders(
         (res.data || []).filter(
           (o: any) => o.status === "OPEN" || o.status === "BILLED"
@@ -103,22 +108,17 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
 
   useEffect(() => {
     fetchActiveOrders();
+    const refreshKitchen = () => { queryClient.invalidateQueries({ queryKey: ["orders", "kitchen"] }); fetchActiveOrders(); };
     const socket = connectSocket();
     if (socket) {
-      socket.on("new_kot", fetchActiveOrders);
-      socket.on("item_status_update", fetchActiveOrders);
-      socket.on("order_billed", fetchActiveOrders);
-      socket.on("order_settled", fetchActiveOrders);
+      socket.on("new_kot", refreshKitchen); socket.on("item_status_update", refreshKitchen); socket.on("order_billed", refreshKitchen); socket.on("order_settled", refreshKitchen);
     }
     return () => {
       if (socket) {
-        socket.off("new_kot", fetchActiveOrders);
-        socket.off("item_status_update", fetchActiveOrders);
-        socket.off("order_billed", fetchActiveOrders);
-        socket.off("order_settled", fetchActiveOrders);
+        socket.off("new_kot", refreshKitchen); socket.off("item_status_update", refreshKitchen); socket.off("order_billed", refreshKitchen); socket.off("order_settled", refreshKitchen);
       }
     };
-  }, [toast]);
+  }, [queryClient, toast]);
 
   const updateItemStatus = async (orderId: string, itemId: string, newStatus: string) => {
     const key = `${orderId}_${itemId}`;
@@ -126,6 +126,7 @@ export function ChefDashboard({ user, embedded, onOpenDrawer }: DashboardProps) 
     setErrors(prev => ({ ...prev, [key]: "" }));
     try {
       await employeeService.updateKotItemStatus(orderId, itemId, newStatus);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
       toast({ title: "Ticket updated" });
       fetchActiveOrders();
 

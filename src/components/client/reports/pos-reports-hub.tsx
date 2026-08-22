@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   posReportsService,
   PosReportType,
@@ -184,8 +185,7 @@ export function PosReportsHub({
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [datePreset, setDatePreset] = useState<string>("today");
 
-  // Loading & Exporting State
-  const [loading, setLoading] = useState(false);
+  // Exporting State
   const [exporting, setExporting] = useState(false);
 
   // Search Filter in Tables with Debouncing
@@ -199,16 +199,6 @@ export function PosReportsHub({
     setOrderPage(1);
   }, [debouncedSearchQuery]);
 
-  // Report Data States
-  const [executiveData, setExecutiveData] = useState<ExecutiveSummaryData | null>(null);
-  const [salesData, setSalesData] = useState<SalesSummaryData | null>(null);
-  const [categoryData, setCategoryData] = useState<CategorySummaryData | null>(null);
-  const [itemData, setItemData] = useState<ItemSummaryData | null>(null);
-  const [orderData, setOrderData] = useState<OrderSummaryData | null>(null);
-  const [groupData, setGroupData] = useState<GroupSummaryData | null>(null);
-  const [variationData, setVariationData] = useState<VariationSummaryData | null>(null);
-  const [coverSizeData, setCoverSizeData] = useState<CoverSizeSummaryData | null>(null);
-  const [zReportsList, setZReportsList] = useState<CashDrawerSession[]>([]);
   const [isZReportDialogOpen, setIsZReportDialogOpen] = useState(false);
 
   // Pagination for Order Summary
@@ -284,72 +274,38 @@ export function PosReportsHub({
     }
   };
 
-  // Main Report Fetcher for Active Tab
-  const fetchReportData = useCallback(async () => {
-    if (!selectedRestaurantId) return;
-    setLoading(true);
-    try {
-      if (activeTab === "executive") {
-        const res = await posReportsService.getExecutiveSummary(selectedRestaurantId, startDate, endDate);
-        setExecutiveData(res.data);
-      } else if (activeTab === "sales") {
-        const res = await posReportsService.getSalesSummary(selectedRestaurantId, startDate, endDate);
-        setSalesData(res.data);
-      } else if (activeTab === "category") {
-        const res = await posReportsService.getCategorySummary(selectedRestaurantId, startDate, endDate);
-        setCategoryData(res.data);
-      } else if (activeTab === "item") {
-        const res = await posReportsService.getItemSummary(selectedRestaurantId, startDate, endDate);
-        setItemData(res.data);
-      } else if (activeTab === "order") {
-        const res = await posReportsService.getOrderSummary(selectedRestaurantId, {
-          startDate,
-          endDate,
-          page: orderPage,
-          limit: orderPageSize,
-          status: orderStatusFilter !== "ALL" ? orderStatusFilter : undefined,
-          orderType: orderTypeFilter !== "ALL" ? orderTypeFilter : undefined,
-          search: debouncedSearchQuery.trim() || undefined,
-        });
-        setOrderData(res.data);
-      } else if (activeTab === "group") {
-        const res = await posReportsService.getGroupSummary(selectedRestaurantId, startDate, endDate);
-        setGroupData(res.data);
-      } else if (activeTab === "variation") {
-        const res = await posReportsService.getVariationSummary(selectedRestaurantId, startDate, endDate);
-        setVariationData(res.data);
-      } else if (activeTab === "cover-size") {
-        const res = await posReportsService.getCoverSizeSummary(selectedRestaurantId, startDate, endDate);
-        setCoverSizeData(res.data);
-      } else if (activeTab === "z-report") {
-        const res = await posReportsService.getZReports(selectedRestaurantId, startDate, endDate);
-        setZReportsList(res.data || []);
-      }
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Error Loading Report",
-        description: err.response?.data?.message || err.message || "Failed to load report data.",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    selectedRestaurantId,
-    startDate,
-    endDate,
-    activeTab,
-    orderPage,
-    orderPageSize,
-    orderStatusFilter,
-    orderTypeFilter,
-    debouncedSearchQuery,
-    toast,
-  ]);
+  const reportQuery = useQuery({
+    queryKey: ["pos-reports", activeTab, selectedRestaurantId, startDate, endDate, orderPage, orderPageSize, orderStatusFilter, orderTypeFilter, debouncedSearchQuery],
+    enabled: Boolean(selectedRestaurantId),
+    queryFn: async () => {
+      if (activeTab === "executive") return (await posReportsService.getExecutiveSummary(selectedRestaurantId, startDate, endDate)).data;
+      if (activeTab === "sales") return (await posReportsService.getSalesSummary(selectedRestaurantId, startDate, endDate)).data;
+      if (activeTab === "category") return (await posReportsService.getCategorySummary(selectedRestaurantId, startDate, endDate)).data;
+      if (activeTab === "item") return (await posReportsService.getItemSummary(selectedRestaurantId, startDate, endDate)).data;
+      if (activeTab === "order") return (await posReportsService.getOrderSummary(selectedRestaurantId, { startDate, endDate, page: orderPage, limit: orderPageSize, status: orderStatusFilter !== "ALL" ? orderStatusFilter : undefined, orderType: orderTypeFilter !== "ALL" ? orderTypeFilter : undefined, search: debouncedSearchQuery.trim() || undefined })).data;
+      if (activeTab === "group") return (await posReportsService.getGroupSummary(selectedRestaurantId, startDate, endDate)).data;
+      if (activeTab === "variation") return (await posReportsService.getVariationSummary(selectedRestaurantId, startDate, endDate)).data;
+      if (activeTab === "cover-size") return (await posReportsService.getCoverSizeSummary(selectedRestaurantId, startDate, endDate)).data;
+      return (await posReportsService.getZReports(selectedRestaurantId, startDate, endDate)).data || [];
+    },
+  });
 
   useEffect(() => {
-    fetchReportData();
-  }, [fetchReportData]);
+    if (!reportQuery.error) return;
+    const error: any = reportQuery.error;
+    toast({ variant: "destructive", title: "Error Loading Report", description: error.response?.data?.message || error.message || "Failed to load report data." });
+  }, [reportQuery.error, toast]);
+
+  const loading = reportQuery.isLoading || reportQuery.isFetching;
+  const executiveData = activeTab === "executive" ? (reportQuery.data as ExecutiveSummaryData | undefined) ?? null : null;
+  const salesData = activeTab === "sales" ? (reportQuery.data as SalesSummaryData | undefined) ?? null : null;
+  const categoryData = activeTab === "category" ? (reportQuery.data as CategorySummaryData | undefined) ?? null : null;
+  const itemData = activeTab === "item" ? (reportQuery.data as ItemSummaryData | undefined) ?? null : null;
+  const orderData = activeTab === "order" ? (reportQuery.data as OrderSummaryData | undefined) ?? null : null;
+  const groupData = activeTab === "group" ? (reportQuery.data as GroupSummaryData | undefined) ?? null : null;
+  const variationData = activeTab === "variation" ? (reportQuery.data as VariationSummaryData | undefined) ?? null : null;
+  const coverSizeData = activeTab === "cover-size" ? (reportQuery.data as CoverSizeSummaryData | undefined) ?? null : null;
+  const zReportsList = activeTab === "z-report" ? ((reportQuery.data as CashDrawerSession[] | undefined) ?? []) : [];
 
   // Export Download Handler
   const handleExport = async (format: "csv" | "excel") => {

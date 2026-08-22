@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Edit, Trash2, AlertCircle, ChevronLeft, ChevronRight, UploadCloud, History, Sliders } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import { inventoryBulkImportConfig } from "@/lib/bulk-import-configs";
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
 export function InventoryTab() {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [search, setSearch] = useState("");
@@ -35,7 +37,7 @@ export function InventoryTab() {
   const fetchItems = async () => {
     try {
       setLoading(true);
-      const res = await inventoryService.getInventoryItems();
+      const res = await queryClient.fetchQuery({ queryKey: ["employee", "inventory"], queryFn: () => inventoryService.getInventoryItems() });
       if (res.data) {
         setItems(res.data);
       }

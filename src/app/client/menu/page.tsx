@@ -36,7 +36,6 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { clientService } from "@/services/client.service";
 import { menuService, Category, MenuItem } from "@/services/menu.service";
 import { AddCategoryDialog } from "@/components/client/add-category-dialog";
 import { AddMenuItemDialog } from "@/components/client/add-menu-item-dialog";
@@ -44,6 +43,9 @@ import { EditMenuItemDialog } from "@/components/client/edit-menu-item-dialog";
 import { BulkImportDialog } from "@/components/client/bulk-import-dialog";
 import { menuBulkImportConfig } from "@/lib/bulk-import-configs";
 import { toast } from "@/components/ui/use-toast";
+import { useClientMenuCategories, useClientMenuItems, useClientRestaurants } from "@/hooks/queries/use-portal-queries";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setClientSelectedRestaurantId } from "@/store/portal-ui-slice";
 
 interface Restaurant {
   _id: string;
@@ -51,13 +53,15 @@ interface Restaurant {
 }
 
 export default function ClientMenuPage() {
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string>("");
-
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [isLoadingItems, setIsLoadingItems] = useState<boolean>(false);
-  const [isLoadingCategories, setIsLoadingCategories] = useState<boolean>(false);
+  const dispatch = useAppDispatch();
+  const selectedRestaurantId = useAppSelector((state) => state.portalUi.clientSelectedRestaurantId);
+  const { data: restaurants = [] } = useClientRestaurants();
+  const categoriesQuery = useClientMenuCategories(selectedRestaurantId);
+  const menuItemsQuery = useClientMenuItems(selectedRestaurantId);
+  const categories = (categoriesQuery.data ?? []) as Category[];
+  const menuItems = (menuItemsQuery.data ?? []) as MenuItem[];
+  const isLoadingItems = menuItemsQuery.isLoading || menuItemsQuery.isFetching;
+  const isLoadingCategories = categoriesQuery.isLoading || categoriesQuery.isFetching;
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -80,80 +84,23 @@ export default function ClientMenuPage() {
   const [catPageSize, setCatPageSize] = useState(10);
 
   useEffect(() => {
-    fetchRestaurants();
-  }, []);
+    if (restaurants.length && !restaurants.some((restaurant: Restaurant) => restaurant._id === selectedRestaurantId)) {
+      dispatch(setClientSelectedRestaurantId(restaurants[0]._id));
+    }
+  }, [dispatch, restaurants, selectedRestaurantId]);
 
   useEffect(() => {
-    if (selectedRestaurantId) {
-      fetchCategories(selectedRestaurantId);
-      fetchMenuItems(selectedRestaurantId);
-    } else {
-      setCategories([]);
-      setMenuItems([]);
-    }
     // Reset pagination on restaurant switch
     setItemPage(1);
     setCatPage(1);
   }, [selectedRestaurantId]);
 
-  const fetchRestaurants = async () => {
-    try {
-      const res = await clientService.getRestaurants();
-
-      let restaurantList = [];
-      if (Array.isArray(res)) {
-        restaurantList = res;
-      } else if (res.data && Array.isArray(res.data)) {
-        restaurantList = res.data;
-      } else if (res.data && res.data.restaurants && Array.isArray(res.data.restaurants)) {
-        restaurantList = res.data.restaurants;
-      } else if (res.restaurants && Array.isArray(res.restaurants)) {
-        restaurantList = res.restaurants;
-      }
-
-      setRestaurants(restaurantList);
-      if (restaurantList.length > 0) {
-        setSelectedRestaurantId(restaurantList[0]._id);
-      }
-    } catch (error) {
-      console.error("Failed to fetch restaurants:", error);
-    }
+  const fetchCategories = async (_restaurantId: string) => {
+    await categoriesQuery.refetch();
   };
 
-  const fetchCategories = async (restaurantId: string) => {
-    try {
-      setIsLoadingCategories(true);
-      const res = await menuService.getCategories(restaurantId);
-      let catList = [];
-      if (Array.isArray(res)) catList = res;
-      else if (res.data && Array.isArray(res.data)) catList = res.data;
-      else if (res.data && res.data.categories && Array.isArray(res.data.categories)) catList = res.data.categories;
-      else if (res.categories && Array.isArray(res.categories)) catList = res.categories;
-
-      setCategories(catList);
-    } catch (error) {
-      console.error("Failed to fetch categories:", error);
-    } finally {
-      setIsLoadingCategories(false);
-    }
-  };
-
-  const fetchMenuItems = async (restaurantId: string) => {
-    try {
-      setIsLoadingItems(true);
-      const res = await menuService.getMenuItems(restaurantId);
-      let itemList = [];
-      if (Array.isArray(res)) itemList = res;
-      else if (res.data && Array.isArray(res.data)) itemList = res.data;
-      else if (res.data && res.data.menuItems && Array.isArray(res.data.menuItems)) itemList = res.data.menuItems;
-      else if (res.menuItems && Array.isArray(res.menuItems)) itemList = res.menuItems;
-
-      setMenuItems(itemList);
-    } catch (error) {
-      console.error("Failed to fetch menu items:", error);
-    } finally {
-      setIsLoadingItems(false);
-    }
+  const fetchMenuItems = async (_restaurantId: string) => {
+    await menuItemsQuery.refetch();
   };
 
   const handleDeleteCategory = async (id: string) => {
@@ -287,7 +234,7 @@ export default function ClientMenuPage() {
         </div>
 
         <div className="w-full sm:w-72">
-          <Select value={selectedRestaurantId} onValueChange={setSelectedRestaurantId}>
+          <Select value={selectedRestaurantId} onValueChange={(restaurantId) => dispatch(setClientSelectedRestaurantId(restaurantId))}>
             <SelectTrigger className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
               <SelectValue placeholder="Select Restaurant" />
             </SelectTrigger>

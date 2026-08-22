@@ -1,32 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { OrderTakingPanel } from "./order-taking-panel";
-import { CashierPickupPanel } from "./cashier-pickup-panel";
-import { ComplimentaryItemDialog } from "./complimentary-item-dialog";
-import { CreateCustomerDialog } from "./create-customer-dialog";
-import { ReceiptModal } from "./ReceiptModal";
-import { CashierReceivablesPanel } from "./cashier-receivables-panel";
-import { PosReportsHub } from "@/components/client/reports/pos-reports-hub";
-import { CashierHistoryDrawer } from "./cashier/cashier-history-drawer";
-import {
-  DashboardProps,
-  KotItem,
-  Order,
-  Mode,
-  useCashierDashboard,
-  CashierHeader,
-  CashierBillingOrdersList,
-  CashierSettlementDrawer,
-  CashierSplitPaymentDialog,
-  CashierReceiveCreditDialog,
-  CashierDueHistoryDialog,
-  BulkSettleDialog,
-} from "./cashier";
+import type { DashboardProps, KotItem, Order, Mode } from "./cashier/types";
+import { useCashierDashboard } from "./cashier/use-cashier-dashboard";
+import { CashierHeader } from "./cashier/cashier-header";
 
 export type { DashboardProps, KotItem, Order, Mode };
+
+const OrderTakingPanel = lazy(() => import("./order-taking-panel").then((module) => ({ default: module.OrderTakingPanel })));
+const CashierPickupPanel = lazy(() => import("./cashier-pickup-panel").then((module) => ({ default: module.CashierPickupPanel })));
+const CashierReceivablesPanel = lazy(() => import("./cashier-receivables-panel").then((module) => ({ default: module.CashierReceivablesPanel })));
+const PosReportsHub = lazy(() => import("@/components/client/reports/pos-reports-hub").then((module) => ({ default: module.PosReportsHub })));
+const CashierBillingOrdersList = lazy(() => import("./cashier/cashier-billing-orders-list").then((module) => ({ default: module.CashierBillingOrdersList })));
+const CashierSettlementDrawer = lazy(() => import("./cashier/cashier-settlement-drawer").then((module) => ({ default: module.CashierSettlementDrawer })));
+const ReceiptModal = lazy(() => import("./ReceiptModal").then((module) => ({ default: module.ReceiptModal })));
+const CashierSplitPaymentDialog = lazy(() => import("./cashier/cashier-split-payment-dialog").then((module) => ({ default: module.CashierSplitPaymentDialog })));
+const CashierReceiveCreditDialog = lazy(() => import("./cashier/cashier-receive-credit-dialog").then((module) => ({ default: module.CashierReceiveCreditDialog })));
+const CashierDueHistoryDialog = lazy(() => import("./cashier/cashier-due-history-dialog").then((module) => ({ default: module.CashierDueHistoryDialog })));
+const BulkSettleDialog = lazy(() => import("./cashier/bulk-settle-dialog").then((module) => ({ default: module.BulkSettleDialog })));
+const CreateCustomerDialog = lazy(() => import("./create-customer-dialog").then((module) => ({ default: module.CreateCustomerDialog })));
+const ComplimentaryItemDialog = lazy(() => import("./complimentary-item-dialog").then((module) => ({ default: module.ComplimentaryItemDialog })));
+const CashierHistoryDrawer = lazy(() => import("./cashier/cashier-history-drawer").then((module) => ({ default: module.CashierHistoryDrawer })));
+
+function CashierPanelFallback() {
+  return (
+    <div className="flex h-full min-h-[240px] items-center justify-center text-sm font-medium text-slate-500 dark:text-slate-400">
+      <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-600" />
+      Loading workspace…
+    </div>
+  );
+}
 
 export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange }: DashboardProps) {
   const router = useRouter();
@@ -136,7 +141,7 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
     handleUnlinkCustomer,
     handleApplyCustomerDiscount,
     handleUpdateDiscount,
-  } = useCashierDashboard();
+  } = useCashierDashboard(currentMode);
 
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
 
@@ -145,10 +150,6 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
     internalSetMode(newMode);
     if (onModeChange) onModeChange(newMode);
   };
-
-  useEffect(() => {
-    fetchOrders();
-  }, [mode]);
 
   if (isLoading) {
     return (
@@ -182,37 +183,46 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
       {/* Mode Content */}
       {mode === "orders" ? (
         <div className="flex-1 min-h-0 p-4 bg-slate-100/50 dark:bg-slate-900/50">
-          <OrderTakingPanel onOrderFired={fetchOrders} />
+          <Suspense fallback={<CashierPanelFallback />}>
+            <OrderTakingPanel />
+          </Suspense>
         </div>
       ) : mode === "kitchen" ? (
         <div className="flex-1 min-h-0 p-4 bg-slate-100/50 dark:bg-slate-900/50">
-          <CashierPickupPanel user={user} embedded />
+          <Suspense fallback={<CashierPanelFallback />}>
+            <CashierPickupPanel user={user} embedded />
+          </Suspense>
         </div>
       ) : mode === "receivables" ? (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <CashierReceivablesPanel
-            onCollectPayment={handleOpenReceiveCredit}
-            onViewHistory={(ord) => setSelectedOrderForHistory(ord)}
-            onBulkSettle={handleOpenBulkSettle}
-            onViewReceipt={(ord) => {
-              setCompletedReceiptOrder(ord);
-              setShowReceipt(true);
-            }}
-          />
+          <Suspense fallback={<CashierPanelFallback />}>
+            <CashierReceivablesPanel
+              onCollectPayment={handleOpenReceiveCredit}
+              onViewHistory={(ord) => setSelectedOrderForHistory(ord)}
+              onBulkSettle={handleOpenBulkSettle}
+              onViewReceipt={(ord) => {
+                setCompletedReceiptOrder(ord);
+                setShowReceipt(true);
+              }}
+            />
+          </Suspense>
         </div>
       ) : mode === "reports" ? (
         <div className="flex-1 min-h-0 p-4 overflow-y-auto bg-slate-100/50 dark:bg-slate-900/50">
-          <PosReportsHub
-            initialRestaurantId={typeof user.restaurantId === 'object' ? (user.restaurantId as any)?._id : user.restaurantId}
-            hideRestaurantSelector={true}
-            defaultTab="executive"
-          />
+          <Suspense fallback={<CashierPanelFallback />}>
+            <PosReportsHub
+              initialRestaurantId={typeof user.restaurantId === 'object' ? (user.restaurantId as any)?._id : user.restaurantId}
+              hideRestaurantSelector={true}
+              defaultTab="executive"
+            />
+          </Suspense>
         </div>
       ) : (
         /* ── BILLING & SETTLEMENTS ── */
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Left: Orders List */}
-          <CashierBillingOrdersList
+          <Suspense fallback={<CashierPanelFallback />}>
+            <CashierBillingOrdersList
             orders={orders}
             filteredOrders={filteredOrders}
             selectedOrder={selectedOrder}
@@ -231,7 +241,7 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
           />
 
           {/* Right: Bill & Settlement Drawer */}
-          <CashierSettlementDrawer
+            <CashierSettlementDrawer
             selectedOrder={selectedOrder}
             billingTab={billingTab}
             setBillingTab={setBillingTab}
@@ -277,22 +287,29 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
               setShowReceipt(true);
             }}
             onReopenOrder={handleReopenOrder}
-            onCheckout={handleCheckout}
-          />
+              onCheckout={handleCheckout}
+            />
+          </Suspense>
         </div>
       )}
 
       {/* ── Global POS Receipt Modal (Available across all tabs) ── */}
-      <ReceiptModal
-        isOpen={showReceipt}
-        onClose={() => setShowReceipt(false)}
-        order={completedReceiptOrder || selectedOrder}
-        tables={tables}
-        restaurant={(user as any)?.restaurant}
-      />
+      {showReceipt && (
+        <Suspense fallback={null}>
+          <ReceiptModal
+            isOpen={showReceipt}
+            onClose={() => setShowReceipt(false)}
+            order={completedReceiptOrder || selectedOrder}
+            tables={tables}
+            restaurant={(user as any)?.restaurant}
+          />
+        </Suspense>
+      )}
 
       {/* ── Multi-Payment / Split Payment Dialog ── */}
-      <CashierSplitPaymentDialog
+      {showSplitDialog && (
+        <Suspense fallback={null}>
+          <CashierSplitPaymentDialog
         isOpen={showSplitDialog}
         onOpenChange={setShowSplitDialog}
         selectedOrder={selectedOrder}
@@ -311,10 +328,14 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
         onOpenCustomerTab={() => {
           setBillingTab("customer");
         }}
-      />
+          />
+        </Suspense>
+      )}
 
       {/* ── Receive Credit Payment Dialog ── */}
-      <CashierReceiveCreditDialog
+      {showReceiveCreditDialog && (
+        <Suspense fallback={null}>
+          <CashierReceiveCreditDialog
         isOpen={showReceiveCreditDialog}
         onOpenChange={setShowReceiveCreditDialog}
         order={creditPaymentOrder}
@@ -336,10 +357,14 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
         setCreditSplitOther={setCreditSplitOther}
         isSubmittingCreditPayment={isSubmittingCreditPayment}
         onCollectCreditPayment={handleCollectCreditPayment}
-      />
+          />
+        </Suspense>
+      )}
 
       {/* ── Bulk Settle All Dues Dialog ── */}
-      <BulkSettleDialog
+      {showBulkSettleDialog && (
+        <Suspense fallback={null}>
+          <BulkSettleDialog
         isOpen={showBulkSettleDialog}
         onOpenChange={setShowBulkSettleDialog}
         customer={bulkSettleCustomer}
@@ -347,50 +372,68 @@ export function CashierDashboard({ user, onOpenDrawer, currentMode, onModeChange
         isLoading={isLoadingBulkSettle}
         isSubmitting={isSubmittingBulkSettle}
         onConfirmBulkSettle={handleConfirmBulkSettle}
-      />
+          />
+        </Suspense>
+      )}
 
       {/* ── Credit Payment History Dialog ── */}
-      <CashierDueHistoryDialog
-        order={selectedOrderForHistory}
-        onClose={() => setSelectedOrderForHistory(null)}
-      />
+      {selectedOrderForHistory && (
+        <Suspense fallback={null}>
+          <CashierDueHistoryDialog
+            order={selectedOrderForHistory}
+            onClose={() => setSelectedOrderForHistory(null)}
+          />
+        </Suspense>
+      )}
 
       {/* ── Quick Create VIP / Friend Dialog ── */}
-      <CreateCustomerDialog
-        isOpen={showCreateCustomerDialog}
-        onClose={() => setShowCreateCustomerDialog(false)}
-        initialPhone={custPhone}
-        initialName={custName}
-        onCustomerCreated={(newCust) => {
-          setMatchedCustomer(newCust);
-          setCustName(newCust.name);
-          if (newCust.phone) setCustPhone(newCust.phone);
-          if (newCust.discountType && newCust.discountType !== "NONE" && newCust.discountValue) {
-            handleApplyCustomerDiscount(newCust);
-          }
-        }}
-      />
+      {showCreateCustomerDialog && (
+        <Suspense fallback={null}>
+          <CreateCustomerDialog
+            isOpen={showCreateCustomerDialog}
+            onClose={() => setShowCreateCustomerDialog(false)}
+            initialPhone={custPhone}
+            initialName={custName}
+            onCustomerCreated={(newCust) => {
+              setMatchedCustomer(newCust);
+              setCustName(newCust.name);
+              if (newCust.phone) setCustPhone(newCust.phone);
+              if (newCust.discountType && newCust.discountType !== "NONE" && newCust.discountValue) {
+                handleApplyCustomerDiscount(newCust);
+              }
+            }}
+          />
+        </Suspense>
+      )}
 
       {/* ── Complimentary (FOC) Item Dialog ── */}
-      <ComplimentaryItemDialog
-        isOpen={showComplimentaryDialog}
-        onClose={() => {
-          setShowComplimentaryDialog(false);
-          setComplimentaryItem(null);
-        }}
-        item={complimentaryItem}
-        onConfirm={handleToggleComplimentary}
-      />
+      {showComplimentaryDialog && (
+        <Suspense fallback={null}>
+          <ComplimentaryItemDialog
+            isOpen={showComplimentaryDialog}
+            onClose={() => {
+              setShowComplimentaryDialog(false);
+              setComplimentaryItem(null);
+            }}
+            item={complimentaryItem}
+            onConfirm={handleToggleComplimentary}
+          />
+        </Suspense>
+      )}
 
       {/* ── Order History Drawer ── */}
-      <CashierHistoryDrawer
-        isOpen={showHistoryDrawer}
-        onClose={() => setShowHistoryDrawer(false)}
-        onViewReceipt={(ord) => {
-          setCompletedReceiptOrder(ord);
-          setShowReceipt(true);
-        }}
-      />
+      {showHistoryDrawer && (
+        <Suspense fallback={null}>
+          <CashierHistoryDrawer
+            isOpen={showHistoryDrawer}
+            onClose={() => setShowHistoryDrawer(false)}
+            onViewReceipt={(ord) => {
+              setCompletedReceiptOrder(ord);
+              setShowReceipt(true);
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
